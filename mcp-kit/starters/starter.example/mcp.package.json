@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.resonolabs.com/vault/mcp-package/v1.json",
+  "name": "starter.example",
+  "version": "0.1.0",
+  "description": "Example hosted MCP package for ReSono Labs Vault",
+  "configuration": "config.schema.json",
+  "runtime": {
+    "type": "process",
+    "command": ["python3", "server.py"],
+    "cwd": ".",
+    "port": 8788,
+    "healthPath": "/health",
+    "mcpPath": "/mcp"
+  },
+  "companionPlugin": {
+    "directory": "plugin",
+    "removeWithPackage": true
+  }
+}

@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+command=${1:-status}
+case "$command" in
+  setup)
+    credential=$(sudo -u resono-vault env RESONO_VAULT_DATA_ROOT=/var/lib/resono-vault \
+      /opt/resono-vault/runtime/bin/python3 -m app.vault_runtime.package_runtime show-setup)
+    printf 'https://127.0.0.1:8765/identity/setup/start?credential=%s\n' "$credential"
+    ;;
+  start|stop|restart|status) systemctl "$command" resono-vault.service ;;
+  logs) journalctl -u resono-vault.service -n 200 --no-pager ;;
+  *)
+    printf 'Usage: resono-vault {setup|start|stop|restart|status|logs}\n' >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 60" fill="none">
+  <g transform="translate(0, 5)">
+    <circle cx="28" cy="25" r="22" stroke="url(#ringGrad)" stroke-width="1.5" fill="none" opacity="0.4"/>
+    <circle cx="28" cy="25" r="18" fill="#07101F" stroke="url(#ringGrad)" stroke-width="2"/>
+    <path d="M10 25 Q16 17 22 25 Q28 33 34 25 Q40 17 46 25" stroke="url(#waveGrad)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="28" cy="25" r="2.5" fill="#00C2FF"/>
+  </g>
+  <text x="62" y="38" font-family="'Inter', sans-serif" font-weight="800" font-size="22" fill="#FFFFFF" letter-spacing="-0.5">ReSono</text>
+  <text x="62" y="52" font-family="'Inter', sans-serif" font-weight="700" font-size="9" fill="#00C2FF" letter-spacing="4" opacity="0.9">LABS</text>
+  <defs>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C2FF"/>
+      <stop offset="50%" stop-color="#0077FF"/>
+      <stop offset="100%" stop-color="#00E5A0"/>
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00C2FF"/>
+      <stop offset="50%" stop-color="#0077FF"/>
+      <stop offset="100%" stop-color="#00E5A0"/>
+    </linearGradient>
+  </defs>
+</svg>

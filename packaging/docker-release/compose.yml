@@ -1,0 +1,93 @@
+name: resono-vault
+
+services:
+  initialize:
+    image: resono-labs-vault:${VAULT_VERSION:-0.1.0}
+    command: ["initialize"]
+    user: "0:0"
+    environment:
+      RESONO_VAULT_PACKAGE_DATABASE_HOST: postgres
+      RESONO_VAULT_PACKAGE_DATABASE_NAME: vault
+      RESONO_VAULT_PACKAGE_DATABASE_USER: vault_runtime
+      RESONO_VAULT_TLS_HOSTS: ${VAULT_TLS_HOSTS:-localhost,127.0.0.1}
+    volumes:
+      - vault_data:/var/lib/resono-vault
+    restart: "no"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vault
+      POSTGRES_USER: vault_runtime
+      POSTGRES_PASSWORD_FILE: /vault-config/postgres-password
+    volumes:
+      - vault_postgres_data:/var/lib/postgresql/data
+      - vault_data:/vault-config:ro
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vault_runtime -d vault"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  vault:
+    image: resono-labs-vault:${VAULT_VERSION:-0.1.0}
+    command: ["serve"]
+    restart: unless-stopped
+    environment:
+      RESONO_VAULT_LOCAL_API_HOST: 0.0.0.0
+      RESONO_VAULT_LOCAL_API_PORT: "8765"
+      RESONO_VAULT_LOCAL_API_TLS_CERTIFICATE_FILE: /var/lib/resono-vault/tls/vault.crt
+      RESONO_VAULT_LOCAL_API_TLS_PRIVATE_KEY_FILE: /var/lib/resono-vault/tls/vault.key
+      RESONO_VAULT_PLUGIN_SERVICE_URL: ${VAULT_PLUGIN_SERVICE_URL:-http://127.0.0.1:8766/plugin-services/v1}
+      RESONO_VAULT_RUNTIME_PUBLISH_PORTS: "1"
+    ports:
+      - "${VAULT_BIND_ADDRESS:-127.0.0.1}:${VAULT_PORT:-8765}:8765"
+      - "127.0.0.1:8790-8810:8790-8810"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - vault_data:/var/lib/resono-vault
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.vault_runtime.package_runtime", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+  bridge:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    user: "10001:10001"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${VAULT_BRIDGE_PORT:-8766}:8766"
+    volumes:
+      - ./bridge/nginx.conf:/etc/nginx/nginx.conf:ro
+      - vault_data:/vault-data:ro
+    depends_on:
+      vault:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8766/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+volumes:
+  vault_data:
+    name: resono-vault-data
+  vault_postgres_data:
+    name: resono-vault-postgres-data

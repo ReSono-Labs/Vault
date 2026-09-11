@@ -1,0 +1,735 @@
+.browser-voice-shell.is-b0r .browser-voice-workspace-page {
+  gap: 18px;
+  padding: 30px 4px 40px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-workspace-page .browser-voice-page-heading {
+  align-items: start;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-workspace-page .browser-voice-page-heading h2 {
+  margin: 0;
+  color: #f4f7fc;
+  font-size: clamp(1.6rem, 2.2vw, 2rem);
+  font-weight: 500;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-workspace-page .browser-voice-page-heading p {
+  margin: 7px 0 0;
+  color: var(--b0r-muted);
+  font-size: 0.96rem;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-shell {
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-head {
+  position: relative;
+  align-items: center;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: min(360px, 42vw);
+  padding: 0 13px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 9px;
+  color: #b8c7da;
+  background: rgba(6, 20, 36, 0.42);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-search > span {
+  font-size: 1.45rem;
+  line-height: 1;
+  transform: rotate(-18deg);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-search input {
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f3f7fc;
+  font: inherit;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-search input::placeholder {
+  color: #9dabc0;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-actions {
+  position: relative;
+  flex-wrap: nowrap;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-actions > .browser-voice-chip,
+.browser-voice-shell.is-b0r .browser-voice-files-new-menu > summary,
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu > summary {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 9px;
+  background: rgba(6, 20, 36, 0.48);
+  color: #eff5fc;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-actions > .browser-voice-chip:first-of-type {
+  border-color: rgba(68, 210, 255, 0.5);
+  background: rgba(47, 188, 235, 0.9);
+  color: #031321;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-new-menu,
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu {
+  position: relative;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-new-menu { order: 1; }
+.browser-voice-shell.is-b0r .browser-voice-files-actions > .browser-voice-chip { order: 2; }
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu { order: 3; }
+
+.browser-voice-shell.is-b0r .browser-voice-files-new-menu > summary::-webkit-details-marker,
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-new-menu-panel,
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu > div {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 12;
+  width: min(390px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 11px;
+  background: #0a1c31;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-new-menu-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-new-menu-panel p {
+  margin: 3px 0 0;
+  color: var(--b0r-muted);
+  font-size: 0.78rem;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu > div {
+  display: grid;
+  width: 180px;
+  gap: 4px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu > div button {
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #eef4fc;
+  text-align: left;
+  cursor: pointer;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu > div button:hover,
+.browser-voice-shell.is-b0r .browser-voice-files-more-menu > div button:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-sync-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--b0r-mint);
+  font-size: 0.86rem;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-sync-state > span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--b0r-mint);
+  box-shadow: 0 0 11px rgba(113, 239, 208, 0.65);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-sync-state strong {
+  font-weight: 500;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-sync-state small {
+  color: var(--b0r-muted);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-layout {
+  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.35fr);
+  gap: 0;
+  height: min(68vh, 720px);
+  min-height: 540px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 11px;
+  overflow: hidden;
+  background: rgba(6, 20, 36, 0.34);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-list,
+.browser-voice-shell.is-b0r .browser-voice-files-preview {
+  height: 100%;
+  max-height: none;
+  padding: 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-list {
+  grid-auto-rows: max-content;
+  border-right: 1px solid var(--b0r-line);
+  overflow-y: auto;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-directory {
+  padding: 2px 3px 10px;
+  color: #eef4fc;
+  font-size: 0.9rem;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-up-button {
+  min-height: 44px;
+  margin-bottom: 4px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 10px;
+  background: rgba(6, 20, 36, 0.72);
+  color: #eff5fc;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-up-button:hover:not(:disabled),
+.browser-voice-shell.is-b0r .browser-voice-files-up-button:focus-visible {
+  border-color: rgba(68, 210, 255, 0.5);
+  background: rgba(47, 188, 235, 0.16);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row {
+  min-height: 68px;
+  border: 0;
+  border-bottom: 1px solid rgba(190, 213, 238, 0.1);
+  border-radius: 0;
+  background: transparent;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 68px;
+  background: #071a2d;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row-body .browser-voice-file-open {
+  grid-column: 1;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-share-button {
+  grid-column: 2;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  margin-right: 10px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #8fa2ba;
+  cursor: pointer;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-share-button:hover,
+.browser-voice-shell.is-b0r .browser-voice-file-share-button:focus-visible {
+  color: #eef4fc;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-share-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row.has-actions-revealed .browser-voice-file-row-body {
+  transform: translateX(-96px);
+  transition: transform 180ms ease;
+}
+
+.browser-voice-share-modal {
+  width: min(480px, calc(100% - 28px));
+}
+
+.browser-voice-share-dialog-body {
+  display: grid;
+  gap: 20px;
+  padding: 28px 30px 30px;
+}
+
+.browser-voice-share-folder-path {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+}
+
+.browser-voice-share-folder-path strong {
+  color: var(--b0r-text);
+  font-size: 1rem;
+  font-weight: 550;
+}
+
+.browser-voice-share-folder-path small {
+  color: var(--b0r-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.browser-voice-share-access {
+  display: grid;
+  gap: 8px;
+}
+
+.browser-voice-share-access > span {
+  color: var(--b0r-muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.browser-voice-share-access-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.browser-voice-share-access-options button {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(151, 178, 207, 0.48);
+  border-radius: 9px;
+  background: rgba(4, 22, 39, 0.58);
+  color: var(--b0r-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+}
+
+.browser-voice-share-access-options button.is-active {
+  border-color: rgba(103, 233, 210, 0.55);
+  background: rgba(103, 233, 210, 0.14);
+  color: #eef9f6;
+}
+
+.browser-voice-share-message {
+  margin: 0;
+  color: #8ce8d2;
+  font-size: 0.9rem;
+}
+
+.browser-voice-share-existing {
+  padding-top: 18px;
+  border-top: 1px solid var(--b0r-line);
+}
+
+.browser-voice-share-existing h3 {
+  margin: 0 0 12px;
+  color: var(--b0r-muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.browser-voice-share-existing ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-voice-share-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(151, 178, 207, 0.18);
+}
+
+.browser-voice-share-member:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.browser-voice-share-member span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.browser-voice-share-member strong {
+  font-size: 0.96rem;
+  font-weight: 550;
+}
+
+.browser-voice-share-member small {
+  color: var(--b0r-muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 540px) {
+  .browser-voice-share-dialog-body {
+    padding: 22px 16px 24px;
+  }
+
+  .browser-voice-share-access-options {
+    grid-template-columns: 1fr;
+  }
+
+  .browser-voice-share-member {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row-body .browser-voice-file-open {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  min-height: 68px;
+  padding: 10px 8px;
+  background: transparent;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row-body:hover,
+.browser-voice-shell.is-b0r .browser-voice-file-row.is-selected .browser-voice-file-row-body {
+  background: rgba(70, 124, 177, 0.13);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-open {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  min-height: 68px;
+  padding: 10px 8px;
+  background: #071a2d;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-open:hover,
+.browser-voice-shell.is-b0r .browser-voice-file-row.is-selected .browser-voice-file-open {
+  background: rgba(70, 124, 177, 0.13);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-swipe-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row.has-actions-revealed .browser-voice-file-swipe-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-open-icon {
+  width: 38px;
+  height: 38px;
+  padding: 8px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 8px;
+  color: #dbe8f6;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-open .browser-voice-file-open-copy {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  gap: 3px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-open-copy strong,
+.browser-voice-shell.is-b0r .browser-voice-file-open-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-open-copy small {
+  color: var(--b0r-muted);
+  font-size: 0.76rem;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-open em {
+  color: #f4f7fc;
+  font-size: 1.55rem;
+  font-style: normal;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row.has-inline-actions .browser-voice-file-open-copy {
+  padding-right: 68px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row.has-inline-actions.has-share-action .browser-voice-file-inline-actions {
+  right: 42px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-row.has-inline-actions .browser-voice-file-open em {
+  visibility: hidden;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-inline-actions {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 3px;
+  transform: translateY(-50%);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-inline-actions button,
+.browser-voice-shell.is-b0r .browser-voice-file-inline-rename button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  place-items: center;
+  border: 1px solid rgba(190, 213, 238, 0.17);
+  border-radius: 7px;
+  background: #10263d;
+  color: #dce8f6;
+  cursor: pointer;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-inline-actions button:hover,
+.browser-voice-shell.is-b0r .browser-voice-file-inline-actions button:focus-visible,
+.browser-voice-shell.is-b0r .browser-voice-file-inline-rename button:hover,
+.browser-voice-shell.is-b0r .browser-voice-file-inline-rename button:focus-visible {
+  border-color: rgba(113, 239, 208, 0.5);
+  color: var(--b0r-mint);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-inline-actions svg {
+  width: 17px;
+  height: 17px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-inline-rename {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 68px;
+  padding: 8px;
+  background: rgba(70, 124, 177, 0.13);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-inline-rename input {
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(113, 239, 208, 0.45);
+  border-radius: 7px;
+  outline: 0;
+  background: #071a2d;
+  color: #f4f7fc;
+  font: inherit;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-preview.has-selection {
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-editor {
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  border-radius: 10px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-save-button {
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 13px;
+  border-radius: 8px;
+  box-shadow: none;
+  font-size: 0.86rem;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-save-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-file-asset-preview {
+  height: 100%;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-preview.is-empty {
+  place-items: center;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-files-preview.is-empty .browser-voice-files-feedback {
+  border: 0;
+  background: transparent;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-workspace-page > .browser-voice-handoff-shell:not(.browser-voice-files-shell) {
+  gap: 12px;
+  margin: 4px 0 0;
+  padding: 14px 16px;
+  border-color: var(--b0r-line);
+  border-radius: 11px;
+  background: rgba(6, 20, 36, 0.38);
+}
+
+.browser-voice-shell.is-b0r .browser-voice-workspace-page > .browser-voice-handoff-shell .browser-voice-handoff-head span {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-workspace-page > .browser-voice-handoff-shell .browser-voice-handoff-head strong {
+  color: #f2f6fc;
+  font-weight: 500;
+}
+
+.browser-voice-shell.is-b0r .browser-voice-workspace-page > .browser-voice-handoff-shell .browser-voice-handoff-head em {
+  color: #f2f6fc;
+}
+
+@media (max-width: 760px) {
+  .browser-voice-shell.is-b0r .browser-voice-workspace-page {
+    gap: 17px;
+    padding: 30px 0 36px;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-workspace-page .browser-voice-page-heading {
+    display: block;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-workspace-page .browser-voice-page-heading h2 {
+    font-size: 1.7rem;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-workspace-page .browser-voice-page-heading p {
+    font-size: 0.94rem;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-head {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-search {
+    width: 100%;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-actions {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-actions > .browser-voice-chip,
+  .browser-voice-shell.is-b0r .browser-voice-files-new-menu > summary,
+  .browser-voice-shell.is-b0r .browser-voice-files-more-menu > summary {
+    width: auto;
+    min-width: 0;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-new-menu-panel {
+    right: auto;
+    left: 0;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-sync-state {
+    flex-wrap: wrap;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+    border-radius: 10px;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-list {
+    height: auto;
+    max-height: none;
+    padding: 0;
+    border-right: 0;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-directory {
+    padding: 13px;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-directory small {
+    display: none;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-file-open {
+    min-height: 76px;
+    padding: 10px 13px;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-preview {
+    height: auto;
+    max-height: none;
+    border-top: 1px solid var(--b0r-line);
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-preview.has-selection {
+    grid-template-rows: minmax(58vh, 620px) auto;
+    overflow: visible;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-file-editor {
+    min-height: 58vh;
+    resize: vertical;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-save-button {
+    justify-self: end;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-files-preview.is-empty {
+    display: none;
+  }
+
+  .browser-voice-shell.is-b0r .browser-voice-workspace-page > .browser-voice-handoff-shell .browser-voice-handoff-head span {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}

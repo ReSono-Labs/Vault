@@ -1,0 +1,42 @@
+{
+  "id": "resono-vault-memory",
+  "name": "ReSono Vault Memory",
+  "description": "Scoped recall and automatic memory synchronization with a local ReSono Vault.",
+  "kind": "memory",
+  "contracts": {
+    "tools": ["vault_memory_search", "vault_memory_get", "vault_memory_store", "vault_memory_correct", "vault_memory_forget"]
+  },
+  "toolMetadata": {
+    "vault_memory_get": { "replaySafe": true },
+    "vault_memory_store": { "sideEffecting": true },
+    "vault_memory_correct": { "sideEffecting": true },
+    "vault_memory_forget": { "sideEffecting": true }
+  },
+  "uiHints": {
+    "credential": { "label": "Vault credential", "sensitive": true },
+    "baseUrl": { "label": "Vault URL", "placeholder": "https://127.0.0.1:8765" },
+    "autoCapture": { "label": "Automatically submit completed turns" },
+    "autoRecall": { "label": "Automatically recall before prompts" },
+    "startupMemory": { "label": "Load Vault startup memory once per session" },
+    "dreaming": { "label": "OpenClaw local dreaming" }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["credential"],
+    "properties": {
+      "credential": { "type": "string", "minLength": 1 },
+      "baseUrl": { "type": "string", "default": "https://127.0.0.1:8765" },
+      "autoCapture": { "type": "boolean", "default": true },
+      "autoRecall": { "type": "boolean", "default": true },
+      "startupMemory": { "type": "boolean", "default": true },
+      "dreaming": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean", "default": false }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+#!/bin/sh
+set -eu
+
+package_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+compose() {
+  docker compose --env-file "$package_dir/vault.env" -f "$package_dir/compose.yml" "$@"
+}
+
+detect_lan_address() {
+  if command -v ip >/dev/null 2>&1; then
+    ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i=1; i<=NF; i++) if ($i == "src") { print $(i+1); exit } }'
+    return
+  fi
+  hostname -I 2>/dev/null | awk '{ print $1 }'
+}
+
+configure_lan() {
+  address=${1:-$(detect_lan_address)}
+  if ! printf '%s\n' "$address" | awk -F. 'NF==4 { for (i=1;i<=4;i++) if ($i !~ /^[0-9]+$/ || $i<0 || $i>255) exit 1; ok=1 } END { exit !ok }'; then
+    printf '%s\n' 'Vault could not detect this computer’s local address.' >&2
+    printf 'Run: %s enable-lan 192.168.1.50\n' "$0" >&2
+    exit 1
+  fi
+  temporary=$(mktemp "$package_dir/vault.env.XXXXXX")
+  awk '!/^VAULT_BIND_ADDRESS=/ && !/^VAULT_TLS_HOSTS=/' "$package_dir/vault.env" > "$temporary"
+  printf 'VAULT_BIND_ADDRESS=0.0.0.0\nVAULT_TLS_HOSTS=localhost,127.0.0.1,%s\n' "$address" >> "$temporary"
+  chmod 0600 "$temporary"
+  mv "$temporary" "$package_dir/vault.env"
+  LAN_ADDRESS=$address
+}
+
+command=${1:-install}
+case "$command" in
+  install|update)
+    if [ -f "$package_dir/images/resono-labs-vault.tar.zst" ]; then
+      zstd -dc "$package_dir/images/resono-labs-vault.tar.zst" | docker load
+    elif [ -f "$package_dir/images/resono-labs-vault.tar.gz" ]; then
+      gzip -dc "$package_dir/images/resono-labs-vault.tar.gz" | docker load
+    fi
+    configure_lan "${VAULT_LAN_ADDRESS:-}"
+    compose up -d --wait
+    printf '%s\n' 'Vault is ready for your computer and local network.'
+    printf 'Computer: https://127.0.0.1:8765\nPhone:    https://%s:8765\n' "$LAN_ADDRESS"
+    printf '%s\n' "Run '$0 setup' for your one-time setup link."
+    ;;
+  setup)
+    credential=$(compose exec -T vault python -m app.vault_runtime.package_runtime show-setup)
+    printf 'https://127.0.0.1:8765/identity/setup/start?credential=%s\n' "$credential"
+    ;;
+  enable-lan)
+    configure_lan "${2:-}"
+    compose up -d --wait
+    printf 'Phone: https://%s:8765\n' "$LAN_ADDRESS"
+    ;;
+  start) compose up -d --wait ;;
+  stop) compose stop ;;
+  status) compose ps ;;
+  logs) compose logs --tail 200 vault bridge postgres ;;
+  uninstall)
+    compose down --remove-orphans
+    printf '%s\n' 'Vault was removed. Your saved data was preserved.'
+    ;;
+  *)
+    printf 'Usage: %s {install|update|setup|enable-lan [address]|start|stop|status|logs|uninstall}\n' "$0" >&2
+    exit 2
+    ;;
+esac

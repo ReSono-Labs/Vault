@@ -1,0 +1,28 @@
+[Unit]
+Description=ReSono Labs Vault
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=resono-vault
+Group=resono-vault
+WorkingDirectory=/opt/resono-vault
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=RESONO_VAULT_DATA_ROOT=/var/lib/resono-vault
+Environment=RESONO_VAULT_WEB_ROOT=/opt/resono-vault/web
+Environment=RESONO_VAULT_LOCAL_API_HOST=127.0.0.1
+Environment=RESONO_VAULT_LOCAL_API_PORT=8765
+Environment=RESONO_VAULT_LOCAL_API_TLS_CERTIFICATE_FILE=/var/lib/resono-vault/tls/vault.crt
+Environment=RESONO_VAULT_LOCAL_API_TLS_PRIVATE_KEY_FILE=/var/lib/resono-vault/tls/vault.key
+ExecStart=/opt/resono-vault/runtime/bin/python3 -m app.vault_runtime.package_runtime serve
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/resono-vault
+
+[Install]
+WantedBy=multi-user.target

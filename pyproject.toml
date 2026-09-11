@@ -1,0 +1,35 @@
+[project]
+name = "resono-labs-vault"
+version = "0.1.0"
+description = "Local-first standalone ReSono Labs Vault"
+readme = "README.md"
+license = {file = "LICENSE.md"}
+authors = [{name = "ReSono Labs"}]
+requires-python = ">=3.11"
+dependencies = [
+  "cryptography==44.0.0",
+  "httpx==0.28.1",
+  "jsonschema==4.23.0",
+  "openai-agents==0.18.3",
+  "psycopg[binary]==3.2.3",
+  "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.4",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.vault_runtime.extensions" = ["standards/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib"]

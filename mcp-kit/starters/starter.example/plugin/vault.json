@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schemas.resonolabs.com/vault/plugin/v1.json",
+  "minimumVaultVersion": "0.1.0",
+  "agents": ["voice", "background"],
+  "services": ["context.locale"]
+}

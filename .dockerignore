@@ -1,0 +1,9 @@
+.git
+.runtime
+.pytest_cache
+.understand-anything
+.venv
+frontend/dist
+frontend/node_modules
+*.pyc
+__pycache__

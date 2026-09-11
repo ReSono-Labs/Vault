@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.resonolabs.com/vault/plugin-config/v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "fields"],
+  "$defs": {
+    "field": {
+      "type": "object", "additionalProperties": false,
+      "required": ["key", "type", "label"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "type": {"enum": ["text", "long_text", "number", "checkbox", "choice", "multiple_choice", "url", "location", "list", "secret"]},
+        "label": {"type": "string", "minLength": 1, "maxLength": 80},
+        "help": {"type": "string", "maxLength": 240},
+        "placeholder": {"type": "string", "maxLength": 160},
+        "required": {"type": "boolean", "default": false},
+        "secretHeader": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]{0,63}$"},
+        "default": {},
+        "choices": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"type": "object", "additionalProperties": false, "required": ["value", "label"], "properties": {"value": {"type": "string", "minLength": 1, "maxLength": 80}, "label": {"type": "string", "minLength": 1, "maxLength": 80}}}},
+        "minimum": {"type": "number"}, "maximum": {"type": "number"},
+        "minLength": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "maxLength": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "maxItems": {"type": "integer", "minimum": 1, "maximum": 100}
+      },
+      "allOf": [
+        {"if": {"properties": {"type": {"enum": ["choice", "multiple_choice"]}}}, "then": {"required": ["choices"]}},
+        {"if": {"properties": {"type": {"const": "secret"}}}, "then": {"required": ["secretHeader"]}}
+      ]
+    }
+  },
+  "properties": {
+    "$schema": {"const": "https://schemas.resonolabs.com/vault/plugin-config/v1.json"},
+    "fields": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/field"}}
+  }
+}

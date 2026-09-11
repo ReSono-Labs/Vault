@@ -1,0 +1,5 @@
+name: resono-vault
+version: 0.1.0
+description: Scoped ReSono Vault recall and proposal-only memory integration.
+hooks: []
+

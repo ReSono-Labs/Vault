@@ -1,0 +1,110 @@
+.browser-voice-handoff-shell {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--browser-voice-line);
+  border-radius: 24px;
+  background: rgba(10, 22, 40, 0.44);
+}
+
+.browser-voice-handoff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--browser-voice-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.browser-voice-handoff-head span { display: grid; gap: 4px; }
+.browser-voice-handoff-head strong { font-size: 0.92rem; }
+.browser-voice-handoff-head small { color: var(--browser-voice-muted); }
+.browser-voice-handoff-head em { color: #78bfff; font-size: 1.5rem; font-style: normal; }
+
+.browser-voice-handoff-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.browser-voice-handoff-input {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(219, 236, 255, 0.16);
+  border-radius: 18px;
+  background: rgba(8, 16, 34, 0.42);
+  color: var(--browser-voice-text);
+}
+
+.browser-voice-handoff-input:focus {
+  outline: 2px solid rgba(123, 191, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.browser-voice-handoff-button {
+  min-width: 120px;
+}
+
+.browser-voice-hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.browser-voice-handoff-attach {
+  min-height: 46px;
+}
+
+.browser-voice-handoff-preview {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 236, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(8, 16, 34, 0.36);
+}
+
+.browser-voice-handoff-preview img {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.browser-voice-handoff-preview strong,
+.browser-voice-handoff-preview span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-voice-handoff-preview strong {
+  color: var(--browser-voice-text);
+  font-size: 0.9rem;
+}
+
+.browser-voice-handoff-preview span,
+.browser-voice-handoff-error {
+  color: var(--browser-voice-muted);
+  font-size: 0.82rem;
+}
+
+.browser-voice-handoff-error {
+  margin: 0;
+}

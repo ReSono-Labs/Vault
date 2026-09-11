@@ -1,0 +1,26 @@
+name: resono-vault-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: resono-vault-test-postgres
+    restart: "no"
+    environment:
+      POSTGRES_DB: ${VAULT_TEST_POSTGRES_DB:-resono_vault_test}
+      POSTGRES_USER: ${VAULT_TEST_POSTGRES_USER:-vault_test}
+      POSTGRES_PASSWORD: ${VAULT_TEST_POSTGRES_PASSWORD:-vault_test_only}
+    ports:
+      - "127.0.0.1:${VAULT_TEST_POSTGRES_PORT:-55436}:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - vault_test_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  vault_test_postgres_data:
+    name: resono-vault-test-postgres-data

@@ -1,0 +1,91 @@
+.browser-voice-shell:not(.is-b0r) {
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+
+.browser-voice-card.is-login-page {
+  width: min(390px, 100%);
+  padding: 28px 20px 20px;
+  border-radius: 22px;
+  background: rgba(10, 25, 48, 0.8);
+  box-shadow: 0 24px 64px rgba(3, 10, 24, 0.32);
+}
+
+.browser-voice-card.is-login-page .browser-voice-header {
+  display: block;
+}
+
+.browser-voice-login-brand {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.browser-voice-login-brand img {
+  width: 190px;
+  height: auto;
+}
+
+.browser-voice-login-brand p {
+  margin: 0;
+  color: rgba(226, 238, 250, 0.78);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.browser-voice-card.is-login-page .browser-voice-login-panel {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.browser-voice-card.is-login-page .browser-voice-login-panel h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.85rem;
+  line-height: 1.1;
+}
+
+.browser-voice-card.is-login-page .browser-voice-form {
+  gap: 12px;
+}
+
+.browser-voice-card.is-login-page .browser-voice-form label {
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.browser-voice-card.is-login-page .browser-voice-form input {
+  padding: 13px 14px;
+  border-radius: 14px;
+  background: rgba(5, 15, 32, 0.56);
+}
+
+.browser-voice-card.is-login-page .browser-voice-submit {
+  margin-top: 2px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.browser-voice-card.is-login-page .browser-voice-feedback {
+  margin-top: 14px;
+}
+
+@media (max-width: 540px) {
+  .browser-voice-shell:not(.is-b0r) {
+    padding: 20px 12px;
+  }
+
+  .browser-voice-card.is-login-page {
+    padding: 24px 16px 16px;
+  }
+
+  .browser-voice-login-brand img {
+    width: 170px;
+  }
+}
