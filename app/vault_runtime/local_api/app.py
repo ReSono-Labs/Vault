@@ -871,6 +871,18 @@ class VaultLocalApiApp:
                     plugin_id=extension_id,
                 )
             ]})
+        if method == "GET" and path.startswith("/extensions/") and path.endswith("/grants"):
+            extension_id = path.removeprefix("/extensions/").removesuffix("/grants").strip("/")
+            repository.by_id(
+                actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
+                extension_id=extension_id, owner=True,
+            )
+            return LocalApiResponse(200, {"items": list(repository.list_grants(
+                actor_user_id=principal.user_id,
+                target_user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                extension_id=extension_id,
+            ))})
         if method == "GET" and path == "/extensions/runtime":
             return LocalApiResponse(200, {"safeMode": repository.safe_mode(
                 actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
@@ -1047,6 +1059,9 @@ class VaultLocalApiApp:
                     if not isinstance(schema, dict):
                         raise ValueError("This Plugin does not have settings.")
                     settings, secret_headers = validate_settings(schema, payload.get("values"))
+                    for header, value in list(secret_headers.items()):
+                        if header.lower() == "authorization" and value and not value.lower().startswith("bearer "):
+                            secret_headers[header] = f"Bearer {value}"
                 elif extension.kind is ExtensionKind.MCP:
                     if extension.configuration.get("packageType") != "hosted" or not isinstance(schema, dict):
                         raise ValueError("This MCP package does not have settings.")
@@ -1064,21 +1079,25 @@ class VaultLocalApiApp:
                 if secret_headers:
                     if self._extension_secrets is None:
                         raise RuntimeError("Local extension credentials are unavailable.")
-                    self._extension_secrets.set_headers(
-                        actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-                        extension_id=extension_id, headers=secret_headers,
-                    )
-                    for child in repository.managed_children(
-                        actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-                        plugin_id=extension_id,
-                    ):
+                    secret_targets: tuple[str, ...]
+                    if extension.kind is ExtensionKind.PLUGIN:
+                        children = repository.managed_children(
+                            actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
+                            plugin_id=extension_id,
+                        )
+                        if not children:
+                            raise ValueError("This plugin has no MCP connection to store the token on. Re-import the plugin or import mcp.json on the MCP tab.")
+                        secret_targets = tuple(child.extension_id for child in children)
+                    else:
+                        secret_targets = (extension_id,)
+                    for target_id in secret_targets:
                         existing_headers = dict(self._extension_secrets.resolve_headers(
                             user_id=principal.user_id, workspace_id=principal.workspace_id,
-                            extension_id=child.extension_id,
+                            extension_id=target_id,
                         ))
                         self._extension_secrets.set_headers(
                             actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-                            extension_id=child.extension_id,
+                            extension_id=target_id,
                             headers=existing_headers | secret_headers,
                         )
                 return LocalApiResponse(200, _extension_payload(record))

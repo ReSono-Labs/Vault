@@ -7,6 +7,8 @@ import { DocumentsPanel } from "@/browser-voice/DocumentsPanel";
 import { SettingsPanel } from "@/browser-voice/SettingsPanel";
 import { BrowserWorkspaceFileBrowser } from "@/browser-voice/BrowserWorkspaceFileBrowser";
 import { PluginImportDialogHost } from "@/browser-voice/PluginImportDialogHost";
+import { overlayLiveBrowserLocalSearch, tryFulfillBrowserLocalVoiceTool } from "@/browser-voice/computerFoldersVoiceTools";
+import { normalizeWorkspaceToolArguments } from "@/browser-voice/workspaceToolArguments";
 import { NotificationsMenu } from "@/browser-voice/NotificationsMenu";
 import {
   localApi,
@@ -562,15 +564,22 @@ export function BrowserVoiceApp() {
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
         throw new Error("Voice produced invalid tool arguments.");
       args = parsed as Record<string, unknown>;
+    } else if (event.arguments && typeof event.arguments === "object" && !Array.isArray(event.arguments)) {
+      args = event.arguments as Record<string, unknown>;
     }
+    args = normalizeWorkspaceToolArguments(name, args);
     const utterance = lastUserUtteranceRef.current;
-    const result = await localApi.callVoiceTool(sessionId, {
+    const browserResult = await tryFulfillBrowserLocalVoiceTool(name, args);
+    let result = browserResult ?? await localApi.callVoiceTool(sessionId, {
       name,
       toolCallId: callId,
       arguments: args,
       userUtterance: utterance?.text,
       userUtteranceId: utterance?.index,
     });
+    if (!browserResult) {
+      result = await overlayLiveBrowserLocalSearch(name, args, result);
+    }
     if (result.resonoSessionUpdate) send(result.resonoSessionUpdate);
     if (providerProtocolRef.current === "google-live-bidi") {
       send({ toolResponse: { functionResponses: [{ id: callId, name, response: result }] } });
@@ -642,7 +651,7 @@ export function BrowserVoiceApp() {
       : destination === "documents"
         ? "Documents"
       : destination === "workspace"
-        ? "Your workspace"
+        ? `${user?.displayName ?? "User"}'s Workspace`
       : destination === "memory"
         ? "Memory"
       : destination === "agent2agent"
@@ -946,8 +955,7 @@ export function BrowserVoiceApp() {
               <div className="browser-voice-management-page browser-voice-workspace-page">
                 <header className="browser-voice-page-heading">
                   <div>
-                    <h2>Your workspace</h2>
-                    <p>Private files from your Vault, available before or during voice.</p>
+                    <h2>{`${activeUser.displayName}'s Workspace`}</h2>
                   </div>
                 </header>
                 <BrowserWorkspaceFileBrowser initiallyExpanded />

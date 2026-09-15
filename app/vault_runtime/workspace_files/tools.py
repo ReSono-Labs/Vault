@@ -15,8 +15,8 @@ from app.vault_runtime.workspace_files.path_areas import classify_workspace_path
 from app.vault_runtime.workspace_files.service import WorkspaceFileService
 
 PATH_PREFIX_GUIDANCE = (
-    "Paths use vault (notes/foo.md), shared (shared/owner/mount/...), or local (local/mount/...) prefixes. "
-    "Call workspace_root first for path area descriptors and available mounts."
+    "Paths use vault, shared/{owner}/{mount}/..., or local/{mount}/... prefixes. "
+    "Call workspace_root or list shared/ and local/ for the current mounts; do not assume folder names."
 )
 
 

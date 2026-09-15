@@ -53,6 +53,21 @@ export function isBrowserLocalMountPath(path: string): boolean {
   return parsed !== null && parsed.mountName.length > 0;
 }
 
+export function browserLinkedMountForPath(
+  path: string,
+  mounts: HostFilesystemMount[],
+): HostFilesystemMount | null {
+  const parsed = parseLocalViewPath(path.trim());
+  if (!parsed?.mountName) {
+    return null;
+  }
+  const mount = mounts.find((item) => item.mountName === parsed.mountName);
+  if (!mount || mount.source === "helper") {
+    return null;
+  }
+  return mount;
+}
+
 function isEditableFile(name: string, mimeType: string, canWrite: boolean): boolean {
   if (!canWrite) {
     return false;
@@ -143,11 +158,34 @@ function findMount(mounts: HostFilesystemMount[], mountName: string): HostFilesy
   return mount;
 }
 
+async function ensureDirectoryPermission(
+  handle: FileSystemDirectoryHandle,
+  permission: "read" | "write",
+): Promise<void> {
+  const mode = permission === "write" ? "readwrite" : "read";
+  const permissive = handle as FileSystemDirectoryHandle & {
+    queryPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
+    requestPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
+  };
+  if (typeof permissive.queryPermission !== "function" || typeof permissive.requestPermission !== "function") {
+    return;
+  }
+  const queried = await permissive.queryPermission({ mode });
+  if (queried === "granted") {
+    return;
+  }
+  const requested = await permissive.requestPermission({ mode });
+  if (requested !== "granted") {
+    throw new Error("Allow folder access in this browser to let Voice browse the linked directory.");
+  }
+}
+
 async function loadMountRoot(mount: HostFilesystemMount): Promise<FileSystemDirectoryHandle> {
   const handle = await getDirectoryHandle(mount.mountId);
   if (!handle) {
     throw new Error("Re-link this folder in Settings on this browser.");
   }
+  await ensureDirectoryPermission(handle, mount.permission);
   return handle;
 }
 
@@ -173,6 +211,7 @@ export async function listBrowserLocalRoot(
       linked: true,
       permission: mount.permission,
       childCount,
+      pathArea: "local",
     });
   }
   entries.sort((left, right) => left.name.localeCompare(right.name));
@@ -180,6 +219,7 @@ export async function listBrowserLocalRoot(
     currentDirectory: LOCAL_FILES_ROOT,
     parentDirectory: "",
     entries,
+    pathArea: "local",
   };
 }
 
@@ -242,8 +282,9 @@ export async function listBrowserLocalDirectory(
   return {
     currentDirectory,
     parentDirectory,
-    entries,
+    entries: entries.map((entry) => ({ ...entry, pathArea: "local" })),
     permission: mount.permission,
+    pathArea: "local",
   };
 }
 
@@ -296,5 +337,104 @@ export async function downloadBrowserLocalFile(
   return {
     blob: file,
     contentType: file.type || "application/octet-stream",
+  };
+}
+
+export async function searchBrowserLocalFiles(
+  query: string,
+  directory: string,
+  mounts: HostFilesystemMount[],
+  limit = 25,
+): Promise<{
+  query: string;
+  directory: string;
+  pathArea: string;
+  matches: Array<{
+    fileKey: string;
+    pathArea: string;
+    mimeType?: string | null;
+    editable?: boolean | null;
+    snippet?: string | null;
+  }>;
+  matchCount: number;
+}> {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    throw new Error("A search query is required.");
+  }
+  const boundedLimit = Math.max(1, Math.min(limit, 50));
+  const startPaths = directory.trim() && directory !== LOCAL_FILES_ROOT
+    ? [directory]
+    : mounts.filter((mount) => mount.source !== "helper").map((mount) => joinViewPath(LOCAL_FILES_ROOT, mount.mountName));
+  const matches: Array<{
+    fileKey: string;
+    pathArea: string;
+    mimeType?: string | null;
+    editable?: boolean | null;
+    snippet?: string | null;
+  }> = [];
+  const queue = [...startPaths];
+  const visited = new Set<string>();
+  let directoriesScanned = 0;
+
+  while (queue.length && matches.length < boundedLimit && directoriesScanned < 200) {
+    const current = queue.shift();
+    if (!current || visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+    directoriesScanned += 1;
+    let listing;
+    try {
+      listing = await listBrowserLocalDirectory(current, mounts);
+    } catch {
+      continue;
+    }
+    for (const entry of listing.entries) {
+      if (entry.kind === "directory") {
+        if (!visited.has(entry.path)) {
+          queue.push(entry.path);
+        }
+        continue;
+      }
+      const haystack = entry.path.toLowerCase();
+      let snippet: string | null = null;
+      let contentHaystack = haystack;
+      try {
+        const readBack = await readBrowserLocalFile(entry.path, mounts);
+        if (readBack.contentMarkdown) {
+          contentHaystack = `${entry.path}\n${readBack.contentMarkdown}`.toLowerCase();
+          const index = contentHaystack.indexOf(normalizedQuery);
+          if (index >= 0) {
+            const start = Math.max(0, index - 40);
+            const end = Math.min(readBack.contentMarkdown.length, index + normalizedQuery.length + 80);
+            snippet = readBack.contentMarkdown.slice(start, end).trim();
+          }
+        }
+      } catch {
+        /* binary or unreadable files still match on path */
+      }
+      if (!contentHaystack.includes(normalizedQuery) && !haystack.includes(normalizedQuery)) {
+        continue;
+      }
+      matches.push({
+        fileKey: entry.path,
+        pathArea: "local",
+        mimeType: entry.mimeType,
+        editable: entry.editable,
+        snippet,
+      });
+      if (matches.length >= boundedLimit) {
+        break;
+      }
+    }
+  }
+
+  return {
+    query,
+    directory: directory.trim() || LOCAL_FILES_ROOT,
+    pathArea: "local",
+    matches,
+    matchCount: matches.length,
   };
 }

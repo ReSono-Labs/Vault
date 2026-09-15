@@ -1,12 +1,23 @@
 .browser-voice-connections { display:grid; gap:22px; min-width:0; }
 .browser-voice-pages[hidden] { display:none !important; }
 .browser-voice-connection-list { display:grid; gap:12px; }
-.browser-voice-connection-row { display:grid; grid-template-columns:52px minmax(0,1fr) auto 18px; gap:16px; align-items:center; width:100%; min-height:86px; padding:15px 18px; color:var(--b0r-text); text-align:left; background:rgba(4,22,39,.42); border:1px solid rgba(137,165,194,.28); border-radius:13px; cursor:pointer; }
+.browser-voice-connection-row { display:grid; grid-template-columns:52px minmax(0,1fr) auto; gap:16px; align-items:center; width:100%; min-height:86px; padding:15px 18px; color:var(--b0r-text); text-align:left; background:rgba(4,22,39,.42); border:1px solid rgba(137,165,194,.28); border-radius:13px; cursor:default; }
 .browser-voice-connection-row:hover { border-color:rgba(107,238,211,.55); background:rgba(12,39,60,.58); }
 .browser-voice-connection-mark { display:grid; place-items:center; width:46px; height:46px; color:#61e8d0; border:1px solid currentColor; border-radius:50%; }
 .browser-voice-connection-mark svg { width:25px; height:25px; }
 .browser-voice-connection-mark.is-calendar { color:#8cbbff; }
-.browser-voice-connection-row > span:nth-child(2) { display:grid; gap:5px; min-width:0; }
+.browser-voice-connection-row > span:nth-child(2),
+.browser-voice-connection-open { display:grid; gap:5px; min-width:0; }
+.browser-voice-connection-open {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
 .browser-voice-connection-row strong { font-size:1.05rem; font-weight:560; }
 .browser-voice-connection-row small { overflow:hidden; color:var(--b0r-muted); text-overflow:ellipsis; white-space:nowrap; }
 .browser-voice-connection-row > b { font-size:1.8rem; font-weight:300; }

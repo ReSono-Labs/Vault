@@ -320,6 +320,14 @@ export function BrowserWorkspaceFileBrowser({ initiallyExpanded = false }: { ini
     }
   }
 
+  function closePreview() {
+    setSelectedFileKey(null);
+    setSelectedFile(null);
+    setEditorContent("");
+    releasePreviewUrl();
+    setPreview(EMPTY_PREVIEW);
+  }
+
   async function openEntry(entry: WorkspaceFileEntry) {
     setRevealedEntryPath(null);
     setNotice(null);
@@ -611,7 +619,6 @@ export function BrowserWorkspaceFileBrowser({ initiallyExpanded = false }: { ini
         ) : (
           <div className="browser-voice-handoff-copy">
             <p className="browser-voice-panel-label">Workspace</p>
-            <p className="browser-voice-panel-copy">Private files from your Vault.</p>
           </div>
         )}
         <div className="browser-voice-files-actions">
@@ -701,18 +708,6 @@ export function BrowserWorkspaceFileBrowser({ initiallyExpanded = false }: { ini
 
           <div className="browser-voice-files-layout">
             <div className="browser-voice-files-list" aria-label="Workspace files">
-              {upDirectory !== null ? (
-                <button
-                  aria-label="Up one folder"
-                  className="browser-voice-files-up-button"
-                  disabled={Boolean(busy)}
-                  onClick={() => setDirectory(upDirectory)}
-                  type="button"
-                >
-                  <WorkspaceUpIcon />
-                  <span>Up one folder</span>
-                </button>
-              ) : null}
               <div className="browser-voice-files-directory">
                 <strong>{currentDirectoryLabel}</strong>
                 <small>Swipe left for actions</small>
@@ -815,11 +810,33 @@ export function BrowserWorkspaceFileBrowser({ initiallyExpanded = false }: { ini
               ) : (
                 <p className="browser-voice-empty">{searchQuery.trim() ? "No matching files." : "No files in this folder."}</p>
               )}
+              {upDirectory !== null ? (
+                <button
+                  aria-label="Up one folder"
+                  className="browser-voice-files-up-button"
+                  disabled={Boolean(busy)}
+                  onClick={() => setDirectory(upDirectory)}
+                  type="button"
+                >
+                  <WorkspaceUpIcon />
+                  <span>Up one folder</span>
+                </button>
+              ) : null}
             </div>
 
             <div className={`browser-voice-files-preview ${selectedFile || selectedEntry ? "has-selection" : "is-empty"}`} aria-label="File preview">
               {selectedFile ? (
                 <>
+                  <div className="browser-voice-files-preview-head">
+                    <button
+                      aria-label={`Close preview of ${selectedFile.filename}`}
+                      className="browser-voice-chip"
+                      onClick={() => closePreview()}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                  </div>
                   {selectedFile.editable ? (
                     <>
                       <textarea

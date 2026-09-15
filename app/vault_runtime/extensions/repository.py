@@ -399,6 +399,32 @@ class ExtensionRepository:
                 )
                 self._event(cursor, extension_id, workspace_id, actor_user_id, "grant_changed", {"targetUserId": target_user_id, "agentKind": agent.value, "capabilityName": capability_name, "enabled": enabled})
 
+    def list_grants(
+        self, *, actor_user_id: str, target_user_id: str, workspace_id: str, extension_id: str,
+    ) -> tuple[dict[str, object], ...]:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._require_scope(cursor, user_id=actor_user_id, workspace_id=workspace_id, owner=True)
+                self._require_scope(cursor, user_id=target_user_id, workspace_id=workspace_id)
+                cursor.execute(
+                    """
+                    SELECT capability_name, agent_kind, enabled, effect_class
+                    FROM vault_private.vault_extension_grants
+                    WHERE extension_id=%s AND user_id=%s AND workspace_id=%s
+                    ORDER BY capability_name, agent_kind
+                    """,
+                    (extension_id, target_user_id, workspace_id),
+                )
+                return tuple(
+                    {
+                        "capabilityName": str(row[0]),
+                        "agentKind": str(row[1]),
+                        "enabled": bool(row[2]),
+                        "effectClass": str(row[3]) if row[3] is not None else None,
+                    }
+                    for row in cursor.fetchall()
+                )
+
     def granted(self, *, user_id: str, workspace_id: str, extension_id: str, agent: AgentKind, capability_name: str = "") -> bool:
         with self._connect() as connection:
             with connection.cursor() as cursor:

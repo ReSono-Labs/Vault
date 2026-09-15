@@ -6,6 +6,7 @@ from threading import RLock
 from jsonschema import Draft202012Validator
 
 from app.vault_runtime.system_agents.inventory import AgentKind
+from app.vault_runtime.tools.argument_aliases import normalize_tool_arguments
 from app.vault_runtime.tools.definitions import ToolDefinition, ToolInvocationContext, ToolInvocationResult
 
 InvocationAuthorizer = Callable[[ToolDefinition, ToolInvocationContext], bool]
@@ -101,6 +102,7 @@ class ToolCatalog:
             return ToolInvocationResult("Tool is not granted.", is_error=True)
         if not self._authorizer(definition, context):
             return ToolInvocationResult("Tool is not granted in the current local scope.", is_error=True)
+        arguments = normalize_tool_arguments(name, arguments)
         if not isinstance(arguments, dict) or not _matches_schema(arguments, definition.input_schema):
             return ToolInvocationResult("Tool arguments are invalid.", is_error=True)
         result = definition.handler(context, arguments)

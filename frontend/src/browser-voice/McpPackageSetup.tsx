@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExtensionSchemaForm, initialExtensionSettings, type ExtensionSchemaField } from "@/browser-voice/ExtensionSchemaForm";
 import { localApi, type LocalExtension } from "@/browser-voice/localApi";
+import { ToolGrantTable } from "@/browser-voice/ToolGrantTable";
 
 type RuntimeStatus = {
   state?: string;
@@ -28,7 +29,6 @@ export function McpPackageSetup({
   const [values, setValues] = useState(() => initialExtensionSettings(schema, saved));
   const [tools, setTools] = useState<string[]>([]);
   const [userId, setUserId] = useState("");
-  const [effect, setEffect] = useState<Record<string, "read" | "write" | "delete">>({});
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,25 +81,6 @@ export function McpPackageSetup({
       setMessage(result.items.length ? "Tools are ready for you to choose." : "This MCP did not report any tools.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Vault could not reach this MCP.");
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function grant(name: string, agentKind: "voice" | "background") {
-    setWorking(true);
-    setError(null);
-    try {
-      await localApi.grantPluginTool(item.extensionId, {
-        targetUserId: userId,
-        agentKind,
-        capabilityName: name,
-        enabled: true,
-        effectClass: effect[name] ?? "read",
-      });
-      setMessage(`${name} is now available to ${agentKind === "voice" ? "Voice" : "Background Agent"}.`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Tool access could not be saved.");
     } finally {
       setWorking(false);
     }
@@ -176,50 +157,16 @@ export function McpPackageSetup({
       {tools.length ? (
         <div className="browser-voice-form">
           <h4>Tools</h4>
-          <p className="browser-voice-form-note">Choose access level, then grant each tool to Voice or Background Agent.</p>
-          <div className="browser-voice-tool-grant-list">
-            <div className="browser-voice-tool-grant-head">
-              <span>Tool</span>
-              <span>Access</span>
-              <span>Voice</span>
-              <span>Background</span>
-            </div>
-            {tools.map((name) => (
-              <div className="browser-voice-tool-grant-row" key={name}>
-                <strong>{name}</strong>
-                <select
-                  aria-label={`${name} access`}
-                  onChange={(event) =>
-                    setEffect((current) => ({
-                      ...current,
-                      [name]: event.target.value as "read" | "write" | "delete",
-                    }))
-                  }
-                  value={effect[name] ?? "read"}
-                >
-                  <option value="read">Read</option>
-                  <option value="write">Write</option>
-                  <option value="delete">Delete</option>
-                </select>
-                <button
-                  className="browser-voice-pill"
-                  disabled={working || !userId}
-                  onClick={() => void grant(name, "voice")}
-                  type="button"
-                >
-                  Voice
-                </button>
-                <button
-                  className="browser-voice-pill browser-voice-pill-muted"
-                  disabled={working || !userId}
-                  onClick={() => void grant(name, "background")}
-                  type="button"
-                >
-                  Background
-                </button>
-              </div>
-            ))}
-          </div>
+          <p className="browser-voice-form-note">Mark Voice and Background, choose Read or Read &amp; write, then save.</p>
+          <ToolGrantTable
+            extensionId={item.extensionId}
+            onError={setError}
+            onMessage={setMessage}
+            onWorking={setWorking}
+            tools={tools}
+            userId={userId}
+            working={working}
+          />
         </div>
       ) : null}
       {onRemove ? (

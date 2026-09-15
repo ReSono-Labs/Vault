@@ -92,5 +92,7 @@ def test_build_agent_path_areas_includes_mounts() -> None:
         local_mounts=[{"path": "local/Documents", "source": "helper", "agentAccessible": True}],
     )
     assert areas[SHARED_PATH_AREA]["mounts"][0]["path"] == "shared/alice/Reports"
+    assert areas[SHARED_PATH_AREA]["pathExample"] == "shared/alice/Reports/..."
     assert areas[LOCAL_PATH_AREA]["enabled"] is True
     assert areas[LOCAL_PATH_AREA]["mounts"][0]["path"] == "local/Documents"
+    assert areas[LOCAL_PATH_AREA]["pathExample"] == "local/Documents/..."

@@ -387,12 +387,15 @@ class WorkspaceFileService:
             if current in visited:
                 continue
             visited.add(current)
-            listing = self.list_directory(
-                principal=principal,
-                directory=current or None,
-                share_id=share_id,
-                for_agent=for_agent,
-            )
+            try:
+                listing = self.list_directory(
+                    principal=principal,
+                    directory=current or None,
+                    share_id=share_id,
+                    for_agent=for_agent,
+                )
+            except (WorkspaceFileBadRequestError, WorkspaceFileNotFoundError):
+                continue
             for entry in listing.entries:
                 if entry.kind == "directory":
                     if entry.path not in visited:

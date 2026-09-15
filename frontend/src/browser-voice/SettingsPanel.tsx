@@ -191,7 +191,10 @@ export function SettingsPanel({ user }: { user: LocalUser }) {
       <div className="browser-voice-section-head">
         <div>
           <h3>Computer folders</h3>
-          <p>Link folders from this computer into your workspace as <code>local/...</code> without copying them into Docker.</p>
+          <p>
+            Link folders from this computer as <code>local/...</code>. Files in this browser can
+            open them. Voice can browse and read them while this Vault tab is open.
+          </p>
         </div>
       </div>
 
@@ -203,7 +206,7 @@ export function SettingsPanel({ user }: { user: LocalUser }) {
             </span>
             <span>
               <strong>Computer folders</strong>
-              <small>Browse linked folders under local/ in your workspace.</small>
+              <small>Files and Voice (this tab) can browse linked folders under local/.</small>
               <small>{enabled ? "On" : "Off"} · This browser</small>
             </span>
           </span>

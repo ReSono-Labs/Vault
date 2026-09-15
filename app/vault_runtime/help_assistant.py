@@ -122,7 +122,7 @@ class HelpAssistant:
             hits.append(HelpSource(relative, excerpt, score, kind))
         hits.sort(key=lambda item: (item.kind != "guide", -item.score, item.path))
         authoritative: list[HelpSource] = []
-        if "mcp" in terms:
+        if "mcp" in terms or "migration" in terms or "ingest" in terms or "ingestion" in terms:
             authoritative.extend(self._exact_sources((
                 "platform-documents/vault-mcp-package-kit.md",
                 "platform-documents/vault-plugin-kit.md",
@@ -138,6 +138,7 @@ class HelpAssistant:
                 "platform-documents/platform-guide.md",
                 "platform-documents/vault-plugin-kit.md",
                 "codebase/app/vault_runtime/extensions/standards/plugin.schema.json",
+                "codebase/app/vault_runtime/extensions/standards/vault.schema.json",
                 "codebase/app/vault_runtime/extensions/specification.py",
                 "codebase/app/vault_runtime/extensions/service.py",
             )))

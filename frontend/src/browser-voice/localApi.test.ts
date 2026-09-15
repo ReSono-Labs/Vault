@@ -22,6 +22,18 @@ describe("local Browser Voice API", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it("loads extension grants without treating GET as a mutation", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [] }), {
+      status: 200, headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    await localApi.extensionGrants("ext-1");
+    expect(fetchMock).toHaveBeenCalledWith("/extensions/ext-1/grants", expect.objectContaining({
+      credentials: "same-origin",
+    }));
+    expect(fetchMock.mock.calls[0][1].method ?? "GET").toBe("GET");
+  });
+
   it("does not echo server errors as successful values", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: "Denied locally." } }), {
       status: 403, headers: { "Content-Type": "application/json" },

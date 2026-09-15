@@ -33,7 +33,7 @@ WORKSPACE_PATH_AREA_DESCRIPTORS: dict[str, dict[str, Any]] = {
         "label": "Shared with me",
         "rootPrefix": SHARED_FILES_ROOT,
         "pathPattern": f"{SHARED_FILES_ROOT}/{{ownerUsername}}/{{mountName}}/...",
-        "pathExample": f"{SHARED_FILES_ROOT}/alice/Reports/Q1.pdf",
+        "pathExample": f"{SHARED_FILES_ROOT}/{{ownerUsername}}/{{mountName}}/...",
         "description": (
             "Folders and files that other Vault users shared with this user. Each mount is read-only at the "
             "workspace root until you enter the mount path."
@@ -50,11 +50,11 @@ WORKSPACE_PATH_AREA_DESCRIPTORS: dict[str, dict[str, Any]] = {
         "label": "Computer folders",
         "rootPrefix": LOCAL_FILES_ROOT,
         "pathPattern": f"{LOCAL_FILES_ROOT}/{{mountName}}/...",
-        "pathExample": f"{LOCAL_FILES_ROOT}/Documents/invoice.pdf",
+        "pathExample": f"{LOCAL_FILES_ROOT}/{{mountName}}/...",
         "description": (
             "Folders linked from the user's computer. Mount names come from Settings > Computer folders."
         ),
-        "agentRead": "Helper-linked mounts only. Browser-linked mounts appear in listings but file content is not available server-side.",
+        "agentRead": "Voice can browse browser-linked mounts in the open Vault tab. Helper-linked mounts are also readable by the Background Agent.",
         "agentWrite": "Only helper-linked mounts with write permission.",
         "notes": (
             "source=helper means the host helper can serve files to agents. "
@@ -160,9 +160,17 @@ def build_agent_path_areas(
     vault = dict(WORKSPACE_PATH_AREA_DESCRIPTORS[VAULT_PATH_AREA])
     shared = dict(WORKSPACE_PATH_AREA_DESCRIPTORS[SHARED_PATH_AREA])
     shared["mounts"] = shared_mounts
+    if shared_mounts:
+        first_shared = str(shared_mounts[0].get("path") or "").strip()
+        if first_shared:
+            shared["pathExample"] = f"{first_shared}/..."
     local = dict(WORKSPACE_PATH_AREA_DESCRIPTORS[LOCAL_PATH_AREA])
     local["enabled"] = local_enabled
     local["mounts"] = local_mounts
+    if local_mounts:
+        first_local = str(local_mounts[0].get("path") or "").strip()
+        if first_local:
+            local["pathExample"] = f"{first_local}/..."
     return {
         VAULT_PATH_AREA: vault,
         SHARED_PATH_AREA: shared,

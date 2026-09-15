@@ -58,6 +58,13 @@ export type LocalTool = {
   builtIn: boolean;
 };
 
+export type ExtensionGrant = {
+  capabilityName: string;
+  agentKind: "voice" | "background";
+  enabled: boolean;
+  effectClass: "read" | "write" | "delete" | null;
+};
+
 export type BuiltinPlugin = {
   key: "markets" | "weather" | "news" | "local_events" | "agent_mail" | "tasks";
   name: string;
@@ -355,6 +362,9 @@ export const localApi = {
   grantPluginTool: (extensionId: string, value: { targetUserId: string; agentKind: "voice" | "background"; capabilityName: string; enabled: boolean; effectClass: "read" | "write" | "delete" }) => request<{ status: string }>(
     `/extensions/${encodeURIComponent(extensionId)}/grants`,
     { method: "POST", body: JSON.stringify(value) },
+  ),
+  extensionGrants: (extensionId: string) => request<{ items: ExtensionGrant[] }>(
+    `/extensions/${encodeURIComponent(extensionId)}/grants`,
   ),
   builtinPlugins: () => request<{ items: BuiltinPlugin[] }>("/builtin-plugins"),
   updateBuiltinPlugin: (key: BuiltinPlugin["key"], value: { enabled?: boolean; configuration?: Record<string, unknown> }) =>
@@ -819,6 +829,7 @@ export type HostFilesystemMount = {
   mountName: string;
   mountPath: string;
   permission: "read" | "write";
+  source?: "browser" | "helper";
   status: string;
   createdAt: string;
 };
@@ -845,6 +856,7 @@ export type WorkspaceFileEntry = {
   shareId?: string | null;
   sharedFrom?: string | null;
   permission?: "read" | "write" | null;
+  pathArea?: string | null;
 };
 
 export type WorkspaceFileDirectoryResponse = {
@@ -853,6 +865,7 @@ export type WorkspaceFileDirectoryResponse = {
   entries: WorkspaceFileEntry[];
   shareId?: string | null;
   permission?: "read" | "write" | null;
+  pathArea?: string | null;
 };
 
 export type WorkspaceFileReadResponse = {

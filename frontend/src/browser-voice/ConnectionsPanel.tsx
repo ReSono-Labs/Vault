@@ -105,10 +105,6 @@ export function ConnectionsPanel() {
       setApiKey("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Voice provider could not be saved."); }
   }
-  async function removeProvider() {
-    try { await localApi.removeVoiceProvider(providerKey); setProvider((current) => current ? { ...current, configured: false, updatedAt: null } : null); setProviders((items) => items.map((item) => item.providerKey === providerKey ? { ...item, configured: false, selected: false } : item)); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Voice provider could not be removed."); }
-  }
   function chooseProvider(nextKey: string) {
     const next = providers.find((item) => item.providerKey === nextKey);
     if (!next) return;
@@ -156,14 +152,6 @@ export function ConnectionsPanel() {
         window.location.assign(started.authorizationUrl);
       }
     } catch (caught) { setError(caught instanceof Error ? caught.message : "OAuth could not be connected."); }
-  }
-  async function useApiKey() {
-    try {
-      const current = await localApi.selectProviderAuth(providerKey, "api_key");
-      setProvider({ ...provider, ...current });
-      setProviders((items) => items.map((item) => item.providerKey === providerKey ? { ...item, ...current } : item));
-      setOauthMessage("API key selected.");
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "API access could not be selected."); }
   }
   async function disconnectOAuth() {
     setError(null); setOauthMessage(null);
@@ -279,8 +267,8 @@ export function ConnectionsPanel() {
         <label><span>{provider?.displayName ?? "Provider"} API key</span><input autoComplete="off" onChange={(event) => setApiKey(event.target.value)} placeholder={provider?.oauthConnected && provider.authMethod !== "api_key" ? "Optional — leave blank to keep OAuth" : undefined} required={!(provider?.oauthConnected && provider.authMethod !== "api_key")} type="password" value={apiKey} /></label>
         <label><span>Voice model</span>{voiceModelOptions.length ? <select onChange={(event) => setModelKey(event.target.value)} value={modelKey}>{voiceModelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select> : <input onChange={(event) => setModelKey(event.target.value)} required value={modelKey} />}</label>
         <label><span>Background text model</span><select onChange={(event) => setBackgroundModelKey(event.target.value)} value={backgroundModelKey}>{backgroundModelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-        {providerKey === "openai" || providerKey === "gemini" ? <div className="browser-voice-inline-actions"><button className="browser-voice-pill" onClick={() => void connectOAuth()} type="button">{providerKey === "openai" ? "ChatGPT OAuth" : "Gemini OAuth"}</button>{provider?.apiKeyConnected && provider.authMethod !== "api_key" ? <button className="browser-voice-pill" onClick={() => void useApiKey()} type="button">Use API key</button> : null}{provider?.oauthConnected ? <button className="browser-voice-pill" onClick={() => void disconnectOAuth()} type="button">Disconnect OAuth</button> : null}{oauthMessage ? <span className="browser-voice-form-note" role="status">{oauthMessage}</span> : null}</div> : null}
-        <div className="browser-voice-inline-actions"><button className="browser-voice-submit" type="submit">Save settings</button>{provider?.configured && !provider.selected ? <button className="browser-voice-pill" onClick={() => void useProvider()} type="button">Use provider</button> : null}{provider?.configured ? <button className="browser-voice-account-danger" onClick={() => void removeProvider()} type="button">Disconnect provider</button> : null}</div>
+        {providerKey === "openai" || providerKey === "gemini" ? <div className="browser-voice-inline-actions">{provider?.oauthConnected ? <button className="browser-voice-pill" onClick={() => void disconnectOAuth()} type="button">Disconnect OAuth</button> : <button className="browser-voice-pill" onClick={() => void connectOAuth()} type="button">{providerKey === "openai" ? "ChatGPT OAuth" : "Gemini OAuth"}</button>}{oauthMessage ? <span className="browser-voice-form-note" role="status">{oauthMessage}</span> : null}</div> : null}
+        <div className="browser-voice-inline-actions"><button className="browser-voice-submit" type="submit">Save settings</button>{provider?.configured && !provider.selected ? <button className="browser-voice-pill" onClick={() => void useProvider()} type="button">Use provider</button> : null}</div>
       </form>
       </section> : null}
       {activeTab === "calendar" ? <section aria-labelledby="connections-calendar-tab" className="browser-voice-management-section browser-voice-connection-tab-panel" id="connections-calendar-panel" role="tabpanel">
@@ -335,11 +323,14 @@ export function ConnectionsPanel() {
         <button aria-pressed={!safeMode} className="browser-voice-agent-switch" onClick={() => void toggleSafeMode()} role="switch" type="button"><span /></button>
       </article>
       {items.map((item) => <article className="browser-voice-connection-row" key={item.extensionId}>
-        <button className="browser-voice-agent-row-main browser-voice-plugin-open" onClick={() => setOpenMcp(item)} type="button">
-          <span className="browser-voice-connection-mark"><BrowserVoiceConnectionCategoryIcon category="provider" /></span>
-          <span><strong>{item.displayName}</strong><small>{item.state === "enabled" ? "On" : "Off"}</small></span>
+        <span className="browser-voice-connection-mark"><BrowserVoiceConnectionCategoryIcon category="provider" /></span>
+        <button className="browser-voice-connection-open" onClick={() => setOpenMcp(item)} type="button">
+          <strong>{item.displayName}</strong>
+          <small>{item.state === "enabled" ? "On" : "Off"} · Open to configure</small>
         </button>
-        <button className="browser-voice-pill browser-voice-pill-muted" disabled={mcpWorking} onClick={() => void removeMcp(item)} type="button">Remove</button>
+        <span className="browser-voice-connection-actions">
+          <button className="browser-voice-pill browser-voice-pill-muted" disabled={mcpWorking} onClick={() => void removeMcp(item)} type="button">Remove</button>
+        </span>
       </article>)}
       {!items.length ? <p className="browser-voice-management-empty">No MCP packages imported.</p> : null}
       </>}

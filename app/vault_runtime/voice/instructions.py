@@ -27,9 +27,10 @@ VOICE_TOOL_GUIDANCE = (
 
 WORKSPACE_FILES_GUIDANCE = (
     "Workspace Files Guidance:\n"
-    "- Three path areas: vault (notes/today.md), shared (shared/owner/mount/...), and local (local/mount/...).\n"
-    "- Call workspace_root first for path area descriptors, available mounts, and the tool catalog.\n"
-    "- Browse with workspace_list_directory. Read with workspace_read_file. Search with workspace_search_files.\n"
+    "- Three path areas: vault, shared/, and local/. shared/ and local/ mounts are live; list them instead of guessing names.\n"
+    "- Call workspace_root first for the current pathAreas.mounts and the tool catalog.\n"
+    "- Browse with workspace_list_directory. After listing local/{mount} or shared/{owner}/{mount}, keep listing nested directories.\n"
+    "- Read with workspace_read_file. Search with workspace_search_files.\n"
     "- Create with workspace_write_file. Replace whole files with workspace_save_file. Targeted edits use workspace_patch_file.\n"
     "- Folders: workspace_create_directory. Moves: workspace_move_path. Deletes: workspace_delete_path. Uploads: workspace_upload_files.\n"
     "- Every tool response includes pathArea when applicable so you know which namespace you touched.\n"

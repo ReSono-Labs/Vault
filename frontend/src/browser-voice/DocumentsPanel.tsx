@@ -11,8 +11,8 @@ const documents: DocumentDefinition[] = [
   { id: "link", title: "ReSono Labs Link", summary: "Add a Custom HTTP/WebSocket Link service for Vault remote access.", href: "/resono-labs-link.md" },
   { id: "bridge", title: "Local Connection Bridge", summary: "Connect trusted local applications that need HTTP or WebSockets.", href: "/local-connection-bridge.md" },
   { id: "agent-memory", title: "Hermes & OpenClaw Memory", summary: "Connect agents to shared Vault memory and session recall.", href: "/hermes-openclaw-memory.md" },
-  { id: "plugin-kit", title: "Vault Plugin Kit", summary: "Build, package, and connect safe capabilities for Vault.", href: "/vault-plugin-kit.md" },
-  { id: "mcp-kit", title: "Vault MCP Package Kit", summary: "Ship hosted MCP packages, migration, companion plugins, and supervised sidecars.", href: "/vault-mcp-package-kit.md" },
+  { id: "plugin-kit", title: "Vault Plugin Kit", summary: "Build Agent Plugins, including package-data migration, Workspace file import, and local folder linking.", href: "/vault-plugin-kit.md" },
+  { id: "mcp-kit", title: "Vault MCP Package Kit", summary: "Ship hosted MCP packages with migration ingestion, companion plugins, and supervised sidecars.", href: "/vault-mcp-package-kit.md" },
 ];
 
 const sectionHelp: Record<string, [string, string]> = {
@@ -22,7 +22,7 @@ const sectionHelp: Record<string, [string, string]> = {
   "3. Install Vault": ["Install Vault", "Set up Vault on this computer or your local network."],
   "4. First-time setup": ["Set up Vault", "Create the main account and finish the first setup."],
   "5. Sign in, sign out, and change a password": ["Sign in and passwords", "Sign in, sign out, or change your password."],
-  "6. Accounts and workspaces": ["People and accounts", "Add people and understand what is private or shared."],
+  "6. Accounts and workspaces": ["People and accounts", "Add people, use Workspace files, and understand what is private or shared."],
   "7. AI providers": ["Choose an AI provider", "Connect OpenAI, Gemini, or xAI and choose the models Vault uses."],
   "8. Voice": ["Use Voice", "Start a voice conversation and control what Voice can access."],
   "9. Background Agent": ["Use the Background Agent", "Give Vault work that can continue without an open voice session."],
@@ -31,7 +31,7 @@ const sectionHelp: Record<string, [string, string]> = {
   "12. Contacts": ["Use Contacts", "Find and work with contacts from Vault."],
   "13. Memory": ["Manage Memory", "See how Vault remembers information and connects memory to other agents."],
   "14. Agent2Agent": ["Connect another agent", "Connect Hermes, OpenClaw, or another compatible agent."],
-  "15. Library: Plugins, Skills, MCP, and Tools": ["Add capabilities", "Install or remove plugins, skills, MCP connections, and tools."],
+  "15. Library: Plugins, Skills, MCP, and Tools": ["Add capabilities", "Install plugins and MCP packages, including package data, Workspace files, and linked folders."],
   "16. Connections safe mode": ["Pause outside connections", "Temporarily stop third-party capabilities without deleting them."],
   "17. Package operation": ["Manage or remove Vault", "Update, back up, restore, uninstall, or reset Vault."],
   "18. Security and privacy boundaries": ["Privacy and security", "Understand where information is stored and what is kept separate."],

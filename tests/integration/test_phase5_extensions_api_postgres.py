@@ -97,6 +97,14 @@ def test_skill_preflight_confirm_list_grant_and_safe_mode(extension_api) -> None
         "capabilityName": "", "enabled": True,
     }, headers)
     assert granted.payload == {"status": "grant_updated"}
+    listed_grants = app.handle(method="GET", target=f"/extensions/{extension_id}/grants", headers=headers)
+    assert listed_grants.status_code == 200
+    assert listed_grants.payload["items"] == [{
+        "capabilityName": "",
+        "agentKind": "voice",
+        "enabled": True,
+        "effectClass": None,
+    }]
     safe = _post(app, "/extensions/safe-mode", {"enabled": True}, headers)
     assert safe.payload == {"safeMode": True}
     runtime = app.handle(method="GET", target="/extensions/runtime", headers=headers)

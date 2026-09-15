@@ -1,6 +1,6 @@
 # ReSono Labs Vault Platform Guide
 
-Status: grounded against the repository and packaged web interface on 2026-08-31.
+Status: grounded against the repository and packaged web interface on 2026-09-11.
 
 This is the canonical user, administrator, connection, agent, memory, and
 extension guide for the current Vault package. It describes implemented
@@ -24,8 +24,10 @@ package files directly.
 | Contacts | Built-in Voice tools search and perform confirmation-protected contact actions in the account's local data. |
 | Vault Memory | Stores classified, scoped memory and can expose it to Hermes, OpenClaw, or compatible plugins. |
 | Agent2Agent | Connects external A2A 1.0 agents by Agent Card URL for Voice or Background delegation and completion tracking. |
-| Library | Imports and manages Agent Plugins, Agent Skills, MCP configurations, and displays categorized tools. |
-| Documents and Vault Help | Opens the complete user-guide collection and a support assistant for setup, troubleshooting, Plugins, and MCPs. |
+| Library | Imports Agent Plugins, Skills, hosted MCP packages (`mcp.package.json`), and external MCP connections. Import can ingest package SQLite/workspace data, copy files into Workspace, and prompt to link a computer folder. |
+| Workspace | Opens the signed-in account's private files, including `local/` linked computer folders. |
+| Settings | Turns Computer folders on or off for this browser and lists linked folders. |
+| Documents and Vault Help | Opens the user-guide collection (this guide plus Windows, Link, local bridge, Hermes/OpenClaw memory, Plugin Kit, and MCP Package Kit) and a support assistant. |
 | ReSono Labs Link | Add a Custom HTTP/WebSocket service (web interface) in Link that targets Vault's local compatibility bridge. |
 | Safe mode | Blocks all third-party capability projection without deleting installed extension records. |
 | Backup and restore | Creates verified local backups of the database and private package data and restores only with an exact confirmation phrase. |
@@ -51,9 +53,22 @@ agents.
 
 ### Documents and Vault Help
 
-Open **Documents** to read or download every user-facing Vault guide. Select
-**Ask Vault Help** for help using Vault, troubleshooting a problem, or drafting
-a Plugin or MCP connection.
+Open **Documents** to read or download every user-facing Vault guide. The
+dashboard collection is:
+
+| Dashboard title | File | Audience |
+| --- | --- | --- |
+| Vault User Guide | this document | Owners and operators |
+| Install Vault on Windows | `WINDOWS-INSTALLATION.md` | Windows Docker Desktop / WSL 2 |
+| ReSono Labs Link | `RESONO-LABS-LINK.md` | Remote access via Link |
+| Local Connection Bridge | `LOCAL-CONNECTION-BRIDGE.md` | Trusted local HTTP/WebSocket apps |
+| Hermes & OpenClaw Memory | `HERMES-OPENCLAW-MEMORY.md` | External agent memory pairing |
+| Vault Plugin Kit | `VAULT-PLUGIN-KIT.md` | Agent Plugin packages, `vault.json` ingestion |
+| Vault MCP Package Kit | `VAULT-MCP-PACKAGE-KIT.md` | Hosted MCP packages, `mcp.package.json` ingestion |
+
+Select **Ask Vault Help** for help using Vault, troubleshooting a problem, or
+drafting a Plugin or MCP package. Vault Help searches this collection first,
+including the Plugin Kit and MCP Package Kit.
 
 Vault Help uses the text model configured for the signed-in account's selected
 AI provider. It searches the complete dashboard-document index before checking
@@ -172,6 +187,25 @@ An account's memory contract supports `private` and `workspace` visibility.
 The current product gives each account one fixed private workspace; it does not
 provide a web workflow for joining another user's workspace.
 
+### Workspace files and Computer folders
+
+Open **Workspace**. The heading is **`{account name}'s Workspace`**. There is no
+private-files subtitle.
+
+The file list keeps the current folder name and **Swipe left for actions** at
+the top. **Up one folder** appears at the bottom of the list when you are not at
+the workspace root. Opening a file shows a preview or editor with **Close**.
+
+**Settings** has **Computer folders**. When that is on, **Linked folders** is the
+heading below the separator. **Add folder** links a host folder so it appears
+under **`local/`** in Workspace. Voice can browse those folders while the Vault
+tab is open. Linking needs a browser with a folder picker (Chrome or Edge).
+
+A Plugin or companion plugin may also prompt during **Import** to link a folder
+(`localShare`) or to copy packaged files into Workspace (`workspaceImport`).
+Those are described under Library. Package-owned SQLite and runtime files
+(`migration`) go into Vault package storage, not into the Workspace file list.
+
 ### How provider sharing actually resolves
 
 Provider sharing is a credential-routing policy, not a data-sharing policy.
@@ -269,8 +303,10 @@ grants. The master account cannot be targeted.
 
 ## 7. AI providers
 
-Open **Connections → AI & Voice**. The selected provider runs Voice and the
-Background Agent. Configure a realtime model, background text model, and voice.
+Open **Connections**. The page heading is **Connected services**. Open the
+**AI & Voice** tab (**Provider settings**). The selected provider runs Voice and
+the Background Agent. Configure a realtime model, background text model, and
+voice.
 
 Supported provider adapters are:
 
@@ -282,16 +318,18 @@ Supported provider adapters are:
 
 ### Use an API key
 
-Select the provider, enter its API key and model settings, then choose
-**Connect provider** or **Replace provider key**. Keys are encrypted locally
-and never returned to the browser. **Use provider** selects an already
-configured provider.
+Select the provider, enter its API key and model settings if you are using a
+key, then choose **Save settings**. Keys are encrypted locally and never
+returned to the browser. **Use provider** appears only when another configured
+provider is selected and this one is not yet the active provider.
 
 ### Use ChatGPT OAuth
 
-Select OpenAI and choose **ChatGPT OAuth**. Vault starts device authorization,
-opens the ChatGPT authorization page, displays the code to enter, polls for
-completion, stores the resulting OAuth tokens encrypted, and selects OAuth.
+When ChatGPT OAuth is **not** connected, select OpenAI and choose **ChatGPT
+OAuth**. Vault starts device authorization, opens the ChatGPT authorization
+page, displays the code to enter, polls for completion, stores the resulting
+OAuth tokens encrypted, and selects OAuth. After OAuth is connected, that
+button is hidden and **Disconnect OAuth** is shown instead.
 
 ### Use Gemini OAuth
 
@@ -309,15 +347,18 @@ https://127.0.0.1:8765/providers/gemini/oauth/callback
 ```
 
 For LAN use, the registered URI must exactly match the address used in the
-browser. Select Gemini and choose **Gemini OAuth**.
+browser. When Gemini OAuth is not connected, select Gemini and choose **Gemini
+OAuth**. When it is connected, that button is hidden and **Disconnect OAuth**
+is shown instead.
 
 ### Switch or disconnect authentication
 
 API and OAuth credentials are encrypted in separate records. Adding one does
-not erase the other. **Use API key** selects a retained API key while preserving
-OAuth. **ChatGPT OAuth** or **Gemini OAuth** selects an already connected OAuth
-record. **Disconnect OAuth** deletes only OAuth and falls back to a retained API
-key when present. **Disconnect provider** removes the provider configuration.
+not erase the other. Save an API key with **Save settings** (leave the key
+blank while OAuth is active to keep OAuth and only change models/voice).
+**Disconnect OAuth** deletes only OAuth and falls back to a retained API key
+when one exists. There is no **Use API key** or **Disconnect provider**
+control on this page.
 
 Embeddings are separate: real OpenAI embeddings use a retained OpenAI API key.
 ChatGPT OAuth is not substituted as an embedding credential. Without a usable
@@ -717,7 +758,8 @@ the full saved review.
 
 ## 15. Library: Plugins, Skills, MCP, and Tools
 
-Open **Library** and select Skills, Plugins, MCP, or Tools. Only the master can
+Open **Library** in the app navigation. The page heading is **Agent
+capabilities**. Select Skills, Plugins, MCP, or Tools. Only the master can
 mutate extension installation or credentials. Installed capabilities target
 only Voice and/or Background; they do not register agents.
 
@@ -801,8 +843,30 @@ reviewed what they provide, and use **Connections → Extensions** to turn on
 safe mode if anything looks unexpected.
 
 Developers can open **Vault Plugin Kit** for Agent Plugin packages (including
-`vault.json` migration). Open **Vault MCP Package Kit** for hosted MCP packages
-(`mcp.package.json`), supervised sidecars, and companion plugins.
+`vault.json` migration, Workspace import, and local folder linking). Open
+**Vault MCP Package Kit** for hosted MCP packages (`mcp.package.json`),
+supervised sidecars, companion plugins, and the same package-data **migration**
+contract.
+
+### Package ingestion on import
+
+Import can move three different kinds of content. They are not interchangeable:
+
+| What the package declares | Where it lands | Who sees it |
+| --- | --- | --- |
+| **`migration`** (SQLite and/or a `migration/workspace` tree) | `extensions/data/{package name}/` | The hosted MCP/plugin runtime (`RESONO_DB`, `RESONO_WORKSPACE`). Not the Workspace file list. |
+| **`workspaceImport`** (on `vault.json`, including a companion plugin) | The account's Vault Workspace files | Owners in **Workspace**. |
+| **`localShare`** (on `vault.json`) | No copy into Docker; a **`local/{name}/…`** mount | Owners in **Workspace → local/** after they confirm the folder picker. |
+
+Vault asks before overwriting when the package uses `onConflict: ask`.
+**Remove plugin** or **Remove MCP package** deletes **`migration`** package data
+for that name. Workspace files copied by **`workspaceImport`** remain in the
+account workspace unless the owner deletes them. Linked **`localShare`** mounts
+remain until removed in Settings or the related plugin is removed.
+
+Hosted MCP **file tools** do not automatically receive a linked folder path.
+The companion plugin can prompt for `localShare`; the MCP server must resolve
+`local/…` itself. See **Vault MCP Package Kit**.
 
 ### Import a hosted MCP package
 
@@ -996,6 +1060,14 @@ that safe mode is off, and that the capability is allowed for Voice or the
 Background Agent. Start a new Voice session after changing capabilities,
 because an existing session keeps the tool list it started with.
 
+### Import asks to link a folder or copy files into Workspace
+
+That is package **ingestion**, not a failed install. **Link a folder** uses
+Computer folders (`local/` in Workspace). **Copy into Workspace** writes owner
+files you can open under Workspace. Package SQLite still goes into hidden
+package data. You can skip an optional folder link unless the package marks it
+required.
+
 ### Signing in works over HTTPS but not through the local bridge
 
 Use `https://127.0.0.1:8765` in a browser. The HTTP bridge at
@@ -1040,6 +1112,13 @@ This guide was cross-checked against these implementation authorities:
 - `frontend/src/browser-voice/ConnectionsPanel.tsx`;
 - `frontend/src/browser-voice/MemoryPanel.tsx`;
 - `frontend/src/browser-voice/CapabilitiesPanel.tsx`;
+- `frontend/src/browser-voice/DocumentsPanel.tsx`;
+- `frontend/src/browser-voice/SettingsPanel.tsx`;
+- `frontend/src/browser-voice/BrowserWorkspaceFileBrowser.tsx`;
+- `docs/VAULT-PLUGIN-KIT.md`;
+- `docs/VAULT-MCP-PACKAGE-KIT.md`;
+- `app/vault_runtime/extensions/standards/vault.schema.json`;
+- `app/vault_runtime/extensions/standards/mcp.package.schema.json`;
 - `app/vault_runtime/local_api/app.py`;
 - `app/vault_runtime/local_identity/repository.py`;
 - `app/vault_runtime/system_agents/inventory.py`;
