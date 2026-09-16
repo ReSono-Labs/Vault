@@ -63,6 +63,8 @@ class OpenAIBackgroundExecutor:
         def observe(observation: AgentTurnObservation) -> None:
             if observation.model_turns:
                 progress.model_turn(observation.model_turns)
+            if observation.reasoning_summaries:
+                progress.reasoning(observation.reasoning_summaries)
 
         final = asyncio.run(self._runner(
             api_key=credential.value, model=model,
@@ -70,7 +72,7 @@ class OpenAIBackgroundExecutor:
             input_text=_input(request, memories=memory_context),
             base_url=("https://api.x.ai/v1" if provider_key == "xai" else
                       "https://chatgpt.com/backend-api/codex" if getattr(credential, "auth_method", "api_key") == "chatgpt_oauth" else None),
-            max_turns=request.limits.max_model_turns,
+            max_turns=request.limits.max_model_turns, reasoning_effort="medium",
             agent_name="ReSono Background Agent", function_tools=function_tools,
             observation_sink=observe, output_type=BackgroundAgentOutput,
         ))

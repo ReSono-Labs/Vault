@@ -35,6 +35,11 @@ def test_background_supply_intersects_names_effect_and_budget() -> None:
         ),
     )
     assert [item["name"] for item in supply.definitions()] == ["read_memory"]
+    empty = BackgroundToolSupply(
+        catalog=catalog,
+        grant=BackgroundToolGrant(autonomy=AutonomyProfile.LIMITED, explicit_names=frozenset(), max_calls=2),
+    )
+    assert [item["name"] for item in empty.definitions()] == ["read_memory"]
     assert supply.invoke("write_memory", {}, context=_context()).is_error
     assert supply.invoke("read_memory", {}, context=_context()).text == "ok"
     with pytest.raises(ToolBudgetExceeded):

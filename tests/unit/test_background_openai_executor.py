@@ -30,6 +30,9 @@ class _Progress:
     def context_frozen(self, memory_references: tuple[str, ...]) -> None:
         self.memory_references = memory_references
 
+    def reasoning(self, summaries: tuple[str, ...]) -> None:
+        self.summaries = summaries
+
 
 class _Memories:
     def search(self, *, user_id: str, workspace_id: str, query: str, limit: int):
@@ -84,6 +87,7 @@ def test_production_background_executor_uses_local_credential_and_validated_json
     assert result["status"] == "complete"
     assert observed["api_key"] == "secret-not-logged"
     assert observed["model"] == "gpt-5.6-sol"
+    assert observed["reasoning_effort"] == "medium"
     assert observed["agent_name"] == "ReSono Background Agent"
     assert observed["function_tools"] == []
     assert observed["output_type"].__name__ == "BackgroundAgentOutput"

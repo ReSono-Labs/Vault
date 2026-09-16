@@ -44,8 +44,10 @@ services:
       RESONO_VAULT_LOCAL_API_TLS_PRIVATE_KEY_FILE: /var/lib/resono-vault/tls/vault.key
       RESONO_VAULT_PLUGIN_SERVICE_URL: ${VAULT_PLUGIN_SERVICE_URL:-http://127.0.0.1:8766/plugin-services/v1}
       RESONO_VAULT_RUNTIME_PUBLISH_PORTS: "1"
+      RESONO_VAULT_A2A_LISTEN_PORT: "${VAULT_A2A_PORT:-8768}"
     ports:
       - "${VAULT_BIND_ADDRESS:-127.0.0.1}:${VAULT_PORT:-8765}:8765"
+      - "127.0.0.1:${VAULT_A2A_PORT:-8768}:${VAULT_A2A_PORT:-8768}"
       - "127.0.0.1:8790-8810:8790-8810"
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -10,6 +10,7 @@ from app.vault_runtime.voice.context import VoiceContextBuilder
 from app.vault_runtime.voice.models import VoiceContext, VoiceSession
 from app.vault_runtime.voice.repository import VoiceSessionRepository
 from app.vault_runtime.voice.tools import LocalToolAuthority
+from app.vault_runtime.voice.modes import GOAL_SUBMIT_TOOL, MODE_SWITCH_TOOL, VoiceModeService
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,12 +126,14 @@ class VoiceSessionCoordinator:
         tools: ToolCatalog,
         providers: ProviderRegistry,
         tool_authority: LocalToolAuthority | None = None,
+        voice_modes: VoiceModeService | None = None,
     ) -> None:
         self._sessions = sessions
         self._contexts = contexts
         self._tools = tools
         self._providers = providers
         self._tool_authority = tool_authority
+        self._voice_modes = voice_modes
 
     def provider_descriptors(self) -> tuple[ProviderDescriptor, ...]:
         return self._providers.descriptors()
@@ -160,11 +163,20 @@ class VoiceSessionCoordinator:
                 user_id=principal.user_id, workspace_id=principal.workspace_id,
                 definitions=definitions,
             )
+        primary = tuple(item for item in definitions if item.name != GOAL_SUBMIT_TOOL)
+        goal = tuple(item for item in definitions if item.name in {MODE_SWITCH_TOOL, GOAL_SUBMIT_TOOL})
+        if self._voice_modes is not None:
+            self._voice_modes.open_session(
+                local.voice_session_id,
+                primary_instructions=context.instructions,
+                primary_tools=lambda items=primary: tuple(item.realtime_definition() for item in items),
+                goal_intake_tools=lambda items=goal: tuple(item.realtime_definition() for item in items),
+            )
         request = RealtimeSessionRequest(
             model_key=model_key,
             connection_mode=connection_mode,
             instructions=context.instructions,
-            tool_definitions=tuple(item.realtime_definition() for item in definitions),
+            tool_definitions=tuple(item.realtime_definition() for item in primary),
             voice=voice,
             input_audio_transcription_model="gpt-4o-mini-transcribe",
             turn_detection_type="server_vad",
@@ -203,3 +215,7 @@ class VoiceSessionCoordinator:
             )
             raise
         return StartedVoiceSession(opened, context, result)
+
+    def close_modes(self, voice_session_id: str) -> None:
+        if self._voice_modes is not None:
+            self._voice_modes.close_session(voice_session_id)

@@ -67,5 +67,5 @@ def register_contacts_tools(*, catalog: ToolCatalog, store: PersonalDataReposito
             description=f"Use the local Vault Contacts client: {name.replace('_', ' ')}.",
             input_schema=_SCHEMAS[name], handler=handler(name),
             effect_class="read" if name == "contacts_search" else "write",
-            audiences=frozenset({AgentKind.VOICE}),
+            audiences=frozenset({AgentKind.VOICE, AgentKind.BACKGROUND}),
         ))

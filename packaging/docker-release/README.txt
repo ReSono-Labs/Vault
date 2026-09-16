@@ -14,6 +14,7 @@ begins. No setup restart is required.
 
 Vault:  https://127.0.0.1:8765
 Bridge: http://127.0.0.1:8766
+A2A:    http://127.0.0.1:8768  (Agent Card; only accepts work when Agent2Agent is on)
 
 The bridge is loopback-only. It verifies Vault's local certificate and supports
 HTTP and WebSocket connections. PostgreSQL is private and is never published as

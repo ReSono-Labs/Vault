@@ -54,7 +54,12 @@ from app.vault_runtime.external_memory.repository import (
 from app.vault_runtime.external_memory.service import ExternalMemoryService
 from app.vault_runtime.host_filesystem.repository import HostFilesystemRepository
 from app.vault_runtime.host_filesystem.service import HostFilesystemService
+from app.vault_runtime.link_companion.repository import (
+    LinkCompanionAuthorizationError,
+    LinkCompanionRepository,
+)
 from app.vault_runtime.agent_network.service import A2AService
+from app.vault_runtime.agent_network.tools import agent2agent_option_on
 from app.vault_runtime.help_assistant import HelpAssistant, HelpAssistantError
 from app.vault_runtime.builtin_plugins import BuiltinPluginRepository
 from app.vault_runtime.workspace_files.errors import WorkspaceFileError
@@ -108,6 +113,7 @@ class VaultLocalApiApp:
         external_memory: ExternalMemoryService | None = None,
         host_filesystem_integrations: HostFilesystemRepository | None = None,
         host_filesystem: HostFilesystemService | None = None,
+        link_companion: LinkCompanionRepository | None = None,
         a2a_service: A2AService | None = None,
         help_assistant: HelpAssistant | None = None,
         builtin_plugins: BuiltinPluginRepository | None = None,
@@ -140,6 +146,7 @@ class VaultLocalApiApp:
         self._external_memory = external_memory
         self._host_filesystem_integrations = host_filesystem_integrations
         self._host_filesystem = host_filesystem
+        self._link_companion = link_companion
         self._a2a_service = a2a_service
         self._help_assistant = help_assistant
         self._builtin_plugins = builtin_plugins
@@ -259,6 +266,28 @@ class VaultLocalApiApp:
                 )
             except Exception as exc:
                 code = getattr(exc, "code", "external_memory_request_failed")
+                status = 400 if isinstance(exc, ValueError) else 403
+                return LocalApiResponse(status, {"error": {"code": code, "message": str(exc)}})
+        if path in ("/link-companion/pairing/start", "/link-companion/pairing/status", "/link-companion/agent-network/apply"):
+            try:
+                return self._handle_link_companion_pairing(
+                    method=method.upper(), path=path, body=body,
+                )
+            except LinkCompanionAuthorizationError as exc:
+                return LocalApiResponse(403, {"error": {"code": exc.code, "message": str(exc)}})
+            except Exception as exc:
+                code = getattr(exc, "code", "link_companion_pairing_failed")
+                status = 400 if isinstance(exc, ValueError) else 403
+                return LocalApiResponse(status, {"error": {"code": code, "message": str(exc)}})
+        if self._identity_service is not None and path.startswith("/link-companion"):
+            try:
+                return self._handle_link_companion(
+                    method=method.upper(), path=path, headers=headers, body=body,
+                )
+            except LinkCompanionAuthorizationError as exc:
+                return LocalApiResponse(403, {"error": {"code": exc.code, "message": str(exc)}})
+            except Exception as exc:
+                code = getattr(exc, "code", "link_companion_request_failed")
                 status = 400 if isinstance(exc, ValueError) else 403
                 return LocalApiResponse(status, {"error": {"code": code, "message": str(exc)}})
         if path.startswith("/host-filesystem/pairing/"):
@@ -1145,6 +1174,19 @@ class VaultLocalApiApp:
         if identity is None or service is None:
             raise RuntimeError("Agent2Agent is unavailable.")
         principal = identity.authenticate(session_token=_session_token(headers))
+        if method == "POST" and path == "/agent2agent/connections":
+            identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
+            if not agent2agent_option_on(self._builtin_plugins, principal.user_id, principal.workspace_id):
+                raise ValueError("Agent2Agent is turned off.")
+            payload = _json_object(body)
+            item = service.connect(
+                user_id=principal.user_id, workspace_id=principal.workspace_id,
+                display_name=_required_text(payload, "displayName"),
+                card_url=_required_text(payload, "cardUrl"),
+                token=str(payload.get("token") or ""),
+            )
+            return LocalApiResponse(201, {"connectionId": item.connection_id, "displayName": item.display_name,
+                "cardUrl": item.card_url, "enabled": item.enabled, "agentCard": item.agent_card})
         repository = service.repository
         if method == "GET" and path == "/agent2agent/connections":
             return LocalApiResponse(200, {"items": [{
@@ -1156,17 +1198,10 @@ class VaultLocalApiApp:
             return LocalApiResponse(200, {"items": list(repository.notifications(
                 user_id=principal.user_id, workspace_id=principal.workspace_id,
             ))})
-        if method == "POST" and path == "/agent2agent/connections":
-            identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
-            payload = _json_object(body)
-            item = service.connect(
-                user_id=principal.user_id, workspace_id=principal.workspace_id,
-                display_name=_required_text(payload, "displayName"),
-                card_url=_required_text(payload, "cardUrl"),
-                token=str(payload.get("token") or ""),
-            )
-            return LocalApiResponse(201, {"connectionId": item.connection_id, "displayName": item.display_name,
-                "cardUrl": item.card_url, "enabled": item.enabled, "agentCard": item.agent_card})
+        if method == "GET" and path == "/agent2agent/listen":
+            if not agent2agent_option_on(self._builtin_plugins, principal.user_id, principal.workspace_id):
+                raise ValueError("Agent2Agent is turned off.")
+            return LocalApiResponse(200, service.listen_info(user_id=principal.user_id, workspace_id=principal.workspace_id))
         if method == "DELETE" and path.startswith("/agent2agent/connections/"):
             identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
             repository.remove(user_id=principal.user_id, workspace_id=principal.workspace_id,
@@ -1228,6 +1263,73 @@ class VaultLocalApiApp:
                 integration_id=integration_id,
             )
             return LocalApiResponse(200, {"status": "revoked"})
+        return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
+
+    def _handle_link_companion_pairing(
+        self, *, method: str, path: str, body: bytes,
+    ) -> LocalApiResponse:
+        repository = self._link_companion
+        if repository is None:
+            raise RuntimeError("Link Companion pairing is unavailable.")
+        if method != "POST":
+            return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
+        payload = _json_object(body)
+        if path == "/link-companion/pairing/start":
+            result = repository.start_pairing(
+                display_name=_required_text(payload, "displayName")[:128],
+                poll_token=_required_text(payload, "pollToken"),
+            )
+            return LocalApiResponse(201, result, (("Cache-Control", "no-store"),))
+        if path == "/link-companion/pairing/status":
+            status = repository.pairing_status(
+                pairing_id=_required_text(payload, "pairingId"),
+                poll_token=_required_text(payload, "pollToken"),
+            )
+            return LocalApiResponse(200, {"status": status}, (("Cache-Control", "no-store"),))
+        if path == "/link-companion/agent-network/apply":
+            if repository.current_link() is None:
+                raise LinkCompanionAuthorizationError("Link Companion is not paired.")
+            service = self._a2a_service
+            if service is None:
+                raise RuntimeError("Agent2Agent is unavailable.")
+            inbound = payload.get("inbound")
+            outbound = payload.get("outbound")
+            if not isinstance(inbound, list) or not isinstance(outbound, list):
+                raise ValueError("inbound and outbound must be lists")
+            result = service.apply_link_snapshot(
+                inbound=[item for item in inbound if isinstance(item, dict)],
+                outbound=[item for item in outbound if isinstance(item, dict)],
+            )
+            return LocalApiResponse(200, result, (("Cache-Control", "no-store"),))
+        return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
+
+    def _handle_link_companion(
+        self, *, method: str, path: str, headers: Mapping[str, str], body: bytes,
+    ) -> LocalApiResponse:
+        repository = self._link_companion
+        identity = self._identity_service
+        if repository is None or identity is None:
+            raise RuntimeError("Link Companion is unavailable.")
+        principal = identity.authenticate(session_token=_session_token(headers))
+        if method == "GET" and path == "/link-companion":
+            current = repository.current_link()
+            return LocalApiResponse(200, current or {"status": "not_paired"})
+        if method == "GET" and path.startswith("/link-companion/pairing/"):
+            code = path.removeprefix("/link-companion/pairing/").strip("/")
+            return LocalApiResponse(200, repository.pairing_by_code(pairing_code=code))
+        if method != "POST":
+            return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
+        identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
+        if not principal.is_device_owner:
+            raise LinkCompanionAuthorizationError("Only the Vault owner can confirm Link Companion.")
+        if path.startswith("/link-companion/pairing/") and path.endswith("/approve"):
+            pairing_id = path.removeprefix("/link-companion/pairing/").removesuffix("/approve").strip("/")
+            return LocalApiResponse(200, repository.approve_pairing(pairing_id=pairing_id))
+        if path == "/link-companion/unpair":
+            repository.unpair()
+            if self._a2a_service is not None:
+                self._a2a_service.clear_link_snapshot()
+            return LocalApiResponse(200, {"status": "unpaired"})
         return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
 
     def _handle_external_memory_pairing(
@@ -1530,7 +1632,7 @@ class VaultLocalApiApp:
                 "connectGreetingEvent": connect_greeting_event(started.context.display_name),
             })
         payload = _json_object(body) if method == "POST" else {}
-        if method == "POST":
+        if method in {"POST", "DELETE"}:
             identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
         if method == "GET" and path == "/voice/plan":
             if self._provider_credential_resolver is None:
@@ -1556,6 +1658,8 @@ class VaultLocalApiApp:
                 user_id=principal.user_id, workspace_id=principal.workspace_id,
                 local_session_id=principal.session_id, voice_session_id=voice_session_id,
             )
+            if self._voice_coordinator is not None:
+                self._voice_coordinator.close_modes(voice_session_id)
             response: dict[str, Any] = {
                 "voiceRealtimeSessionId": session.voice_session_id, "status": session.status,
             }
@@ -1638,6 +1742,24 @@ class VaultLocalApiApp:
                 "embeddingsAvailable": finalized.embeddings_available,
                 "summary": finalized.summary,
             })
+        if method == "GET" and path == "/background/runs":
+            if self._background_runs is None:
+                raise RuntimeError("Background Agent runs are unavailable.")
+            items = self._background_runs.list_in_workspace(
+                user_id=principal.user_id, workspace_id=principal.workspace_id,
+                local_session_id=principal.session_id,
+            )
+            return LocalApiResponse(200, {"items": [
+                _background_run_payload(
+                    item,
+                    events=self._background_runs.list_events(
+                        user_id=principal.user_id, workspace_id=principal.workspace_id,
+                        local_session_id=principal.session_id, run_id=item.request.run_id,
+                        authorize=False,
+                    ),
+                )
+                for item in items
+            ]})
         if method == "POST" and path == "/background/runs":
             if self._background_service is None:
                 raise RuntimeError("Background Agent is unavailable.")
@@ -1654,17 +1776,31 @@ class VaultLocalApiApp:
             cancel = suffix.endswith("/cancel")
             run_id = suffix.removesuffix("/cancel").strip("/")
             if method == "GET" and not cancel:
-                run = self._background_runs.get(
+                run = self._background_runs.get_in_workspace(
                     user_id=principal.user_id, workspace_id=principal.workspace_id,
                     local_session_id=principal.session_id, run_id=run_id,
                 )
-                return LocalApiResponse(200, _background_run_payload(run))
+                events = self._background_runs.list_events(
+                    user_id=principal.user_id, workspace_id=principal.workspace_id,
+                    local_session_id=principal.session_id, run_id=run_id, authorize=False,
+                )
+                return LocalApiResponse(200, _background_run_payload(run, events=events))
             if method == "POST" and cancel:
-                run = self._background_runs.request_cancellation(
+                run = self._background_runs.request_cancellation_in_workspace(
                     user_id=principal.user_id, workspace_id=principal.workspace_id,
                     local_session_id=principal.session_id, run_id=run_id,
                 )
                 return LocalApiResponse(200, _background_run_payload(run))
+            if method == "DELETE" and not cancel:
+                from app.vault_runtime.background_agent.repository import BackgroundRunConflictError
+                try:
+                    self._background_runs.delete_in_workspace(
+                        user_id=principal.user_id, workspace_id=principal.workspace_id,
+                        local_session_id=principal.session_id, run_id=run_id,
+                    )
+                except BackgroundRunConflictError as exc:
+                    return LocalApiResponse(409, {"error": {"code": "run_not_terminal", "message": str(exc)}})
+                return LocalApiResponse(200, {"runId": run_id, "deleted": True})
         return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
 
     def _handle_tasks(self, *, method: str, path: str, headers: Mapping[str, str]) -> LocalApiResponse:
@@ -2065,15 +2201,47 @@ def _background_request(payload: Mapping[str, Any]) -> BackgroundRunRequest:
     )
 
 
-def _background_run_payload(run) -> dict[str, Any]:
+def _background_run_payload(run, events=()) -> dict[str, Any]:
+    from app.vault_runtime.background_agent.progress import explain_failure, project_progress
+    progress = project_progress(run.state, run.request.recipe, events)
+    reasoning_entries = [
+        {
+            "type": item.event_type,
+            "createdAt": item.created_at.isoformat(),
+            "detail": item.detail,
+        }
+        for item in events
+        if item.event_type in {"reasoning_summary", "agent_evidence"}
+    ]
+    invocation = "voice_goal" if run.request.instruction_profile == "voice-goal" else run.request.instruction_profile
     return {
         "runId": run.request.run_id, "agentKind": "background",
+        "invocationType": invocation,
+        "originId": run.local_session_id,
+        "objective": run.request.objective,
+        "recipe": run.request.recipe.value,
         "state": run.state.value, "cancellationRequested": run.cancellation_requested,
-        "output": run.output, "failureCode": run.failure_code,
-        "failureMessage": run.failure_message, "modelTurns": run.model_turns,
+        "output": run.output,
+        "failure": ({"code": run.failure_code, "message": run.failure_message}
+                    if run.failure_code else None),
+        "failureCode": run.failure_code,
+        "failureMessage": run.failure_message,
+        "failureExplanation": explain_failure(run),
+        "modelTurns": run.model_turns,
         "toolCalls": run.tool_calls, "createdAt": run.created_at.isoformat(),
         "updatedAt": run.updated_at.isoformat(),
         "completedAt": run.completed_at.isoformat() if run.completed_at else None,
+        "reasoningEntries": reasoning_entries,
+        "progress": {
+            "label": progress.label,
+            "fraction": progress.fraction,
+            "active": progress.active,
+            "tone": progress.tone,
+            "activity": progress.activity,
+            "modelTurns": progress.model_turns or run.model_turns,
+            "toolCalls": progress.tool_calls or run.tool_calls,
+            "timeline": list(progress.timeline),
+        },
     }
 
 

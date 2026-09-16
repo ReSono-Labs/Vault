@@ -49,6 +49,36 @@ export type LocalExtension = {
   configuration: Record<string, unknown>;
 };
 
+export type BackgroundRun = {
+  runId: string;
+  objective: string;
+  invocationType: string;
+  originId: string;
+  state: string;
+  cancellationRequested: boolean;
+  output: Record<string, unknown> | null;
+  failure: { code: string | null; message: string | null } | null;
+  failureCode: string | null;
+  failureMessage: string | null;
+  failureExplanation: string | null;
+  modelTurns: number;
+  toolCalls: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  reasoningEntries: { type: string; createdAt: string; detail: Record<string, unknown> }[];
+  progress: {
+    label: string;
+    fraction: number;
+    active: boolean;
+    tone: string;
+    activity: string;
+    modelTurns: number;
+    toolCalls: number;
+    timeline: { label: string; createdAt: string }[];
+  };
+};
+
 export type LocalTool = {
   name: string;
   description: string;
@@ -66,7 +96,7 @@ export type ExtensionGrant = {
 };
 
 export type BuiltinPlugin = {
-  key: "markets" | "weather" | "news" | "local_events" | "agent_mail" | "tasks";
+  key: "markets" | "weather" | "news" | "local_events" | "agent_mail" | "tasks" | "agent2agent" | "agent2agent_collab";
   name: string;
   description: string;
   enabled: boolean;
@@ -370,6 +400,15 @@ export const localApi = {
   updateBuiltinPlugin: (key: BuiltinPlugin["key"], value: { enabled?: boolean; configuration?: Record<string, unknown> }) =>
     request<BuiltinPlugin>(`/builtin-plugins/${encodeURIComponent(key)}`, { method: "POST", body: JSON.stringify(value) }),
   tools: () => request<{ items: LocalTool[] }>("/tools"),
+  backgroundRuns: () => request<{ items: BackgroundRun[] }>("/background/runs"),
+  cancelBackgroundRun: (runId: string) => request<BackgroundRun>(
+    `/background/runs/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST", body: "{}" },
+  ),
+  deleteBackgroundRun: (runId: string) => request<{ runId: string; deleted: boolean }>(
+    `/background/runs/${encodeURIComponent(runId)}`,
+    { method: "DELETE" },
+  ),
   extensionRuntime: () => request<{ safeMode: boolean }>("/extensions/runtime"),
   providers: () => request<AIProviderCatalog>("/providers/catalog"),
   voiceProvider: (providerKey = "openai") => request<VoiceProviderStatus>(`/providers/${encodeURIComponent(providerKey)}`),
@@ -499,6 +538,18 @@ export const localApi = {
   hostFilesystemIntegrations: () => request<{ items: HostFilesystemIntegration[] }>("/host-filesystem/integrations"),
   hostFilesystemPairing: (code: string) =>
     request<HostFilesystemPairing>(`/host-filesystem/integrations/pairing/${encodeURIComponent(code)}`),
+  linkCompanion: () => request<{ status: string; displayName?: string; pairingId?: string; pairedAt?: string }>("/link-companion"),
+  linkCompanionPairing: (code: string) =>
+    request<{ pairingId: string; displayName: string; status: string }>(
+      `/link-companion/pairing/${encodeURIComponent(code)}`,
+    ),
+  approveLinkCompanionPairing: (pairingId: string) =>
+    request<{ status: string; displayName: string }>(
+      `/link-companion/pairing/${encodeURIComponent(pairingId)}/approve`,
+      { method: "POST", body: "{}" },
+    ),
+  unpairLinkCompanion: () =>
+    request<{ status: string }>("/link-companion/unpair", { method: "POST", body: "{}" }),
   approveHostFilesystemPairing: (pairingId: string) =>
     request<HostFilesystemIntegration>(
       `/host-filesystem/integrations/pairing/${encodeURIComponent(pairingId)}/approve`,
@@ -523,6 +574,7 @@ export const localApi = {
     }),
   a2aConnections: () => request<{ items: A2AConnection[] }>("/agent2agent/connections"),
   a2aNotifications: () => request<{ items: A2ANotification[] }>("/agent2agent/notifications"),
+  a2aListen: () => request<{ cardUrl: string; rpcUrl: string; token: string }>("/agent2agent/listen"),
   notifications: () => request<{ items: VaultNotification[]; unreadCount: number }>("/notifications"),
   clearNotification: (notificationId: string) =>
     request<{ status: string; notificationId: string }>(`/notifications/${encodeURIComponent(notificationId)}/clear`, {

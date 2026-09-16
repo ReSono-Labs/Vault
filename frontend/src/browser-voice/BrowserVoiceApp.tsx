@@ -3,6 +3,7 @@ import { AccountPanel } from "@/browser-voice/AccountPanel";
 import { CapabilitiesPanel } from "@/browser-voice/CapabilitiesPanel";
 import { ConnectionsPanel } from "@/browser-voice/ConnectionsPanel";
 import { MemoryPanel } from "@/browser-voice/MemoryPanel";
+import { BackgroundRunsPanel } from "@/browser-voice/BackgroundRunsPanel";
 import { DocumentsPanel } from "@/browser-voice/DocumentsPanel";
 import { SettingsPanel } from "@/browser-voice/SettingsPanel";
 import { BrowserWorkspaceFileBrowser } from "@/browser-voice/BrowserWorkspaceFileBrowser";
@@ -656,6 +657,8 @@ export function BrowserVoiceApp() {
         ? "Memory"
       : destination === "agent2agent"
         ? "Agent2Agent"
+      : destination === "background"
+        ? "Background Agent"
       : destination === "connections"
         ? "Connections"
         : destination === "settings"
@@ -966,6 +969,11 @@ export function BrowserVoiceApp() {
                 <Agent2AgentPanel />
               </div>
             ) : null}
+            {destination === "background" ? (
+              <div className="browser-voice-management-page">
+                <BackgroundRunsPanel />
+              </div>
+            ) : null}
             {destination === "account" ? (
               <div className="browser-voice-management-page">
                 <AccountPanel
@@ -1121,6 +1129,11 @@ function HomeVoice({
 function Agent2AgentPanel() {
   const [connections, setConnections] = useState<A2AConnection[]>([]);
   const [notifications, setNotifications] = useState<A2ANotification[]>([]);
+  const [optionOn, setOptionOn] = useState(false);
+  const [listen, setListen] = useState<{ cardUrl: string; rpcUrl: string; token: string } | null>(null);
+  const [companion, setCompanion] = useState<{ status: string; displayName?: string } | null>(null);
+  const [companionCode, setCompanionCode] = useState("");
+  const [companionPending, setCompanionPending] = useState<{ pairingId: string; displayName: string } | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<A2ANotification | null>(null);
   const [adding, setAdding] = useState(false);
@@ -1150,11 +1163,20 @@ function Agent2AgentPanel() {
 
   async function refresh() {
     try {
-      const [connected, activity] = await Promise.all([
-        localApi.a2aConnections(), localApi.a2aNotifications(),
+      const [connected, activity, plugins, companionState] = await Promise.all([
+        localApi.a2aConnections(), localApi.a2aNotifications(), localApi.builtinPlugins(), localApi.linkCompanion(),
       ]);
+      const enabled = Boolean(plugins.items?.find((item) => item.key === "agent2agent")?.enabled);
       setConnections(Array.isArray(connected?.items) ? connected.items : []);
       setNotifications(Array.isArray(activity?.items) ? activity.items : []);
+      setOptionOn(enabled);
+      setCompanion(companionState);
+      if (enabled) {
+        const inbound = await localApi.a2aListen();
+        setListen(inbound);
+      } else {
+        setListen(null);
+      }
       setError(null);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Agent2Agent could not be loaded."); }
   }
@@ -1180,8 +1202,13 @@ function Agent2AgentPanel() {
   const selectedCard = selected?.connection?.agentCard;
   return <section aria-labelledby="agent2agent-title" className="browser-voice-connections browser-voice-a2a">
     <header className="browser-voice-management-heading"><div><span className="browser-voice-eyebrow-label">Agent network</span><h2 id="agent2agent-title">External agents</h2><p>Agents available to Voice and the Background Agent through the A2A standard.</p></div></header>
+    {optionOn && listen ? <section className="browser-voice-management-section"><div className="browser-voice-section-head"><div><span className="browser-voice-eyebrow-label">This Vault</span><h3>Inbound Agent Card</h3><p>Peers send work to the Background Agent with this Card URL and bearer. Keep the token distinct from outbound connection tokens.</p></div></div><dl className="browser-voice-a2a-facts"><div className="is-wide"><dt>Agent Card</dt><dd>{listen.cardUrl}</dd></div><div className="is-wide"><dt>Inbound bearer</dt><dd>{listen.token}</dd></div></dl></section> : null}
     <section className="browser-voice-management-section">
-      <div className="browser-voice-section-head"><div><span className="browser-voice-eyebrow-label">Connections</span><h3>Agent connections</h3><p>Select an agent to view its Agent Card, access, skills, and connection details.</p></div><button className="browser-voice-submit" onClick={() => setAdding(true)} type="button">Connect agent</button></div>
+      <div className="browser-voice-section-head"><div><span className="browser-voice-eyebrow-label">ReSono Link</span><h3>Set up Link Companion</h3><p>{companion?.status === "paired" ? `Paired with ${companion.displayName || "this computer's Link connector"}. Disconnect in Link to revoke platform access.` : "Confirm this Vault with the host connector. Do not type ports. Run sudo resono-link-connector companion setup vault, then enter the pairing code here."}</p></div></div>
+      {companion?.status === "paired" ? <div className="browser-voice-modal-actions"><button className="browser-voice-account-danger" onClick={() => { void (async () => { try { await localApi.unpairLinkCompanion(); setCompanionCode(""); setCompanionPending(null); await refresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Link Companion could not be disconnected."); } })(); }} type="button">Disconnect Link Companion</button></div> : <form onSubmit={(event) => { event.preventDefault(); void (async () => { try { const pending = await localApi.linkCompanionPairing(companionCode.trim()); setCompanionPending(pending); setError(null); } catch (caught) { setError(caught instanceof Error ? caught.message : "That pairing code is not waiting."); } })(); }}><label><span className="browser-voice-eyebrow-label">Pairing code</span><input value={companionCode} onChange={(event) => setCompanionCode(event.target.value)} placeholder="ABCD-EF01" required /></label><div className="browser-voice-modal-actions"><button className="browser-voice-submit" type="submit">Look up request</button>{companionPending ? <button className="browser-voice-submit" onClick={(event) => { event.preventDefault(); void (async () => { try { await localApi.approveLinkCompanionPairing(companionPending.pairingId); setCompanionCode(""); setCompanionPending(null); await refresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Link Companion could not be confirmed."); } })(); }} type="button">Confirm {companionPending.displayName}</button> : null}</div></form>}
+    </section>
+    <section className="browser-voice-management-section">
+      <div className="browser-voice-section-head"><div><span className="browser-voice-eyebrow-label">Connections</span><h3>Agent connections</h3><p>{optionOn ? "Select an agent to view its Agent Card, access, skills, and connection details." : "Turn on Agent2Agent under Library (Built into Vault) before connecting an agent."}</p></div><button className="browser-voice-submit" disabled={!optionOn} onClick={() => setAdding(true)} type="button">Connect agent</button></div>
       {agents.map((item) => <button className="browser-voice-connection-row browser-voice-a2a-standard-row" key={item.key} onClick={() => setSelectedAgent(item.key)} type="button"><span className="browser-voice-connection-mark"><BrowserVoiceConnectionsIcon /></span><span><strong>{item.connection.displayName}</strong><small>A2A connected · Voice and Background Agent available</small></span><span className="browser-voice-state is-ready">Connected</span></button>)}
       {!agents.length ? <p className="browser-voice-management-empty">No external agents are connected.</p> : null}
     </section>

@@ -137,7 +137,7 @@ export function BrowserVoiceSettingsIcon({ className }: IconProps) {
   );
 }
 
-export type BrowserVoiceDestination = "account" | "agent2agent" | "capabilities" | "connections" | "documents" | "home" | "memory" | "settings" | "workspace";
+export type BrowserVoiceDestination = "account" | "agent2agent" | "background" | "capabilities" | "connections" | "documents" | "home" | "memory" | "settings" | "workspace";
 
 export function BrowserVoiceFutureNavigation({
   activeDestination = "home",
@@ -155,6 +155,7 @@ export function BrowserVoiceFutureNavigation({
     { key: "connections", label: placement === "desktop" ? "Connections" : "Connect", icon: BrowserVoiceConnectionsIcon },
     { key: "memory", label: "Memory", icon: BrowserVoiceMemoryIcon },
     { key: "agent2agent", label: placement === "desktop" ? "Agent2Agent" : "Agents", icon: BrowserVoiceAgentsIcon },
+    { key: "background", label: placement === "desktop" ? "Background Agent" : "Tasks", icon: BrowserVoiceAgentsIcon },
     { key: "documents", label: placement === "desktop" ? "Documents" : "Docs", icon: BrowserVoiceDocumentsIcon },
     { key: "settings", label: "Settings", icon: BrowserVoiceSettingsIcon },
     { key: "account", label: "Accounts", icon: BrowserVoiceDevicesIcon },

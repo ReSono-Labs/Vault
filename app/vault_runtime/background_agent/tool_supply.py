@@ -76,7 +76,7 @@ class BackgroundToolSupply:
         return result
 
     def _allowed(self, definition) -> bool:
-        if definition.name not in self._grant.explicit_names:
+        if self._grant.explicit_names and definition.name not in self._grant.explicit_names:
             return False
         if self._grant.autonomy is AutonomyProfile.LIMITED:
             return definition.effect_class == "read"

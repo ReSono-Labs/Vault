@@ -339,9 +339,10 @@ class LocalToolAuthority:
 
 
 class VoiceToolRuntime:
-    def __init__(self, *, catalog: ToolCatalog, authority: LocalToolAuthority) -> None:
+    def __init__(self, *, catalog: ToolCatalog, authority: LocalToolAuthority, voice_modes=None) -> None:
         self._catalog = catalog
         self._authority = authority
+        self._voice_modes = voice_modes
 
     def invoke(
         self, *, name: str, arguments: dict[str, object], context: ToolInvocationContext
@@ -352,6 +353,8 @@ class VoiceToolRuntime:
         definition = definitions.get(name)
         if definition is None or not self._authority.authorize(definition, context):
             return ToolInvocationResult("Tool is not granted.", is_error=True)
+        if self._voice_modes is not None and not self._voice_modes.allows(name, context):
+            return ToolInvocationResult("Tool is not available in the current Voice profile.", is_error=True)
         claim = self._authority.prepare_voice_invocation(
             context=context, definition=definition, arguments=arguments
         )

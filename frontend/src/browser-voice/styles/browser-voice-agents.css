@@ -442,6 +442,93 @@
 .browser-voice-agent-facts dt { color: #8fa0b9; font-size: 0.75rem; text-transform: uppercase; }
 .browser-voice-agent-facts dd { color: #f5f8ff; margin: 0; }
 
+.browser-voice-state.is-error:before { background: #ff6b6b; }
+
+.browser-voice-background-run-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: start;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--b0r-line);
+}
+.browser-voice-run-rail {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--row-accent, var(--b0r-cyan, #79edee));
+  border-radius: 50%;
+}
+.browser-voice-run-rail:after {
+  place-self: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--row-accent, var(--b0r-cyan, #79edee));
+  border-radius: 4px;
+  content: "";
+}
+.browser-voice-run-copy strong { display: block; font-size: 1.05rem; font-weight: 500; }
+.browser-voice-run-copy > small { display: block; margin: 7px 0; color: var(--b0r-muted); }
+.browser-voice-run-progress { display: grid; gap: 8px; max-width: 680px; margin-top: 14px; }
+.browser-voice-run-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(126, 151, 185, 0.17);
+}
+.browser-voice-run-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--b0r-cyan, #79edee);
+  transition: width 0.35s ease;
+}
+.browser-voice-run-progress.is-active .browser-voice-run-progress-track i {
+  background: linear-gradient(90deg, var(--b0r-cyan, #79edee), #79eccb, var(--b0r-cyan, #79edee));
+  background-size: 200% 100%;
+  animation: browser-voice-run-progress-flow 1.4s linear infinite;
+}
+.browser-voice-run-progress.failed .browser-voice-run-progress-track i,
+.browser-voice-run-progress.stopped .browser-voice-run-progress-track i { background: #ff6b6b; }
+.browser-voice-run-progress.complete .browser-voice-run-progress-track i { background: #79eccb; }
+.browser-voice-run-activity { margin: 0; color: var(--b0r-text, #f5f8ff); line-height: 1.4; }
+.browser-voice-run-metrics { margin: 0; color: var(--b0r-muted); font-size: 0.82rem; }
+.browser-voice-run-timeline { display: grid; margin-top: 8px; border-top: 1px solid rgba(151, 178, 207, 0.22); }
+.browser-voice-run-timeline > div {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(151, 178, 207, 0.14);
+  font-size: 0.84rem;
+}
+.browser-voice-run-timeline i { width: 6px; height: 6px; border-radius: 50%; background: var(--b0r-cyan, #79edee); }
+.browser-voice-run-timeline time { color: var(--b0r-muted); font-size: 0.78rem; }
+.browser-voice-run-error-detail {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-left: 3px solid #ff6b6b;
+  background: rgba(255, 107, 107, 0.06);
+}
+.browser-voice-run-error-detail strong { color: #ff9a9a; }
+.browser-voice-run-error-detail p { margin: 7px 0 0; color: var(--b0r-muted); }
+.browser-voice-run-actions { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.browser-voice-run-remove { border-color: rgba(255, 107, 107, 0.55); color: #ff9292; }
+.browser-voice-reasoning-run { padding: 0; border-bottom: 1px solid var(--b0r-line); }
+.browser-voice-reasoning-run > summary { display: grid; gap: 6px; padding: 20px 0; cursor: pointer; }
+.browser-voice-reasoning-run > summary small { color: var(--b0r-muted); }
+.browser-voice-reasoning-entry { margin-top: 18px; padding-left: 16px; border-left: 2px solid var(--b0r-cyan, #79edee); }
+.browser-voice-reasoning-entry p { margin: 6px 0 0; line-height: 1.55; }
+@keyframes browser-voice-run-progress-flow { to { background-position: -200% 0; } }
+@media (max-width: 800px) {
+  .browser-voice-background-run-row { grid-template-columns: 54px minmax(0, 1fr); }
+  .browser-voice-run-actions { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .browser-voice-run-progress.is-active .browser-voice-run-progress-track i { animation: none; }
+}
+
 .browser-voice-agent-detail > .browser-voice-agent-primary { margin-top: 1.25rem; }
 
 .browser-voice-agent-configuration {

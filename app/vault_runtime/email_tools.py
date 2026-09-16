@@ -35,7 +35,7 @@ def register_email_tools(*, catalog: ToolCatalog, runtime: LocalEmailRuntime, bu
             tool_id=f"builtin.{name.replace('_', '-')}.v1", name=name,
             description=descriptions[name], input_schema=schemas[name], handler=execute,
             effect_class="read" if name in EMAIL_SIGNAL_CACHE_TOOLS else "write",
-            audiences=frozenset({AgentKind.VOICE}),
+            audiences=frozenset({AgentKind.VOICE, AgentKind.BACKGROUND}),
         ))
     agent_names = {name for name in EMAIL_SIGNAL_CACHE_TOOLS | EMAIL_SIGNAL_SIDE_EFFECT_TOOLS if name in {"email_check","email_get_unread","email_search","email_read","email_mark_read","email_mark_unread","email_compose","email_send_pending","email_archive"}}
     for email_name in sorted(agent_names):
@@ -50,7 +50,7 @@ def register_email_tools(*, catalog: ToolCatalog, runtime: LocalEmailRuntime, bu
                     payload = tools.execute_cache_tool(**kwargs) if source_name in EMAIL_SIGNAL_CACHE_TOOLS else tools.execute_side_effect_tool(**kwargs)
                 return ToolInvocationResult(json.dumps(payload, separators=(",", ":")), payload)
             except Exception as exc: return ToolInvocationResult(str(exc), is_error=True)
-        catalog.register(ToolDefinition(tool_id=f"builtin.{agent_name.replace('_','-')}.v1", name=agent_name, description=descriptions[email_name].replace("email", "Agent Mail"), input_schema=schemas[email_name], handler=execute_agent, effect_class="read" if email_name in EMAIL_SIGNAL_CACHE_TOOLS else "write", audiences=frozenset({AgentKind.VOICE}), availability=(lambda user_id, workspace_id: builtin_plugins.enabled(account_id=user_id, workspace_id=workspace_id, plugin_key="agent_mail")) if builtin_plugins is not None else None))
+        catalog.register(ToolDefinition(tool_id=f"builtin.{agent_name.replace('_','-')}.v1", name=agent_name, description=descriptions[email_name].replace("email", "Agent Mail"), input_schema=schemas[email_name], handler=execute_agent, effect_class="read" if email_name in EMAIL_SIGNAL_CACHE_TOOLS else "write", audiences=frozenset({AgentKind.VOICE, AgentKind.BACKGROUND}), availability=(lambda user_id, workspace_id: builtin_plugins.enabled(account_id=user_id, workspace_id=workspace_id, plugin_key="agent_mail")) if builtin_plugins is not None else None))
 
 
 def _object(properties: dict[str, object], required: tuple[str, ...] = ()) -> dict[str, object]:

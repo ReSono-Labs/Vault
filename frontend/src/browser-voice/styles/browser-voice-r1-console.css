@@ -61,6 +61,7 @@
 .browser-voice-state { display:inline-flex; align-items:center; gap:9px; color:var(--b0r-muted); font-size:.88rem; white-space:nowrap; }
 .browser-voice-state:before { width:9px; height:9px; border-radius:50%; background:#ffd166; content:""; }
 .browser-voice-state.is-ready:before { background:#79eccb; box-shadow:0 0 14px rgba(121,236,203,.3); }
+.browser-voice-state.is-error:before { background:#ff6b6b; }
 .browser-voice-form { width:100%; max-width:780px; gap:14px; margin:20px 0 0; }
 .browser-voice-form.is-two-column { grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px 36px; }
 .browser-voice-form.is-two-column>.browser-voice-form-wide,

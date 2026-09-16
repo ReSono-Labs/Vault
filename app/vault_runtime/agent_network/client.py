@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from ipaddress import ip_address
 from typing import Any, Mapping
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from uuid import uuid4
 
 import httpx
+
+from app.vault_runtime.link_companion.transport import companion_request_options, link_agent_network_host
 
 
 class A2AError(RuntimeError):
@@ -37,6 +39,13 @@ def validate_card_url(value: str) -> str:
     return value.strip()
 
 
+def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+    kwargs.update(companion_request_options(url))
+    if method == "GET":
+        return httpx.get(url, **kwargs)
+    return httpx.post(url, **kwargs)
+
+
 class A2AClient:
     def __init__(self, *, timeout: float = 120.0) -> None:
         self._timeout = timeout
@@ -44,7 +53,7 @@ class A2AClient:
     def discover(self, card_url: str, token: str = "") -> ValidatedAgentCard:
         card_url = validate_card_url(card_url)
         try:
-            response = httpx.get(card_url, headers=_headers(token), timeout=15, follow_redirects=False)
+            response = _request("GET", card_url, headers=_headers(token), timeout=15, follow_redirects=False)
             response.raise_for_status()
             card = response.json()
         except (httpx.HTTPError, ValueError) as exc:
@@ -58,8 +67,17 @@ class A2AClient:
                 continue
             candidate = urljoin(card_url, str(interface.get("url", "")))
             parsed = urlsplit(candidate)
-            if parsed.scheme == origin.scheme and parsed.hostname == origin.hostname and parsed.port == origin.port and not parsed.username and not parsed.password and not parsed.fragment:
+            if parsed.scheme != origin.scheme or parsed.hostname != origin.hostname or parsed.username or parsed.password or parsed.fragment:
+                continue
+            if parsed.port == origin.port:
                 rpc_url = candidate
+                break
+            # A Link Card advertises the destination listener (normally 8443),
+            # while this installation reaches it through its authorized source
+            # lane (normally 8453). Keep the advertised RPC path and query, but
+            # never replace the source route's authenticated authority.
+            if origin.hostname and link_agent_network_host(origin.hostname):
+                rpc_url = urlunsplit((origin.scheme, origin.netloc, parsed.path, parsed.query, ""))
                 break
         if not rpc_url:
             raise A2AError("a2a_protocol_unsupported", "The agent does not advertise A2A JSON-RPC 1.0.")
@@ -82,7 +100,7 @@ class A2AClient:
     def _rpc(self, url: str, token: str, method: str, params: dict[str, object]) -> dict[str, object]:
         request_id = uuid4().hex
         try:
-            response = httpx.post(url, headers=_headers(token), json={"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}, timeout=self._timeout, follow_redirects=False)
+            response = _request("POST", url, headers=_headers(token), json={"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}, timeout=self._timeout, follow_redirects=False)
             response.raise_for_status()
             value = response.json()
         except (httpx.HTTPError, ValueError) as exc:

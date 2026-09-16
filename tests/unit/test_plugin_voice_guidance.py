@@ -30,6 +30,7 @@ def test_voice_context_receives_safe_saved_plugin_defaults_and_routing():
     assert "do not substitute generic web_search" in context.instructions
     assert "geographic/local news" in context.instructions
     assert "Agent Mail" not in context.instructions
+    assert "agent2agent_send" not in context.instructions
 
 
 def test_tool_argument_audit_keeps_routing_values_and_redacts_secrets():

@@ -1,7 +1,7 @@
 import hashlib
 
 from app.core.security.passwords import hash_password, verify_password
-from app.core.security.tokens import hash_token
+from app.core.security.tokens import hash_token, token_equals
 
 
 def test_password_hash_roundtrip_preserves_voice_contract() -> None:
@@ -26,3 +26,10 @@ def test_malformed_password_hash_is_denied_without_crashing_login() -> None:
 
 def test_opaque_token_hash_is_voice_compatible() -> None:
     assert hash_token("local-session-token") == hashlib.sha256(b"local-session-token").hexdigest()
+
+
+def test_bearer_secrets_compare_equal_only_when_identical() -> None:
+    assert token_equals("inbound-secret", "inbound-secret") is True
+    assert token_equals("inbound-secret", "outbound-secret") is False
+    assert token_equals("short", "much-longer-token") is False
+    assert token_equals("", "inbound-secret") is False

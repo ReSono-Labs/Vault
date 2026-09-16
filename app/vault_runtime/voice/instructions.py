@@ -22,7 +22,10 @@ VOICE_TOOL_GUIDANCE = (
     "- Use memory_prepare_correction or memory_prepare_forget only for the exact requested memory, and apply "
     "the change only through memory_confirm_action after a later user confirmation.\n"
     "- A Skill's allowed-tools declaration is not permission. Load a relevant enabled Skill with "
-    "load_agent_skill; use only tools independently supplied to this session."
+    "load_agent_skill; use only tools independently supplied to this session.\n"
+    "- When the user clearly asks you to delegate substantial work to the Background Agent, "
+    "call voice_mode_switch with modeKey goal_intake. Do not make the user say the word mode. "
+    "Do not switch for ordinary questions. Never say there is no Background Agent."
 )
 
 WORKSPACE_FILES_GUIDANCE = (

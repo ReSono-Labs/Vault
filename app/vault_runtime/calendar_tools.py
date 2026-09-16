@@ -32,7 +32,7 @@ def register_calendar_tools(*, catalog: ToolCatalog, runtime: LocalCalendarRunti
                 return ToolInvocationResult(str(exc), is_error=True)
         catalog.register(ToolDefinition(
             tool_id=f"builtin.{name.replace('_', '-')}.v1", name=name, description=description,
-            input_schema=schema, handler=read, effect_class="read", audiences=frozenset({AgentKind.VOICE}),
+            input_schema=schema, handler=read, effect_class="read", audiences=frozenset({AgentKind.VOICE, AgentKind.BACKGROUND}),
         ))
 
     def create(context: ToolInvocationContext, arguments: dict[str, object]) -> ToolInvocationResult:
@@ -47,7 +47,7 @@ def register_calendar_tools(*, catalog: ToolCatalog, runtime: LocalCalendarRunti
         tool_id="builtin.calendar-create.v1", name="calendar_create",
         description="Prepare a Calendar event, then create it only after explicit confirmation.",
         input_schema=_create_schema(), handler=create, effect_class="write",
-        audiences=frozenset({AgentKind.VOICE}),
+        audiences=frozenset({AgentKind.VOICE, AgentKind.BACKGROUND}),
     ))
 
 

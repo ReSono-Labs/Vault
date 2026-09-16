@@ -63,7 +63,7 @@ def register_tasks_tools(
             input_schema=schemas[name],
             handler=handler(name),
             effect_class="read" if name in {"tasks_list", "tasks_read"} else "write",
-            audiences=frozenset({AgentKind.VOICE}),
+            audiences=frozenset({AgentKind.VOICE, AgentKind.BACKGROUND}),
             availability=(
                 (lambda user_id, workspace_id: builtin_plugins.enabled(
                     account_id=user_id, workspace_id=workspace_id, plugin_key="tasks",

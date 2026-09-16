@@ -28,7 +28,7 @@ package files directly.
 | Workspace | Opens the signed-in account's private files, including `local/` linked computer folders. |
 | Settings | Turns Computer folders on or off for this browser and lists linked folders. |
 | Documents and Vault Help | Opens the user-guide collection (this guide plus Windows, Link, local bridge, Hermes/OpenClaw memory, Plugin Kit, and MCP Package Kit) and a support assistant. |
-| ReSono Labs Link | Add a Custom HTTP/WebSocket service (web interface) in Link that targets Vault's local compatibility bridge. |
+| ReSono Labs Link | Pair Link Companion from External agents (or `sudo resono-link-connector companion setup vault`), then add ReSono Labs Vault in Link. After `agent-network setup` and Connect grants, Link apply fills External agents with those peers. Leftover Custom HTTP to `:8766` remains until cleanup. |
 | Safe mode | Blocks all third-party capability projection without deleting installed extension records. |
 | Backup and restore | Creates verified local backups of the database and private package data and restores only with an exact confirmation phrase. |
 | Uninstall | Removes containers and the network while preserving production data volumes. |
@@ -434,8 +434,10 @@ selected provider's background text model, a frozen per-run tool set, autonomy
 and tool-call limits, and a durable run lifecycle. It is not a user-installable
 agent and extensions cannot create additional system-agent identities.
 
-The current web navigation does not provide a standalone Background-run form.
-Background execution exists through the local API and internal product flows.
+The current web UI reviews Background runs on the **Background Agent** page using
+the R1 delegated-work layout (run logs and reasoning logs). It does
+not submit work. Voice starts a goal after switching into Goal Intake; inbound
+Agent2Agent can also enqueue a run. There is no Background submission form.
 
 ### Provider and model selection
 
@@ -476,11 +478,13 @@ model-turn or time limit fails the run.
 
 ### How Background capabilities are selected
 
-The Background Agent never receives every catalog tool automatically. At run
-start, Vault freezes the intersection of:
+At run start, Vault freezes the intersection of:
 
-1. tools currently visible to the Background Agent for that user/workspace;
-2. exact tool names listed in the run request;
+1. tools currently visible to the Background Agent for that user/workspace,
+   including MCP tools granted to Background (restored from durable grants
+   immediately before the freeze);
+2. exact tool names listed in the run request, or **all** matching Background
+   tools when the request lists none (Voice `goal_start` uses this path);
 3. the run's autonomy policy; and
 4. the run's tool-call budget.
 
@@ -492,11 +496,13 @@ started/completed/failed activity. A tool-result error still consumes a tool
 call because the provider attempted the call.
 
 Built-in tools available to Background by audience include memory lookup,
-memory evidence explanation, web search, and A2A list/send. Mail, Contacts,
-Calendar, explicit remember, and Voice confirmation-based correction/forget
-tools are currently Voice-only. An imported Skill or MCP tool reaches
-Background only when its lifecycle, user/workspace audience, safe-mode state,
-and exact grant all permit it; installation alone is insufficient.
+memory evidence explanation, web search, Mail, Contacts, Calendar, Tasks,
+workspace files, enabled built-in plugins, and A2A list/send. Voice-only tools
+include Goal Intake (`goal_start` / inspect / cancel), `voice_mode_switch`,
+explicit remember, and confirmation-based memory correction/forget. An imported
+Skill or MCP tool reaches Background only when its lifecycle, user/workspace
+audience, safe-mode state, and grant all permit it; installation alone is
+insufficient.
 
 ### Background memory context
 
@@ -725,9 +731,20 @@ removed/restored.
 
 ## 14. Agent2Agent
 
-Vault implements outbound A2A 1.0 connectivity. Voice and Background share
-`agent2agent_list` and `agent2agent_send`. Vault does not currently expose an
-inbound non-human execution principal for external agents to run Vault.
+Vault implements A2A 1.0 as a Built into Vault option (default off). Voice and
+Background share outbound `agent2agent_list` and `agent2agent_send`. When the
+option is on, Vault also serves a loopback Agent Card and JSON-RPC so a peer can
+`SendMessage` this Vault; inbound work runs as the Background text agent, not
+Voice. **Setup for this pass is port numbers:** inbound Card at
+`http://127.0.0.1:8768/.well-known/agent-card.json` (port override
+`RESONO_VAULT_A2A_LISTEN_PORT`, Docker host override `VAULT_A2A_PORT`) plus the inbound bearer shown on the Agent2Agent
+page; outbound is Connect agent with the peer’s Card URL (another loopback port
+is enough). The Docker package publishes that host loopback port and binds the
+listener on all container interfaces (`RESONO_VAULT_RUNTIME_PUBLISH_PORTS`); the
+Agent Card URL stays `127.0.0.1`. Standalone Vault still binds loopback only.
+Accepting inbound work still requires the Agent2Agent option on. A Link Agent
+profile is optional later and is not required for A2A to work. Dashboard Custom
+HTTP on `:8766` is the Vault UI tunnel, not A2A.
 
 ### Connect an agent
 
@@ -1088,7 +1105,8 @@ rebuilds the package without deleting saved Vault data.
 - No cloud account, email-based recovery, MFA, or security questions.
 - Age classification does not yet implement parental controls.
 - No general shared-workspace selection between different users.
-- No standalone Background Agent submission page in the current web UI.
+- No Background Agent submission form in the current web UI; Voice (and inbound
+  Agent2Agent) start runs. The Background page tracks progress only.
 - No standalone Contacts management page.
 - No supported Mail-account removal control.
 - Streamable HTTP is the only executable MCP transport.
@@ -1096,8 +1114,8 @@ rebuilds the package without deleting saved Vault data.
   current Library page.
 - Detailed Plugin review findings are not yet displayed by the current Library
   import screen.
-- A2A is outbound from Vault; inbound external-agent execution of Vault is not
-  implemented.
+- A2A outbound tools, new agent connections, and the inbound loopback Agent Card require the built-in Agent2Agent option (default off). Inbound HTTP requires `Authorization: Bearer` with this Vault's inbound token (not a browser cookie, Basic auth, or an outbound peer token). Inbound tasks execute as the Background text agent. Standalone binds `127.0.0.1:8768`; Docker publishes host `127.0.0.1:8768` (`VAULT_A2A_PORT`) so a host connector can reach the Card. Docker outbound to Link Agent Network uses the packaged connector CONNECT hop; operators do not set peer URLs to `host.docker.internal`.
+- Collab runs automatically with Agent2Agent (no separate option). It waits for a connected peer's turn using the Hermes coordinator; it does not replace `agent2agent_send`.
 - Remote A2A routing is not created by Vault; the operator supplies the
   reachable HTTPS route.
 - ChatGPT OAuth does not replace an OpenAI API key for embeddings.

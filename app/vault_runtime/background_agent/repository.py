@@ -137,13 +137,83 @@ class BackgroundRunRepository:
         row = cursor.fetchone()
         if row is None:
             raise BackgroundRunAuthorizationError("Background run is unavailable in the active scope.")
-        return StoredBackgroundRun(
-            request=_request(row[0]), user_id=str(row[1]), workspace_id=str(row[2]),
-            local_session_id=str(row[3]), state=BackgroundRunState(row[4]),
-            cancellation_requested=bool(row[5]), output=row[6], failure_code=row[7],
-            failure_message=row[8], model_turns=int(row[9]), tool_calls=int(row[10]),
-            created_at=row[11], updated_at=row[12], completed_at=row[13],
-        )
+        return _stored(row)
+
+    def get_in_workspace(
+        self, *, user_id: str, workspace_id: str, local_session_id: str, run_id: str,
+    ) -> StoredBackgroundRun:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                VoiceSessionRepository._require_authority(
+                    cursor, user_id=user_id, workspace_id=workspace_id,
+                    local_session_id=local_session_id,
+                )
+                cursor.execute(
+                    """
+                    SELECT request_json,user_id,workspace_id,local_session_id,state,
+                           cancellation_requested,output_json,failure_code,failure_message,
+                           model_turns,tool_calls,created_at,updated_at,completed_at
+                    FROM vault_private.vault_background_runs
+                    WHERE run_id=%s AND user_id=%s AND workspace_id=%s
+                    """,
+                    (run_id, user_id, workspace_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise BackgroundRunAuthorizationError("Background run is unavailable in the active scope.")
+                return _stored(row)
+
+    def list_in_workspace(
+        self, *, user_id: str, workspace_id: str, local_session_id: str, limit: int = 40,
+    ) -> tuple[StoredBackgroundRun, ...]:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                VoiceSessionRepository._require_authority(
+                    cursor, user_id=user_id, workspace_id=workspace_id,
+                    local_session_id=local_session_id,
+                )
+                cursor.execute(
+                    """
+                    SELECT request_json,user_id,workspace_id,local_session_id,state,
+                           cancellation_requested,output_json,failure_code,failure_message,
+                           model_turns,tool_calls,created_at,updated_at,completed_at
+                    FROM vault_private.vault_background_runs
+                    WHERE user_id=%s AND workspace_id=%s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (user_id, workspace_id, max(1, min(limit, 80))),
+                )
+                return tuple(_stored(row) for row in cursor.fetchall())
+
+    def list_events(
+        self, *, user_id: str, workspace_id: str, local_session_id: str, run_id: str,
+        authorize: bool = True,
+    ) -> tuple[BackgroundRunEvent, ...]:
+        if authorize:
+            self.get_in_workspace(
+                user_id=user_id, workspace_id=workspace_id,
+                local_session_id=local_session_id, run_id=run_id,
+            )
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT run_id,event_index,event_type,state,detail_json,created_at
+                    FROM vault_private.vault_background_run_events
+                    WHERE run_id=%s AND user_id=%s AND workspace_id=%s
+                    ORDER BY event_index
+                    """,
+                    (run_id, user_id, workspace_id),
+                )
+                return tuple(
+                    BackgroundRunEvent(
+                        run_id=str(row[0]), event_index=int(row[1]), event_type=str(row[2]),
+                        state=BackgroundRunState(row[3]), detail=row[4] if isinstance(row[4], dict) else {},
+                        created_at=row[5],
+                    )
+                    for row in cursor.fetchall()
+                )
 
     def transition(
         self,
@@ -229,6 +299,43 @@ class BackgroundRunRepository:
             user_id=user_id, workspace_id=workspace_id,
             local_session_id=local_session_id, run_id=run_id,
         )
+
+    def request_cancellation_in_workspace(
+        self, *, user_id: str, workspace_id: str, local_session_id: str, run_id: str,
+    ) -> StoredBackgroundRun:
+        current = self.get_in_workspace(
+            user_id=user_id, workspace_id=workspace_id,
+            local_session_id=local_session_id, run_id=run_id,
+        )
+        if current.state in TERMINAL_RUN_STATES:
+            return current
+        return self.request_cancellation(
+            user_id=user_id, workspace_id=workspace_id,
+            local_session_id=current.local_session_id, run_id=run_id,
+        )
+
+    def delete_in_workspace(
+        self, *, user_id: str, workspace_id: str, local_session_id: str, run_id: str,
+    ) -> bool:
+        current = self.get_in_workspace(
+            user_id=user_id, workspace_id=workspace_id,
+            local_session_id=local_session_id, run_id=run_id,
+        )
+        if current.state not in TERMINAL_RUN_STATES:
+            raise BackgroundRunConflictError("Only a completed, failed, or cancelled run can be deleted.")
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """DELETE FROM vault_private.vault_background_run_events
+                       WHERE run_id=%s AND user_id=%s AND workspace_id=%s""",
+                    (run_id, user_id, workspace_id),
+                )
+                cursor.execute(
+                    """DELETE FROM vault_private.vault_background_runs
+                       WHERE run_id=%s AND user_id=%s AND workspace_id=%s""",
+                    (run_id, user_id, workspace_id),
+                )
+        return True
 
     def record_activity(
         self, *, user_id: str, workspace_id: str, local_session_id: str,
@@ -318,6 +425,16 @@ class BackgroundRunRepository:
                 json.dumps(detail, separators=(",", ":")),
             ),
         )
+
+
+def _stored(row: Any) -> StoredBackgroundRun:
+    return StoredBackgroundRun(
+        request=_request(row[0]), user_id=str(row[1]), workspace_id=str(row[2]),
+        local_session_id=str(row[3]), state=BackgroundRunState(row[4]),
+        cancellation_requested=bool(row[5]), output=row[6], failure_code=row[7],
+        failure_message=row[8], model_turns=int(row[9]), tool_calls=int(row[10]),
+        created_at=row[11], updated_at=row[12], completed_at=row[13],
+    )
 
 
 def _request(raw: object) -> BackgroundRunRequest:

@@ -222,6 +222,23 @@ describe("standalone Browser Voice shell", () => {
           ownerKind: "background", createdAt: "2026-08-31T12:00:00Z",
           updatedAt: "2026-08-31T12:01:00Z", completedAt: "2026-08-31T12:01:00Z",
         }] });
+        if (path === "/builtin-plugins") return response({ items: [{
+          key: "agent2agent", name: "Agent2Agent",
+          description: "Let Voice and the Background Agent talk to other A2A agents.",
+          enabled: false, builtIn: true, canDelete: false, configuration: {}, updatedAt: null,
+        }] });
+        if (path === "/background/runs") return response({ items: [{
+          runId: "run-1", objective: "Summarize the notes", state: "running",
+          invocationType: "voice_goal", originId: "session-1",
+          cancellationRequested: false, output: null, failure: null, failureCode: null,
+          failureMessage: null, failureExplanation: null,
+          modelTurns: 1, toolCalls: 2, createdAt: "2026-09-15T12:00:00Z",
+          updatedAt: "2026-09-15T12:00:01Z", completedAt: null, reasoningEntries: [],
+          progress: {
+            label: "Working and checking the result", fraction: 0.52, active: true, tone: "active",
+            activity: "Queued for the Background Agent", modelTurns: 1, toolCalls: 2, timeline: [],
+          },
+        }] });
         return response({ items: [] });
       }),
     );
@@ -251,16 +268,71 @@ describe("standalone Browser Voice shell", () => {
     expect(document.documentElement.scrollTop).toBe(0);
     expect(document.body.scrollTop).toBe(0);
     expect(screen.queryByText("Foundry")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Plugin" }));
+    expect((await screen.findAllByText(/Built into Vault/)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Plugins" })).toBeInTheDocument();
+    expect(screen.getByText("Let Voice and the Background Agent talk to other A2A agents.")).toBeInTheDocument();
+    expect(screen.queryByText("Collab")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(await screen.findByText("No external agents are connected.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect agent" })).toBeDisabled();
+    expect(screen.getByText(/Turn on Agent2Agent under Library/)).toBeInTheDocument();
+    expect(screen.queryByText("Inbound Agent Card")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "External agents" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1, name: "Agent2Agent" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Memory only/i)).not.toBeInTheDocument();
     const activitySummary = await screen.findByText("Finished the requested repository review.");
     fireEvent.click(activitySummary.closest("button")!);
     expect(await screen.findByRole("heading", { name: "OpenClaw" })).toBeInTheDocument();
-    expect(screen.getByText("Background Agent")).toBeInTheDocument();
+    expect(screen.getAllByText("Background Agent").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Finished the requested repository review.")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
+    expect(await screen.findByRole("heading", { name: "Delegated work" })).toBeInTheDocument();
+    expect(screen.getByText("Review work delegated by Voice. This page does not start runs.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run logs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reasoning logs" })).toBeInTheDocument();
+    expect(screen.getByText("Summarize the notes")).toBeInTheDocument();
+    expect(screen.getByText(/1 model turns · 2 tool calls/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reasoning logs" }));
+    expect(screen.getByText("No provider reasoning summaries or explicit agent evidence have been recorded yet.")).toBeInTheDocument();
+  });
+
+  it("shows this Vault inbound card when Agent2Agent is on", async () => {
+    const user = {
+      userId: "u",
+      username: "owner",
+      displayName: "Local Owner",
+      experienceStyle: "funny",
+      isDeviceOwner: true,
+      activeWorkspaceId: "w",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const path = String(input);
+        if (path === "/identity/status") return response({ setupComplete: true });
+        if (path === "/me") return response({ user });
+        if (path === "/builtin-plugins") return response({ items: [{
+          key: "agent2agent", name: "Agent2Agent",
+          description: "Let Voice and the Background Agent talk to other A2A agents.",
+          enabled: true, builtIn: true, canDelete: false, configuration: {}, updatedAt: null,
+        }] });
+        if (path === "/agent2agent/listen") return response({
+          cardUrl: "http://127.0.0.1:8768/.well-known/agent-card.json",
+          rpcUrl: "http://127.0.0.1:8768/",
+          token: "inbound-secret",
+        });
+        if (path === "/agent2agent/notifications") return response({ items: [] });
+        return response({ items: [] });
+      }),
+    );
+    render(<BrowserVoiceApp />);
+    await screen.findByRole("heading", { name: "Voice" });
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(await screen.findByRole("heading", { name: "Inbound Agent Card" })).toBeInTheDocument();
+    expect(screen.getByText("http://127.0.0.1:8768/.well-known/agent-card.json")).toBeInTheDocument();
+    expect(screen.getByText("inbound-secret")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect agent" })).toBeEnabled();
+    expect(screen.queryByText("Agent2Agent Collab")).not.toBeInTheDocument();
   });
 
   it("connections exposes Voice infrastructure, agent memory, Mail, Calendar, and modular MCP", async () => {

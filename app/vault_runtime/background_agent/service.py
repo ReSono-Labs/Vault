@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from queue import Empty, Queue
 from threading import Event, Lock, Thread
 from time import monotonic
+from collections.abc import Callable
 from typing import Protocol
 
 from app.vault_runtime.background_agent.contracts import (
@@ -50,6 +51,14 @@ class RunProgressRecorder:
             event_type="model_turns", detail={"count": count},
         )
 
+    def reasoning(self, summaries: tuple[str, ...]) -> None:
+        for summary in summaries:
+            self.repository.record_activity(
+                user_id=self.user_id, workspace_id=self.workspace_id,
+                local_session_id=self.local_session_id, run_id=self.run_id,
+                event_type="reasoning_summary", detail={"summary": summary[:16384]},
+            )
+
     def cancellation_requested(self) -> bool:
         return self.repository.get(
             user_id=self.user_id, workspace_id=self.workspace_id,
@@ -74,6 +83,7 @@ class BackgroundAgentService:
         self._repository = repository
         self._catalog = catalog
         self._executor = executor
+        self._restore_background_tools: Callable[[str, str], None] | None = None
         self._queue: Queue[tuple[str, str, str, str]] = Queue()
         self._stop = Event()
         if not 1 <= worker_count <= 4:
@@ -102,6 +112,9 @@ class BackgroundAgentService:
             worker.join(timeout=max(0.1, timeout))
         with self._worker_lock:
             self._workers = []
+
+    def attach_tool_restore(self, restore: Callable[[str, str], None]) -> None:
+        self._restore_background_tools = restore
 
     def submit(
         self, *, user_id: str, workspace_id: str, local_session_id: str,
@@ -152,6 +165,8 @@ class BackgroundAgentService:
             tool_call_id=f"{run_id}:executor", local_session_id=local_session_id,
             execution_id=run_id,
         )
+        if self._restore_background_tools is not None:
+            self._restore_background_tools(user_id, workspace_id)
 
         def activity(event_type: str, detail: dict[str, object]) -> None:
             self._repository.record_activity(
@@ -236,3 +251,19 @@ class BackgroundAgentService:
                 pass
             finally:
                 self._queue.task_done()
+
+    def inspect_workspace(
+        self, *, user_id: str, workspace_id: str, run_id: str, local_session_id: str,
+    ) -> StoredBackgroundRun:
+        return self._repository.get_in_workspace(
+            user_id=user_id, workspace_id=workspace_id,
+            local_session_id=local_session_id, run_id=run_id,
+        )
+
+    def cancel_workspace(
+        self, *, user_id: str, workspace_id: str, run_id: str, local_session_id: str,
+    ) -> StoredBackgroundRun:
+        return self._repository.request_cancellation_in_workspace(
+            user_id=user_id, workspace_id=workspace_id,
+            local_session_id=local_session_id, run_id=run_id,
+        )

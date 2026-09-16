@@ -10,6 +10,8 @@ from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from app.core.security.tokens import token_equals
+
 from app.vault_runtime.agent_network.schema import ensure_a2a_schema
 from app.vault_runtime.extensions.secrets import LocalMasterKey
 
@@ -24,6 +26,7 @@ class A2AConnection:
     rpc_url: str
     agent_card: dict[str, object]
     enabled: bool
+    link_grant_id: str | None = None
 
 
 class A2ARepository:
@@ -58,7 +61,7 @@ class A2ARepository:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id, workspace_id)
-                cursor.execute("""SELECT connection_id,user_id,workspace_id,display_name,card_url,rpc_url,agent_card,enabled
+                cursor.execute("""SELECT connection_id,user_id,workspace_id,display_name,card_url,rpc_url,agent_card,enabled,link_grant_id
                   FROM vault_private.vault_a2a_connections WHERE user_id=%s AND workspace_id=%s ORDER BY display_name""", (user_id,workspace_id))
                 return tuple(_connection(row) for row in cursor.fetchall())
 
@@ -66,7 +69,7 @@ class A2ARepository:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id, workspace_id)
-                cursor.execute("""SELECT connection_id,user_id,workspace_id,display_name,card_url,rpc_url,agent_card,enabled
+                cursor.execute("""SELECT connection_id,user_id,workspace_id,display_name,card_url,rpc_url,agent_card,enabled,link_grant_id
                   FROM vault_private.vault_a2a_connections WHERE connection_id=%s AND user_id=%s AND workspace_id=%s""", (connection_id,user_id,workspace_id))
                 row = cursor.fetchone()
         if row is None: raise ValueError("A2A connection is unavailable.")
@@ -125,10 +128,210 @@ class A2ARepository:
                   ORDER BY t.completed_at DESC NULLS LAST LIMIT 5""",(user_id,workspace_id))
                 return tuple({"taskId":str(r[0]),"agentName":str(r[1]),"state":str(r[2]),"summary":str(r[3]),"issue":r[4],"ownerKind":str(r[5]),"createdAt":r[6].isoformat(),"updatedAt":r[7].isoformat(),"completedAt":r[8].isoformat() if r[8] else None} for r in cursor.fetchall())
 
+    def inbound_row(self, *, user_id: str, workspace_id: str) -> tuple[str, str] | None:
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                self._require_scope(cursor, user_id, workspace_id, owner=True)
+                cursor.execute("""SELECT inbound_session_id,credential_nonce,credential_ciphertext
+                  FROM vault_private.vault_a2a_inbound WHERE user_id=%s AND workspace_id=%s""",
+                  (user_id, workspace_id))
+                row = cursor.fetchone()
+        if row is None:
+            return None
+        token = self._open(workspace_id, user_id, bytes(row[1]), bytes(row[2]))
+        return str(row[0]), token
+
+    def save_inbound(self, *, user_id: str, workspace_id: str, session_id: str, token: str) -> None:
+        nonce, ciphertext = self._seal_inbound(user_id, workspace_id, token)
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                self._require_scope(cursor, user_id, workspace_id, owner=True)
+                cursor.execute("""INSERT INTO vault_private.vault_a2a_inbound
+                  (workspace_id,user_id,inbound_session_id,credential_nonce,credential_ciphertext)
+                  VALUES (%s,%s,%s,%s,%s)
+                  ON CONFLICT (workspace_id,user_id) DO UPDATE SET
+                    inbound_session_id=EXCLUDED.inbound_session_id,
+                    credential_nonce=EXCLUDED.credential_nonce,
+                    credential_ciphertext=EXCLUDED.credential_ciphertext,
+                    updated_at=now()""",
+                  (workspace_id, user_id, session_id, nonce, ciphertext))
+
+    def resolve_inbound(self, token: str) -> tuple[str, str, str] | None:
+        if not token:
+            return None
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute("""SELECT user_id,workspace_id,inbound_session_id,credential_nonce,credential_ciphertext
+                  FROM vault_private.vault_a2a_inbound""")
+                inbound_rows = cursor.fetchall()
+                cursor.execute("""SELECT grant_id,user_id,workspace_id,credential_nonce,credential_ciphertext
+                  FROM vault_private.vault_a2a_link_accept""")
+                link_rows = cursor.fetchall()
+        for row in inbound_rows:
+            user_id, workspace_id, session_id = str(row[0]), str(row[1]), str(row[2])
+            stored = self._open(workspace_id, user_id, bytes(row[3]), bytes(row[4]))
+            if token_equals(stored, token):
+                return (user_id, workspace_id, session_id)
+        sessions = {(str(row[0]), str(row[1])): str(row[2]) for row in inbound_rows}
+        for row in link_rows:
+            user_id, workspace_id = str(row[1]), str(row[2])
+            stored = self._open_link_accept(workspace_id, user_id, str(row[0]), bytes(row[3]), bytes(row[4]))
+            if token_equals(stored, token):
+                session_id = sessions.get((user_id, workspace_id))
+                if session_id is not None:
+                    return (user_id, workspace_id, session_id)
+        return None
+
+    def inbound_scopes(self) -> tuple[tuple[str, str], ...]:
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute("SELECT user_id,workspace_id FROM vault_private.vault_a2a_inbound")
+                return tuple((str(row[0]), str(row[1])) for row in cursor.fetchall())
+
+    def replace_link_accept(self, *, user_id: str, workspace_id: str, tokens: tuple[tuple[str, str], ...]) -> None:
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM vault_private.vault_a2a_link_accept WHERE user_id=%s AND workspace_id=%s",
+                    (user_id, workspace_id),
+                )
+                for grant_id, token in tokens:
+                    nonce, ciphertext = self._seal_link_accept(user_id, workspace_id, grant_id, token)
+                    cursor.execute(
+                        """INSERT INTO vault_private.vault_a2a_link_accept
+                           (grant_id,user_id,workspace_id,credential_nonce,credential_ciphertext)
+                           VALUES (%s,%s,%s,%s,%s)""",
+                        (grant_id, user_id, workspace_id, nonce, ciphertext),
+                    )
+
+    def upsert_link_connection(
+        self, *, user_id: str, workspace_id: str, grant_id: str, display_name: str,
+        card_url: str, rpc_url: str, card: dict[str, object], token: str,
+    ) -> None:
+        nonce, ciphertext = self._seal(grant_id, workspace_id, token)
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute(
+                    """SELECT connection_id FROM vault_private.vault_a2a_connections
+                       WHERE user_id=%s AND workspace_id=%s AND link_grant_id=%s""",
+                    (user_id, workspace_id, grant_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    cursor.execute(
+                        """INSERT INTO vault_private.vault_a2a_connections
+                           (connection_id,user_id,workspace_id,display_name,card_url,rpc_url,agent_card,
+                            credential_nonce,credential_ciphertext,link_grant_id)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)""",
+                        (grant_id, user_id, workspace_id, display_name, card_url, rpc_url,
+                         json.dumps(card), nonce, ciphertext, grant_id),
+                    )
+                    return
+                cursor.execute(
+                    """UPDATE vault_private.vault_a2a_connections
+                       SET display_name=%s,card_url=%s,rpc_url=%s,agent_card=%s::jsonb,
+                           credential_nonce=%s,credential_ciphertext=%s,updated_at=now()
+                       WHERE connection_id=%s""",
+                    (display_name, card_url, rpc_url, json.dumps(card), nonce, ciphertext, str(row[0])),
+                )
+
+    def refresh_link_card(
+        self, *, connection: A2AConnection, rpc_url: str, card: dict[str, object],
+    ) -> A2AConnection:
+        if connection.link_grant_id is None:
+            return connection
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE vault_private.vault_a2a_connections
+                       SET rpc_url=%s,agent_card=%s::jsonb,updated_at=now()
+                       WHERE connection_id=%s AND link_grant_id=%s""",
+                    (rpc_url, json.dumps(card), connection.connection_id, connection.link_grant_id),
+                )
+        return self.get(
+            user_id=connection.user_id,
+            workspace_id=connection.workspace_id,
+            connection_id=connection.connection_id,
+        )
+
+    def prune_link_connections(self, *, user_id: str, workspace_id: str, active_grant_ids: tuple[str, ...]) -> None:
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                if not active_grant_ids:
+                    cursor.execute(
+                        """DELETE FROM vault_private.vault_a2a_connections
+                           WHERE user_id=%s AND workspace_id=%s AND link_grant_id IS NOT NULL""",
+                        (user_id, workspace_id),
+                    )
+                    return
+                cursor.execute(
+                    """DELETE FROM vault_private.vault_a2a_connections
+                       WHERE user_id=%s AND workspace_id=%s AND link_grant_id IS NOT NULL
+                         AND NOT (link_grant_id = ANY(%s))""",
+                    (user_id, workspace_id, list(active_grant_ids)),
+                )
+
+    def clear_link_managed(self) -> None:
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute("DELETE FROM vault_private.vault_a2a_link_accept")
+                cursor.execute(
+                    "DELETE FROM vault_private.vault_a2a_connections WHERE link_grant_id IS NOT NULL"
+                )
+
+    def outbound_tokens(self, *, user_id: str, workspace_id: str) -> tuple[str, ...]:
+        items = self.list(user_id=user_id, workspace_id=workspace_id)
+        return tuple(self.token(item) for item in items if self.token(item))
+
+    def inbound_token_equals(self, *, user_id: str, workspace_id: str, token: str) -> bool:
+        if not token:
+            return False
+        inbound = self.inbound_row(user_id=user_id, workspace_id=workspace_id)
+        return inbound is not None and token_equals(inbound[1], token)
+
+    def save_inbound_task(self, *, task_id: str, user_id: str, workspace_id: str,
+                          local_session_id: str, run_id: str, context_id: str) -> None:
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute("""INSERT INTO vault_private.vault_a2a_inbound_tasks
+                  (task_id,user_id,workspace_id,local_session_id,run_id,context_id)
+                  VALUES (%s,%s,%s,%s,%s,%s)""",
+                  (task_id, user_id, workspace_id, local_session_id, run_id, context_id))
+
+    def inbound_task(self, *, task_id: str) -> tuple[str, str, str, str, str] | None:
+        with self._connect() as database:
+            with database.cursor() as cursor:
+                cursor.execute("""SELECT user_id,workspace_id,local_session_id,run_id,context_id
+                  FROM vault_private.vault_a2a_inbound_tasks WHERE task_id=%s""", (task_id,))
+                row = cursor.fetchone()
+        if row is None:
+            return None
+        return str(row[0]), str(row[1]), str(row[2]), str(row[3]), str(row[4])
+
     def _seal(self, connection_id: str, workspace_id: str, token: str) -> tuple[bytes|None,bytes|None]:
         if not token: return None,None
         nonce=os.urandom(12); aad=f"{workspace_id}:{connection_id}:a2a".encode()
         return nonce,AESGCM(self._master_key.load_or_create()).encrypt(nonce,token.encode(),aad)
+
+    def _seal_inbound(self, user_id: str, workspace_id: str, token: str) -> tuple[bytes, bytes]:
+        nonce = os.urandom(12)
+        aad = f"{workspace_id}:{user_id}:a2a-inbound".encode()
+        return nonce, AESGCM(self._master_key.load_or_create()).encrypt(nonce, token.encode(), aad)
+
+    def _open(self, workspace_id: str, user_id: str, nonce: bytes, ciphertext: bytes) -> str:
+        aad = f"{workspace_id}:{user_id}:a2a-inbound".encode()
+        return AESGCM(self._master_key.load_or_create()).decrypt(nonce, ciphertext, aad).decode()
+
+    def _seal_link_accept(self, user_id: str, workspace_id: str, grant_id: str, token: str) -> tuple[bytes, bytes]:
+        nonce = os.urandom(12)
+        aad = f"{workspace_id}:{user_id}:a2a-link-accept:{grant_id}".encode()
+        return nonce, AESGCM(self._master_key.load_or_create()).encrypt(nonce, token.encode(), aad)
+
+    def _open_link_accept(
+        self, workspace_id: str, user_id: str, grant_id: str, nonce: bytes, ciphertext: bytes,
+    ) -> str:
+        aad = f"{workspace_id}:{user_id}:a2a-link-accept:{grant_id}".encode()
+        return AESGCM(self._master_key.load_or_create()).decrypt(nonce, ciphertext, aad).decode()
 
     @staticmethod
     def _require_scope(cursor, user_id: str, workspace_id: str, owner: bool=False) -> None:
@@ -137,4 +340,7 @@ class A2ARepository:
 
 
 def _connection(row) -> A2AConnection:
-    return A2AConnection(str(row[0]),str(row[1]),str(row[2]),str(row[3]),str(row[4]),str(row[5]),dict(row[6]),bool(row[7]))
+    return A2AConnection(
+        str(row[0]),str(row[1]),str(row[2]),str(row[3]),str(row[4]),str(row[5]),
+        dict(row[6]),bool(row[7]),str(row[8]) if row[8] is not None else None,
+    )

@@ -23,7 +23,14 @@ from app.vault_runtime.background_agent.openai_executor import OpenAIBackgroundE
 from app.vault_runtime.background_agent.repository import BackgroundRunRepository
 from app.vault_runtime.background_agent.service import BackgroundAgentService
 from app.vault_runtime.agent_network import A2AService, register_a2a_tools
+from app.vault_runtime.agent_network.collab import register_collab_tools
 from app.vault_runtime.agent_network.client import A2AClient
+from app.vault_runtime.agent_network.inbound import (
+    A2AInboundApp,
+    A2AInboundHttpServer,
+    listen_host_from_env,
+    listen_port_from_env,
+)
 from app.vault_runtime.agent_network.repository import A2ARepository
 from app.vault_runtime.contacts_tools import register_contacts_tools
 from app.vault_runtime.calendar_runtime import LocalCalendarRuntime
@@ -44,6 +51,7 @@ from app.vault_runtime.memory.pipeline import MemoryPipeline
 from app.vault_runtime.external_memory.repository import ExternalMemoryRepository
 from app.vault_runtime.external_memory.service import ExternalMemoryService
 from app.vault_runtime.host_filesystem.repository import HostFilesystemRepository
+from app.vault_runtime.link_companion.repository import LinkCompanionRepository
 from app.vault_runtime.host_filesystem.service import HostFilesystemService
 from app.vault_runtime.tools.catalog import ToolCatalog
 from app.vault_runtime.web_search import register_web_search_tool
@@ -59,6 +67,8 @@ from app.vault_runtime.voice.provider import ProviderRegistry, VoiceSessionCoord
 from app.vault_runtime.voice.oauth import ProviderOAuthService
 from app.vault_runtime.voice.repository import VoiceSessionRepository
 from app.vault_runtime.voice.tools import LocalToolAuthority, VoiceToolRuntime
+from app.vault_runtime.voice.modes import VoiceModeService, register_voice_mode_tool
+from app.vault_runtime.voice.goal_tools import register_goal_tools
 from app.vault_runtime.workspace_files.store import WorkspaceFilesystemStore
 from app.vault_runtime.workspace_storage import WorkspaceStorage
 from app.vault_runtime.workspace_files.repository import WorkspaceFileRepository
@@ -67,6 +77,7 @@ from app.vault_runtime.workspace_files.tools import register_workspace_file_tool
 from app.vault_runtime.tasks.repository import TaskRepository
 from app.vault_runtime.tasks_tools import register_tasks_tools
 from app.vault_runtime.notifications.repository import NotificationRepository
+from app.vault_runtime.system_agents.inventory import AgentKind
 
 
 def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
@@ -141,6 +152,8 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     external_integrations.ensure_schema()
     host_filesystem_repository = HostFilesystemRepository(database_url=database_url)
     host_filesystem_repository.ensure_schema()
+    link_companion = LinkCompanionRepository(database_url=database_url)
+    link_companion.ensure_schema()
     host_filesystem = HostFilesystemService(
         repository=host_filesystem_repository,
         credential_key=LocalMasterKey(data_root / "keys" / "host-filesystem.key"),
@@ -176,7 +189,8 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     )
     a2a_repository.ensure_schema()
     a2a_service = A2AService(repository=a2a_repository, client=A2AClient())
-    register_a2a_tools(catalog, a2a_service)
+    register_a2a_tools(catalog, a2a_service, builtin_plugins=builtin_plugins)
+    register_collab_tools(catalog, a2a_service, builtin_plugins=builtin_plugins)
     a2a_service.start()
 
     def backfill_memory_vectors() -> None:
@@ -204,6 +218,20 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         ),
     )
     background_service.start()
+    inbound_app = A2AInboundApp(
+        repository=a2a_repository, builtin_plugins=builtin_plugins,
+        background=background_service, runs=background_runs,
+        sessions=identity_repository,
+    )
+    a2a_service.attach_inbound(inbound_app)
+    try:
+        inbound_http = A2AInboundHttpServer(
+            inbound_app, host=listen_host_from_env(), port=listen_port_from_env(),
+        )
+        inbound_http.start()
+        a2a_service._inbound_http = inbound_http
+    except OSError:
+        logging.getLogger(__name__).exception("vault A2A inbound listener did not start")
     help_assistant = HelpAssistant(
         credentials=provider_credentials,
         source_root=Path("/opt/resono-vault/help-source"),
@@ -240,13 +268,17 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     extension_root = data_root / "extensions"
     skill_activation = SkillActivation(repository=extensions, extension_root=extension_root)
     catalog.register(skill_activation.tool_definition())
+    voice_modes = VoiceModeService()
+    register_voice_mode_tool(catalog, voice_modes)
+    register_goal_tools(catalog, background_service, voice_modes)
     coordinator = VoiceSessionCoordinator(
         sessions=voices,
         contexts=VoiceContextBuilder(memories=memories, skills=skill_activation, builtin_plugins=builtin_plugins), tools=catalog,
         providers=ProviderRegistry((OpenAIRealtimeProvider(), GeminiLiveProvider(), XAIRealtimeProvider())),
         tool_authority=tool_authority,
+        voice_modes=voice_modes,
     )
-    voice_tools = VoiceToolRuntime(catalog=catalog, authority=tool_authority)
+    voice_tools = VoiceToolRuntime(catalog=catalog, authority=tool_authority, voice_modes=voice_modes)
     extension_files = ExtensionFilesystem(extension_root)
     extension_files.recover()
     extension_secrets = ExtensionSecretStore(
@@ -298,6 +330,9 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     mcp_lifecycle = McpLifecycle(
         repository=extensions, catalog=catalog, client_factory=mcp_client,
     )
+    background_service.attach_tool_restore(lambda user_id, workspace_id: mcp_lifecycle.restore_scope(
+        user_id=user_id, workspace_id=workspace_id, agent=AgentKind.BACKGROUND,
+    ))
     Thread(
         target=mcp_runtime.restore_on_boot,
         name="resono-vault-mcp-restore",
@@ -324,6 +359,7 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         external_memory=external_memory,
         host_filesystem_integrations=host_filesystem_repository,
         host_filesystem=host_filesystem,
+        link_companion=link_companion,
         a2a_service=a2a_service,
         help_assistant=help_assistant,
         builtin_plugins=builtin_plugins,
