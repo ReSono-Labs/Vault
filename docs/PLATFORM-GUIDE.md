@@ -351,6 +351,19 @@ browser. When Gemini OAuth is not connected, select Gemini and choose **Gemini
 OAuth**. When it is connected, that button is hidden and **Disconnect OAuth**
 is shown instead.
 
+### Use xAI OAuth
+
+xAI/Grok OAuth uses the same device-code login as Hermes (`hermes auth add
+xai-oauth`) and OpenClaw (`openclaw models auth login --provider xai`). Vault
+requests a device code from `auth.x.ai`, opens the verification page, and
+polls until you approve. SuperGrok or X Premium+ is required; there is no
+separate API key. Tokens are encrypted locally and refreshed in the
+background. After OAuth is connected, **Disconnect OAuth** is shown instead.
+
+The selected provider — including xAI OAuth — is what the Background Agent
+uses for text work. Voice over xAI OAuth may still fail; that is not required
+for Background.
+
 ### Switch or disconnect authentication
 
 API and OAuth credentials are encrypted in separate records. Adding one does

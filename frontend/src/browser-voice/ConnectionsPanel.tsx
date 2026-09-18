@@ -122,11 +122,11 @@ export function ConnectionsPanel() {
     setError(null); setOauthMessage(null);
     try {
       if (provider?.oauthConnected && provider.authMethod === "api_key") {
-        const method = providerKey === "openai" ? "chatgpt_oauth" : "gemini_oauth";
+        const method = providerKey === "openai" ? "chatgpt_oauth" : providerKey === "xai" ? "xai_oauth" : "gemini_oauth";
         const current = await localApi.selectProviderAuth(providerKey, method);
         setProvider({ ...provider, ...current });
         setProviders((items) => items.map((item) => item.providerKey === providerKey ? { ...item, ...current } : item));
-        setOauthMessage(`${providerKey === "openai" ? "ChatGPT" : "Gemini"} OAuth selected.`);
+        setOauthMessage(`${providerKey === "openai" ? "ChatGPT" : providerKey === "xai" ? "xAI" : "Gemini"} OAuth selected.`);
         return;
       }
       if (providerKey === "openai") {
@@ -145,6 +145,23 @@ export function ConnectionsPanel() {
           }
         }
         throw new Error("ChatGPT OAuth expired. Try again.");
+      }
+      if (providerKey === "xai") {
+        const started = await localApi.startXaiOAuth();
+        window.open(started.verificationUrl, "_blank", "noopener,noreferrer");
+        setOauthMessage(`Approve xAI access. Code ${started.userCode}. SuperGrok or X Premium+ is required.`);
+        const deadline = started.expiresAt * 1000;
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => window.setTimeout(resolve, started.pollIntervalSeconds * 1000));
+          const result = await localApi.pollXaiOAuth(started.authSessionId);
+          if (result.status === "completed") {
+            const current = await localApi.voiceProvider("xai");
+            setProvider({ ...provider, ...current, configured: true, selected: true });
+            setProviders((items) => items.map((item) => item.providerKey === "xai" ? { ...item, ...current, configured: true, selected: true } : { ...item, selected: false }));
+            setOauthMessage("xAI OAuth connected."); return;
+          }
+        }
+        throw new Error("xAI OAuth expired. Try again.");
       }
       if (providerKey === "gemini") {
         const redirectUri = `${window.location.origin}/providers/gemini/oauth/callback`;
@@ -251,7 +268,7 @@ export function ConnectionsPanel() {
     backgroundModelKey,
     ...(providerKey === "openai" ? ["gpt-5.6-sol"]
       : providerKey === "gemini" ? ["gemini-2.5-pro"]
-      : providerKey === "xai" ? ["grok-4-0709"] : []),
+      : providerKey === "xai" ? ["grok-4.6", "grok-4-0709"] : []),
   ].filter(Boolean)));
   return (
     <section className="browser-voice-connections" aria-labelledby="connections-title">
@@ -267,7 +284,7 @@ export function ConnectionsPanel() {
         <label><span>{provider?.displayName ?? "Provider"} API key</span><input autoComplete="off" onChange={(event) => setApiKey(event.target.value)} placeholder={provider?.oauthConnected && provider.authMethod !== "api_key" ? "Optional — leave blank to keep OAuth" : undefined} required={!(provider?.oauthConnected && provider.authMethod !== "api_key")} type="password" value={apiKey} /></label>
         <label><span>Voice model</span>{voiceModelOptions.length ? <select onChange={(event) => setModelKey(event.target.value)} value={modelKey}>{voiceModelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select> : <input onChange={(event) => setModelKey(event.target.value)} required value={modelKey} />}</label>
         <label><span>Background text model</span><select onChange={(event) => setBackgroundModelKey(event.target.value)} value={backgroundModelKey}>{backgroundModelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-        {providerKey === "openai" || providerKey === "gemini" ? <div className="browser-voice-inline-actions">{provider?.oauthConnected ? <button className="browser-voice-pill" onClick={() => void disconnectOAuth()} type="button">Disconnect OAuth</button> : <button className="browser-voice-pill" onClick={() => void connectOAuth()} type="button">{providerKey === "openai" ? "ChatGPT OAuth" : "Gemini OAuth"}</button>}{oauthMessage ? <span className="browser-voice-form-note" role="status">{oauthMessage}</span> : null}</div> : null}
+        {providerKey === "openai" || providerKey === "gemini" || providerKey === "xai" ? <div className="browser-voice-inline-actions">{provider?.oauthConnected ? <button className="browser-voice-pill" onClick={() => void disconnectOAuth()} type="button">Disconnect OAuth</button> : <button className="browser-voice-pill" onClick={() => void connectOAuth()} type="button">{providerKey === "openai" ? "ChatGPT OAuth" : providerKey === "xai" ? "xAI OAuth" : "Gemini OAuth"}</button>}{oauthMessage ? <span className="browser-voice-form-note" role="status">{oauthMessage}</span> : null}</div> : null}
         <div className="browser-voice-inline-actions"><button className="browser-voice-submit" type="submit">Save settings</button>{provider?.configured && !provider.selected ? <button className="browser-voice-pill" onClick={() => void useProvider()} type="button">Use provider</button> : null}</div>
       </form>
       </section> : null}

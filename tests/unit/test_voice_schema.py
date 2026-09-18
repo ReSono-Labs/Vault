@@ -11,6 +11,12 @@ def test_voice_schema_has_only_local_session_ledgers() -> None:
     assert "resono_api" not in sql and "service_api_key" not in sql
 
 
+def test_voice_session_auth_method_allows_xai_oauth() -> None:
+    sql = "\n".join(SCHEMA_STATEMENTS).lower()
+    assert "xai_oauth" in sql
+    assert "vault_voice_sessions_auth_method_check" in sql
+
+
 def test_voice_provider_table_is_created_before_migrations_and_dependents() -> None:
     statements = [statement.lower() for statement in SCHEMA_STATEMENTS]
     create_provider = next(

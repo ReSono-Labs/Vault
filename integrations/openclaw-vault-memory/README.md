@@ -9,9 +9,10 @@ signed-in user selects **Connect** once, and writes the credential to
 `~/.openclaw/.env`. Configure the plugin credential as the
 `RESONO_VAULT_MEMORY_CREDENTIAL` environment reference, enable the plugin and
 select `resono-vault-memory` in `plugins.slots.memory`.
-Set `baseUrl` only when Vault is not at `https://127.0.0.1:8765`. Trust Vault's
-local CA through the Node process trust configuration; TLS verification is not
-disabled by this plugin.
+Set `baseUrl` only when Vault is not at `https://127.0.0.1:8765`. Pairing
+rewrites `NODE_EXTRA_CA_CERTS` from Vault `GET /vault-local-ca.crt` and re-execs
+so pairing POSTs stay verified. TLS verification is not disabled for memory
+calls.
 
 `startupMemory` defaults to `true`. On the first prompt in each session, the
 plugin loads the same bounded, non-sensitive startup profile used by Vault

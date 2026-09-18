@@ -5,6 +5,8 @@ its first public development release.
 
 ## Unreleased
 
+- Hermes and OpenClaw memory pairing rewrite the host Vault CA from `GET /vault-local-ca.crt` so a container recreate does not leave a stale dashboard certificate. Pairing POSTs and memory HTTPS stay verified.
+- Connections AI & Voice can connect xAI/Grok with the same device-code OAuth Hermes and OpenClaw use (`auth.x.ai`, SuperGrok or X Premium+). The selected xAI OAuth token is what the Background Agent uses; Voice over that token is not required.
 - Docker Link Companion uses the packaged host-gateway to reach the host connector. Outbound Agent Network still uses Link `https://…:8443` URLs; companion does not ask the operator to configure a proxy.
 - Link collab clients that POST `/a2a/v1` are accepted on the Background Card (same JSON-RPC as `/`).
 - The Background Agent Card on `:8768` answers `GET /.well-known/agent-card.json` without a bearer so Link can discover it. JSON-RPC still requires `Authorization: Bearer`.

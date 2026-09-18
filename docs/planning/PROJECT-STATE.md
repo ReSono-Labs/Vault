@@ -1,6 +1,6 @@
 # Project state (index)
 
-Date: 2026-09-15  
+Date: 2026-09-17  
 Role: index and current-state file. It does not replace existing frozen authorities.
 
 ## Controlling sources
@@ -25,6 +25,7 @@ Do not copy constitution or phase prompts into this repository.
 
 Original instructions and later corrections:
 
+- 2026-09-17 owner: set up xAI/Grok OAuth on Vault the same way OpenClaw and Hermes do (device code). Voice may fail; the required outcome is a token the Background Agent can use via the provider selector.
 - 2026-09-15 owner: Visual Background progress like R1, but do not submit tasks from the UI. Voice creates the goal, Background works it with most Voice tools plus dynamically granted third-party tools, same provider auth tokens as Voice. Review then finish. Combined with prior inventory.
 - 2026-09-15 owner: Voice says there is no Background Agent. Are we not doing “modes” anymore? The whole point of Background Agent is for Voice to delegate tasks to it. Is Background built but not connected? Is it OpenAI Agents SDK? Do a full inventory. Record: `docs/planning/2026-09-15-background-agent-connection-inventory.md` (`BA-INV-2026-09-15-r1`).
 - 2026-09-11 owner: this project has a lot of UI component cleanup. Components will be given one by one. The agent must create some type of markdown file for tracking, then perform all listed cleanups at once (not incrementally as each item arrives).
@@ -814,6 +815,8 @@ MDG: bind `0.0.0.0` in-container only when `runtime_port_publish_enabled()`; adv
 Contract `VA2A-C05` r1: Docker compose + listen host. Forbidden: C04 Link `vault` adapter; public internet bind of A2A (`VAULT_BIND_ADDRESS` does not apply to A2A); mixing Card onto 8766.
 
 ## Current state
+
+2026-09-17: xAI device-code OAuth is implemented on Connections (start/poll `/providers/xai/oauth/*`, `xai_oauth` tokens, refresh against `auth.x.ai`). Background executor already sends the selected xAI credential to `https://api.x.ai/v1`. Owner must approve the device login in a browser to mint a live token. Agent does not grant acceptance.
 
 Phase 03 implementer-complete for Voice Goal Intake (`voice_mode_switch` / `goal_start`) and Background progress page. Empty requested tool names freeze all Background-visible tools; MCP grants restore at run start; executor uses selected-provider `background_access`. Agent does not grant acceptance.
 

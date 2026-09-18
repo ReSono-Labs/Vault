@@ -52,7 +52,7 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
       workspace_id text NOT NULL REFERENCES vault_private.local_workspaces(workspace_id) ON DELETE CASCADE,
       local_session_id text NOT NULL REFERENCES vault_private.local_sessions(session_id) ON DELETE CASCADE,
       provider_key text NOT NULL,
-      auth_method text NOT NULL DEFAULT 'api_key' CHECK (auth_method IN ('api_key','chatgpt_oauth','gemini_oauth')),
+      auth_method text NOT NULL DEFAULT 'api_key' CHECK (auth_method IN ('api_key','chatgpt_oauth','gemini_oauth','xai_oauth')),
       api_key_configured boolean NOT NULL DEFAULT true,
       model_key text NOT NULL,
       connection_mode text NOT NULL CHECK (connection_mode IN ('webrtc','websocket','provider-websocket')),
@@ -72,6 +72,9 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     """ALTER TABLE vault_private.vault_voice_sessions DROP CONSTRAINT IF EXISTS vault_voice_sessions_connection_mode_check""",
     """ALTER TABLE vault_private.vault_voice_sessions ADD CONSTRAINT vault_voice_sessions_connection_mode_check
        CHECK (connection_mode IN ('webrtc','websocket','provider-websocket'))""",
+    """ALTER TABLE vault_private.vault_voice_sessions DROP CONSTRAINT IF EXISTS vault_voice_sessions_auth_method_check""",
+    """ALTER TABLE vault_private.vault_voice_sessions ADD CONSTRAINT vault_voice_sessions_auth_method_check
+       CHECK (auth_method IN ('api_key','chatgpt_oauth','gemini_oauth','xai_oauth'))""",
     """
     CREATE TABLE IF NOT EXISTS vault_private.vault_ai_provider_selection (
       workspace_id text PRIMARY KEY REFERENCES vault_private.local_workspaces(workspace_id) ON DELETE CASCADE,

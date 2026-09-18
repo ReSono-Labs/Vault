@@ -11,8 +11,8 @@ credential in `~/.hermes/.env`; no credential copy/paste is required.
 2. Run `resono-vault-memory-pair` and approve the connection in Vault.
 3. Restart Hermes.
 4. Set `RESONO_VAULT_MEMORY_URL` if Vault is not at
-   `https://127.0.0.1:8443`. For a private local CA, set
-   `RESONO_VAULT_CA_FILE` to its certificate file.
+   `https://127.0.0.1:8765`. Pairing rewrites `RESONO_VAULT_CA_FILE` from
+   Vault `GET /vault-local-ca.crt`. Pairing POSTs stay verified.
 5. Select `resono-vault` as Hermes's active memory provider.
 
 Startup memory is enabled by default and uses the same bounded, non-sensitive

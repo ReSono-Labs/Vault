@@ -9,6 +9,7 @@ import ssl
 import time
 import webbrowser
 import subprocess
+import urllib.error
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -28,14 +29,23 @@ def _post(
         return json.loads(response.read().decode())
 
 
-def _save_env(path: Path, credential: str) -> None:
-    key = "RESONO_VAULT_MEMORY_CREDENTIAL"
+def _save_env(path: Path, values: dict[str, str]) -> None:
     lines = path.read_text().splitlines() if path.exists() else []
-    lines = [line for line in lines if not line.startswith(key + "=")]
-    lines.append(f"{key}={credential}")
+    keys = set(values)
+    kept = []
+    for line in lines:
+        if not line:
+            kept.append(line)
+            continue
+        name = line.split("=", 1)[0]
+        if name in keys:
+            continue
+        kept.append(line)
+    for key, value in values.items():
+        kept.append(f"{key}={value}")
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    temporary.write_text("\n".join(lines) + "\n")
+    temporary.write_text("\n".join(kept) + "\n")
     temporary.chmod(0o600)
     temporary.replace(path)
 
@@ -60,6 +70,43 @@ def _env_value(path: Path, key: str, default: str = "") -> str:
     return default
 
 
+def _ca_dest(existing: str) -> Path:
+    if existing:
+        return Path(existing).expanduser()
+    return Path.home() / ".hermes" / "vault-local-ca.crt"
+
+
+def _write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(data)
+    temporary.chmod(0o600)
+    temporary.replace(path)
+
+
+def _get_bytes(url: str, context: ssl.SSLContext) -> bytes:
+    with urlopen(Request(url, method="GET"), timeout=10, context=context) as response:
+        return response.read()
+
+
+def refresh_host_ca(base_url: str, ca_path: Path, context: ssl.SSLContext) -> ssl.SSLContext:
+    """Rewrite the host Vault CA from GET /vault-local-ca.crt, then verify with it.
+
+    Pairing POSTs stay verified. Unverified TLS is used only for that CA GET
+    when the current file cannot authenticate the dashboard.
+    """
+    url = base_url.rstrip("/") + "/vault-local-ca.crt"
+    pem: bytes | None = None
+    try:
+        pem = _get_bytes(url, context)
+    except (ssl.SSLError, OSError, urllib.error.URLError):
+        pem = _get_bytes(url, ssl._create_unverified_context())
+    if not pem or b"BEGIN CERTIFICATE" not in pem:
+        raise SystemExit("Vault /vault-local-ca.crt did not return a certificate.")
+    _write_bytes(ca_path, pem)
+    return ssl.create_default_context(cafile=str(ca_path))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pair or disconnect Hermes from Vault Memory")
     parser.add_argument("--disconnect", action="store_true")
@@ -68,7 +115,9 @@ def main() -> None:
     env_path = Path.home() / ".hermes" / ".env"
     base_url = os.getenv("RESONO_VAULT_MEMORY_URL", _env_value(env_path, "RESONO_VAULT_MEMORY_URL", "https://127.0.0.1:8765")).rstrip("/")
     ca_file = os.getenv("RESONO_VAULT_CA_FILE", _env_value(env_path, "RESONO_VAULT_CA_FILE", "")).strip()
-    context = ssl.create_default_context(cafile=ca_file or None)
+    ca_path = _ca_dest(ca_file)
+    context = ssl.create_default_context(cafile=str(ca_path) if ca_path.is_file() else (ca_file or None))
+    context = refresh_host_ca(base_url, ca_path, context)
     if args.disconnect:
         credential = os.getenv("RESONO_VAULT_MEMORY_CREDENTIAL", _env_value(env_path, "RESONO_VAULT_MEMORY_CREDENTIAL", "")).strip()
         if credential and not args.local_only:
@@ -96,7 +145,10 @@ def main() -> None:
             "pairingId": started["pairingId"], "pollToken": poll_token,
         }, context)
         if result.get("status") == "approved":
-            _save_env(env_path, credential)
+            _save_env(env_path, {
+                "RESONO_VAULT_MEMORY_CREDENTIAL": credential,
+                "RESONO_VAULT_CA_FILE": str(ca_path),
+            })
             subprocess.run(
                 ["hermes", "config", "set", "memory.provider", "resono-vault"],
                 check=True,

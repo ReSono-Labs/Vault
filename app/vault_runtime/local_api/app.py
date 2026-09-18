@@ -511,6 +511,14 @@ class VaultLocalApiApp:
             if oauth is None: raise RuntimeError("Provider OAuth is unavailable.")
             identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
             return LocalApiResponse(200, oauth.start_gemini(principal, _required_text(_json_object(body), "redirectUri")))
+        if path == "/providers/xai/oauth/start" and method == "POST":
+            if oauth is None: raise RuntimeError("Provider OAuth is unavailable.")
+            identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
+            return LocalApiResponse(200, oauth.start_xai(principal))
+        if path == "/providers/xai/oauth/poll" and method == "POST":
+            if oauth is None: raise RuntimeError("Provider OAuth is unavailable.")
+            identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
+            return LocalApiResponse(200, oauth.poll_xai(principal, _required_text(_json_object(body), "authSessionId")))
         if self._voice_coordinator is None:
             raise RuntimeError("AI provider registry is unavailable.")
         descriptors = {item.provider_key: item for item in self._voice_coordinator.provider_descriptors()}

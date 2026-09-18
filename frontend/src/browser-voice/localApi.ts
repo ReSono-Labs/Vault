@@ -126,7 +126,7 @@ export type VoiceProviderStatus = {
   voices?: string[];
   voiceModels?: string[];
   selected?: boolean;
-  authMethod?: "api_key" | "chatgpt_oauth" | "gemini_oauth" | null;
+  authMethod?: "api_key" | "chatgpt_oauth" | "gemini_oauth" | "xai_oauth" | null;
   apiKeyConnected?: boolean;
   oauthConnected?: boolean;
   negotiatedDataChannel?: boolean;
@@ -427,7 +427,7 @@ export const localApi = {
   selectProvider: (providerKey: string) => request<{ selectedProviderKey: string }>(
     `/providers/${encodeURIComponent(providerKey)}/select`, { method: "POST", body: "{}" },
   ),
-  selectProviderAuth: (providerKey: string, authMethod: "api_key" | "chatgpt_oauth" | "gemini_oauth") =>
+  selectProviderAuth: (providerKey: string, authMethod: "api_key" | "chatgpt_oauth" | "gemini_oauth" | "xai_oauth") =>
     request<VoiceProviderStatus>(`/providers/${encodeURIComponent(providerKey)}/auth-method`, {
       method: "POST", body: JSON.stringify({ authMethod }),
     }),
@@ -439,6 +439,12 @@ export const localApi = {
   ),
   pollChatGptOAuth: (authSessionId: string) => request<{ status: "pending" | "completed" }>(
     "/providers/openai/oauth/poll", { method: "POST", body: JSON.stringify({ authSessionId }) },
+  ),
+  startXaiOAuth: () => request<{ authSessionId: string; verificationUrl: string; userCode: string; expiresAt: number; pollIntervalSeconds: number }>(
+    "/providers/xai/oauth/start", { method: "POST", body: "{}" },
+  ),
+  pollXaiOAuth: (authSessionId: string) => request<{ status: "pending" | "completed" }>(
+    "/providers/xai/oauth/poll", { method: "POST", body: JSON.stringify({ authSessionId }) },
   ),
   startGeminiOAuth: (redirectUri: string) => request<{ authorizationUrl: string }>(
     "/providers/gemini/oauth/start", { method: "POST", body: JSON.stringify({ redirectUri }) },

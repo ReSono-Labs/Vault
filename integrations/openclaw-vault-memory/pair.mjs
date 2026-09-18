@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import https from "node:https";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -13,14 +14,54 @@ function savedValue(key) {
   const line = savedEnv.split(/\r?\n/).find((value) => value.startsWith(prefix));
   return line ? line.slice(prefix.length).trim() : "";
 }
+const baseUrl = String(process.env.RESONO_VAULT_MEMORY_URL || savedValue("RESONO_VAULT_MEMORY_URL") || "https://127.0.0.1:8765").replace(/\/+$/, "");
 const savedCa = savedValue("NODE_EXTRA_CA_CERTS");
-if (!process.env.NODE_EXTRA_CA_CERTS && savedCa && !process.env.RESONO_VAULT_PAIR_REEXEC) {
+const caPath = savedCa || join(homedir(), ".hermes", "vault-local-ca.crt");
+
+function getCaPem(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { rejectUnauthorized: false }, (res) => {
+      if (res.statusCode && res.statusCode >= 400) {
+        reject(new Error(`Vault CA HTTP ${res.statusCode}`));
+        res.resume();
+        return;
+      }
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+    });
+    req.on("error", reject);
+    req.setTimeout(10_000, () => {
+      req.destroy(new Error("Vault CA download timed out"));
+    });
+  });
+}
+
+async function refreshHostCa() {
+  const pem = await getCaPem(`${baseUrl}/vault-local-ca.crt`);
+  if (!pem.includes("BEGIN CERTIFICATE")) {
+    throw new Error("Vault /vault-local-ca.crt did not return a certificate.");
+  }
+  await mkdir(dirname(caPath), { recursive: true });
+  const temporary = `${caPath}.tmp`;
+  await writeFile(temporary, pem, { mode: 0o600 });
+  await chmod(temporary, 0o600);
+  await rename(temporary, caPath);
+}
+
+await refreshHostCa();
+if (!process.env.RESONO_VAULT_CA_REFRESHED) {
   const child = spawnSync(process.execPath, process.argv.slice(1), {
-    stdio: "inherit", env: { ...process.env, NODE_EXTRA_CA_CERTS: savedCa, RESONO_VAULT_PAIR_REEXEC: "1" },
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      NODE_EXTRA_CA_CERTS: caPath,
+      RESONO_VAULT_PAIR_REEXEC: "1",
+      RESONO_VAULT_CA_REFRESHED: "1",
+    },
   });
   process.exit(child.status ?? 1);
 }
-const baseUrl = String(process.env.RESONO_VAULT_MEMORY_URL || savedValue("RESONO_VAULT_MEMORY_URL") || "https://127.0.0.1:8765").replace(/\/+$/, "");
 const credential = randomBytes(32).toString("base64url");
 const pollToken = randomBytes(32).toString("base64url");
 
@@ -36,11 +77,12 @@ async function post(path, payload, runtimeCredential = "") {
 }
 
 async function saveEnv(path) {
-  const key = "RESONO_VAULT_MEMORY_CREDENTIAL";
+  const drop = new Set(["RESONO_VAULT_MEMORY_CREDENTIAL=", "NODE_EXTRA_CA_CERTS="]);
   let lines = [];
   try { lines = (await readFile(path, "utf8")).split(/\r?\n/); } catch {}
-  lines = lines.filter((line) => line && !line.startsWith(key + "="));
-  lines.push(`${key}=${credential}`);
+  lines = lines.filter((line) => line && ![...drop].some((prefix) => line.startsWith(prefix)));
+  lines.push(`RESONO_VAULT_MEMORY_CREDENTIAL=${credential}`);
+  lines.push(`NODE_EXTRA_CA_CERTS=${caPath}`);
   await mkdir(dirname(path), { recursive: true });
   const temporary = path + ".tmp";
   await writeFile(temporary, lines.join("\n") + "\n", { mode: 0o600 });

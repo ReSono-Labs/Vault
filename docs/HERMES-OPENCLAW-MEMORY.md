@@ -90,6 +90,10 @@ When the agent computer needs Vault's local CA file, also add:
 RESONO_VAULT_CA_FILE=/full/path/to/vault-ca.crt
 ```
 
+Pairing rewrites that host CA file from Vault `GET /vault-local-ca.crt` so a
+container recreate does not leave a stale dashboard CA. Memory HTTPS stays
+verified.
+
 ### 3. Pair Hermes with Vault
 
 Run:

@@ -8,6 +8,7 @@ import os
 import json
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -374,7 +375,7 @@ class VoiceProviderCredentialStore:
         self, principal: LocalPrincipal, *, provider_key: str, auth_method: str,
         token_payload: dict[str, object], model_key: str, background_model_key: str, voice: str,
     ) -> None:
-        if auth_method not in {"chatgpt_oauth", "gemini_oauth"}:
+        if auth_method not in {"chatgpt_oauth", "gemini_oauth", "xai_oauth"}:
             raise ValueError("OAuth method is invalid")
         serialized = json.dumps(token_payload, separators=(",", ":"))
         provider = _bounded(provider_key, "providerKey", 120)
@@ -414,7 +415,7 @@ class VoiceProviderCredentialStore:
                 )
 
     def select_auth_method(self, principal: LocalPrincipal, *, provider_key: str, auth_method: str) -> None:
-        if auth_method not in {"api_key", "chatgpt_oauth", "gemini_oauth"}:
+        if auth_method not in {"api_key", "chatgpt_oauth", "gemini_oauth", "xai_oauth"}:
             raise ValueError("authMethod is invalid")
         with self._connect() as connection:
             with connection.cursor() as cursor:
@@ -474,7 +475,8 @@ class VoiceProviderCredentialStore:
 
     def _refresh_oauth(self, provider_key: str, payload: dict[str, object]) -> dict[str, object]:
         expires_at = int(payload.get("_resono_expires_at") or 0)
-        if expires_at > int(time.time()) + 300:
+        skew = 3600 if provider_key == "xai" else 300
+        if expires_at > int(time.time()) + skew:
             return payload
         refresh_token = payload.get("refresh_token")
         if not isinstance(refresh_token, str) or not refresh_token:
@@ -490,6 +492,14 @@ class VoiceProviderCredentialStore:
                 "grant_type": "refresh_token", "client_id": self._google_oauth_client_id,
                 "client_secret": self._google_oauth_client_secret, "refresh_token": refresh_token,
             }, timeout=30.0)
+        elif provider_key == "xai":
+            endpoint = payload.get("_resono_token_endpoint")
+            if not isinstance(endpoint, str) or not _trusted_xai_refresh_endpoint(endpoint):
+                endpoint = "https://auth.x.ai/oauth2/token"
+            response = httpx.post(endpoint, data={
+                "grant_type": "refresh_token", "client_id": "b1a00492-073a-47ea-816f-4c329264a828",
+                "refresh_token": refresh_token,
+            }, headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}, timeout=30.0)
         else:
             return payload
         response.raise_for_status()
@@ -499,6 +509,9 @@ class VoiceProviderCredentialStore:
         refreshed.setdefault("refresh_token", refresh_token)
         if isinstance(refreshed.get("expires_in"), int):
             refreshed["_resono_expires_at"] = int(time.time()) + int(refreshed["expires_in"])
+        token_endpoint = payload.get("_resono_token_endpoint")
+        if isinstance(token_endpoint, str):
+            refreshed["_resono_token_endpoint"] = token_endpoint
         return refreshed
 
     def background_access(self, *, user_id: str, workspace_id: str, provider_key: str | None = None) -> tuple[ProviderCredential, str]:
@@ -518,6 +531,12 @@ class VoiceProviderCredentialStore:
         if row is None:
             raise VoiceProviderCredentialError("Background model is not configured.")
         return credential, str(row[0])
+
+
+def _trusted_xai_refresh_endpoint(url: str) -> bool:
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    return parsed.scheme == "https" and bool(host) and (host == "x.ai" or host.endswith(".x.ai"))
 
 
 def _bounded(value: str, name: str, maximum: int) -> str:
