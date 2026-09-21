@@ -264,9 +264,12 @@ export function ConnectionsPanel() {
     }
   }
   const voiceModelOptions = provider?.voiceModels ?? [];
+  const catalogTextModels = provider?.textModels ?? [];
   const backgroundModelOptions = Array.from(new Set([
     backgroundModelKey,
-    ...(providerKey === "openai" ? ["gpt-5.6-sol"]
+    ...(catalogTextModels.length
+      ? catalogTextModels
+      : providerKey === "openai" ? ["gpt-5.6-sol", "gpt-5.6-luna"]
       : providerKey === "gemini" ? ["gemini-2.5-pro"]
       : providerKey === "xai" ? ["grok-4.6", "grok-4-0709"] : []),
   ].filter(Boolean)));

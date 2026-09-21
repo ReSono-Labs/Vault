@@ -125,6 +125,7 @@ export type VoiceProviderStatus = {
   protocol?: string;
   voices?: string[];
   voiceModels?: string[];
+  textModels?: string[];
   selected?: boolean;
   authMethod?: "api_key" | "chatgpt_oauth" | "gemini_oauth" | "xai_oauth" | null;
   apiKeyConnected?: boolean;

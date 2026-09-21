@@ -24,6 +24,7 @@ class ProviderDescriptor:
     default_voice: str
     voices: tuple[str, ...]
     voice_models: tuple[str, ...] = ()
+    text_models: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

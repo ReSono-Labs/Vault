@@ -25,6 +25,7 @@ Do not copy constitution or phase prompts into this repository.
 
 Original instructions and later corrections:
 
+- 2026-09-21 owner: add OpenAI Luna as a Connections Background text model selection; official API id `gpt-5.6-luna`; keep default Sol; Docker package rebuild and deploy.
 - 2026-09-17 owner: set up xAI/Grok OAuth on Vault the same way OpenClaw and Hermes do (device code). Voice may fail; the required outcome is a token the Background Agent can use via the provider selector.
 - 2026-09-15 owner: Visual Background progress like R1, but do not submit tasks from the UI. Voice creates the goal, Background works it with most Voice tools plus dynamically granted third-party tools, same provider auth tokens as Voice. Review then finish. Combined with prior inventory.
 - 2026-09-15 owner: Voice says there is no Background Agent. Are we not doing “modes” anymore? The whole point of Background Agent is for Voice to delegate tasks to it. Is Background built but not connected? Is it OpenAI Agents SDK? Do a full inventory. Record: `docs/planning/2026-09-15-background-agent-connection-inventory.md` (`BA-INV-2026-09-15-r1`).

@@ -4,6 +4,11 @@ from app.vault_runtime.voice.openai_realtime import (
     normalize_webrtc_sdp,
     uses_subscription_live_transport,
 )
+
+
+def test_openai_background_text_models_include_luna() -> None:
+    assert OpenAIRealtimeProvider.descriptor.default_text_model == "gpt-5.6-sol"
+    assert OpenAIRealtimeProvider.descriptor.text_models == ("gpt-5.6-sol", "gpt-5.6-luna")
 from app.vault_runtime.voice.provider import ProviderCredential, RealtimeSessionRequest
 
 

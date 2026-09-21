@@ -1378,7 +1378,7 @@ function OptionalAccountsPanel({ onDone }: { onDone: () => void }) {
 
 function OnboardingAiConfiguration({ onDone }: { onDone: () => void }) {
   const [configuring, setConfiguring] = useState(false);
-  const [providers, setProviders] = useState<Array<{ providerKey: string; displayName?: string; modelKey: string; backgroundModelKey: string; voice: string; voices?: string[]; voiceModels?: string[] }>>([]);
+  const [providers, setProviders] = useState<Array<{ providerKey: string; displayName?: string; modelKey: string; backgroundModelKey: string; voice: string; voices?: string[]; voiceModels?: string[]; textModels?: string[] }>>([]);
   const [providerKey, setProviderKey] = useState("openai");
   const [apiKey, setApiKey] = useState("");
   const [modelKey, setModelKey] = useState("gpt-realtime-2.1");
@@ -1453,11 +1453,11 @@ function OnboardingAiConfiguration({ onDone }: { onDone: () => void }) {
         </label>
         <label>
           <span>Background model</span>
-          <input
+          {providers.find((item) => item.providerKey === providerKey)?.textModels?.length ? <select onChange={(event) => setBackgroundModelKey(event.target.value)} value={backgroundModelKey}>{providers.find((item) => item.providerKey === providerKey)?.textModels?.map((item) => <option key={item} value={item}>{item}</option>)}</select> : <input
             onChange={(event) => setBackgroundModelKey(event.target.value)}
             required
             value={backgroundModelKey}
-          />
+          />}
         </label>
         <label>
           <span>Voice</span>

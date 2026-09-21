@@ -26,6 +26,7 @@ class XAIRealtimeProvider:
         default_text_model="grok-4-0709", default_voice="eve",
         voices=("eve", "ara", "rex", "sal", "leo"),
         voice_models=("grok-voice-latest",),
+        text_models=("grok-4.6", "grok-4-0709"),
     )
 
     def __init__(self, *, json_transport: JSONTransport | None = None) -> None:

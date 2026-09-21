@@ -541,6 +541,7 @@ class VaultLocalApiApp:
                     "protocol": item.protocol,
                     "voices": list(item.voices),
                     "voiceModels": list(item.voice_models),
+                    "textModels": list(item.text_models),
                     "negotiatedDataChannel": uses_subscription_live_transport(
                         auth_method=str(item_status.get("authMethod") or "api_key"),
                         model_key=str(item_status.get("modelKey") or item.default_voice_model),

@@ -30,6 +30,7 @@ class OpenAIRealtimeProvider:
         default_text_model="gpt-5.6-sol", default_voice="marin",
         voices=("marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"),
         voice_models=("gpt-live-1", "gpt-realtime-2.1", "gpt-realtime-2.1-mini"),
+        text_models=("gpt-5.6-sol", "gpt-5.6-luna"),
     )
 
     def __init__(

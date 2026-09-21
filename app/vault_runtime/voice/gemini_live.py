@@ -26,6 +26,7 @@ class GeminiLiveProvider:
         default_text_model="gemini-2.5-pro", default_voice="Kore",
         voices=("Kore", "Puck", "Charon", "Fenrir", "Aoede", "Leda", "Orus", "Zephyr"),
         voice_models=("gemini-3.1-flash-live-preview",),
+        text_models=("gemini-2.5-pro",),
     )
 
     def __init__(self, *, json_transport: JSONTransport | None = None) -> None:
