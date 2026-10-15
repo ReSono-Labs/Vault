@@ -136,6 +136,7 @@ def test_phase4_api_exposes_only_two_agents_and_voice_lifecycle(phase4_app) -> N
     closed = _post(app, f"/voice/sessions/{session_id}/close", {}, headers)
     assert closed.payload == {
         "voiceRealtimeSessionId": session_id, "status": "closed",
+        "captureState": "unknown",
         "learning": "skipped_empty", "memoryCount": 0,
         "embeddedCount": 0, "embeddingsAvailable": False,
     }

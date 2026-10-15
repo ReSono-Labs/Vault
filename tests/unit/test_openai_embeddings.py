@@ -52,3 +52,23 @@ def test_scoped_factory_uses_each_users_resolved_provider_access() -> None:
 
     assert provider.model_key == "text-embedding-3-small"
     assert provider.dimensions == 1536
+
+
+def test_oauth_embedding_request_uses_shared_token(monkeypatch):
+    import io
+    import json
+    from app.vault_runtime.memory import openai_embeddings as module
+
+    class Credentials:
+        def resolve(self, principal, provider):
+            assert provider == 'openai'
+            return SimpleNamespace(value='oauth-token', auth_method='chatgpt_oauth')
+
+    def send(request, **kwargs):
+        assert request.full_url == 'https://api.openai.com/v1/embeddings'
+        assert request.get_header('Authorization') == 'Bearer oauth-token'
+        return io.BytesIO(json.dumps({'data': [{'index': 0, 'embedding': [0.1] * 1536}]}).encode())
+
+    monkeypatch.setattr(module, 'urlopen', send)
+    provider = ScopedOpenAIEmbeddingFactory(Credentials())('user', 'workspace')
+    assert len(provider.embed('fact')) == 1536

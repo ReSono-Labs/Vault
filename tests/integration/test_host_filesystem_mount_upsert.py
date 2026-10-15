@@ -12,34 +12,19 @@ from app.vault_runtime.local_identity.models import LocalPrincipal
 from datetime import UTC, datetime
 
 
+from tests.integration.test_conversation_identity_postgres import context
+
+
 @pytest.fixture()
-def host_filesystem():
-    database_url = os.getenv("VAULT_TEST_DATABASE_URL")
-    if not database_url:
-        pytest.skip("VAULT_TEST_DATABASE_URL is required for PostgreSQL integration tests")
-    with psycopg.connect(database_url) as connection:
-        connection.execute("DELETE FROM vault_private.host_filesystem_mounts")
-        connection.execute("DELETE FROM vault_private.host_filesystem_integrations")
-    repository = HostFilesystemRepository(database_url=database_url)
-    service = HostFilesystemService(
-        repository=repository,
-        credential_key=LocalMasterKey("/tmp/host-filesystem-test.key"),
-    )
-    principal = LocalPrincipal(
-        user_id="owner-user",
-        username="owner",
-        display_name="Owner",
-        experience_style="balanced",
-        is_device_owner=True,
-        session_id="session",
-        workspace_id="workspace-a",
-        expires_at=datetime.now(UTC),
-    )
-    service.save_settings(principal=principal, enabled=True)
-    yield service, repository, principal
-    with psycopg.connect(database_url) as connection:
-        connection.execute("DELETE FROM vault_private.host_filesystem_mounts")
-        connection.execute("DELETE FROM vault_private.host_filesystem_integrations")
+def host_filesystem(context,tmp_path):
+    database_url,_identity,owner,_second,_conversations=context
+    repository=HostFilesystemRepository(database_url=database_url)
+    repository.ensure_schema()
+    service=HostFilesystemService(repository=repository,
+        credential_key=LocalMasterKey(tmp_path/'host-filesystem.key'))
+    principal=owner.principal
+    service.save_settings(principal=principal,enabled=True)
+    yield service,repository,principal
 
 
 def test_upsert_reactivates_revoked_mount_with_same_name(host_filesystem) -> None:

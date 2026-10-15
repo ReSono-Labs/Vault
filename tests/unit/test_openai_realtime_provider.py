@@ -1,6 +1,7 @@
 from app.vault_runtime.voice.openai_realtime import (
     OpenAIRealtimeError,
     OpenAIRealtimeProvider,
+    build_openai_realtime_session_object,
     normalize_webrtc_sdp,
     uses_subscription_live_transport,
 )
@@ -113,3 +114,11 @@ def test_chatgpt_oauth_uses_codex_transport(monkeypatch) -> None:
     assert result.protocol == "openai-realtime"
     assert result.session_update_event["type"] == "session.update"
     assert result.session_update_event["session"]["tools"][0]["name"] == "memory_lookup"
+
+
+def test_live_transcription_session_requests_low_delay_and_client_commit() -> None:
+    session = build_openai_realtime_session_object(RealtimeSessionRequest(
+        model_key="gpt-live-transcribe", connection_mode="webrtc", session_type="transcription",
+        input_audio_transcription_model="gpt-live-transcribe", input_audio_transcription_delay="low"))
+    assert session == {"type": "transcription", "audio": {"input": {
+        "transcription": {"model": "gpt-live-transcribe", "delay": "low"}, "turn_detection": None}}}

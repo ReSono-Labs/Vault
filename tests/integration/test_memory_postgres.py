@@ -498,3 +498,70 @@ def test_pipeline_persists_real_pgvector_for_scoped_memory(memory_context) -> No
             (owner.principal.user_id, owner.principal.workspace_id),
         ).fetchone()
     assert stored == ("openai", _Embedder.model_key, 2, 2)
+
+
+def test_voice_analysis_survives_atomic_publication_failure(memory_context,monkeypatch):
+    url,_identity,owner,_second,memories=memory_context
+    _entry(memories,owner.principal,session='retry-voice',index=1,text='Remember that I prefer tea')
+    calls=[]
+    class Reviewer(_ReviewerCapability):
+        def review(self,text):
+            calls.append(text)
+            return super().review(text)
+    pipeline=MemoryPipeline(repository=memories,reviewer=Reviewer())
+    arguments=dict(user_id=owner.principal.user_id,workspace_id=owner.principal.workspace_id,voice_session_id='retry-voice')
+    reconcile=memories.reconcile_memory
+    def fail(**kwargs):
+        reconcile(**kwargs)
+        raise RuntimeError('Interrupted publication')
+    monkeypatch.setattr(memories,'reconcile_memory',fail)
+    with pytest.raises(RuntimeError,match='Interrupted publication'):
+        pipeline.finalize(**arguments)
+    with psycopg.connect(url) as connection:
+        assert connection.execute('SELECT count(*) FROM vault_private.vault_memory_records').fetchone()[0]==0
+        assert connection.execute('SELECT count(*) FROM vault_private.vault_session_summaries').fetchone()[0]==0
+        state,review=connection.execute('SELECT state,review_json FROM vault_private.vault_memory_ingestions').fetchone()
+        assert state=='running' and review['model']=='test-reviewer'
+    monkeypatch.setattr(memories,'reconcile_memory',reconcile)
+    assert pipeline.finalize(**arguments).memory_count==1
+    assert pipeline.finalize(**arguments).already_completed
+    assert len(calls)==1
+
+
+def test_voice_bounded_source_steps_resume_without_repeating_analysis(memory_context):
+    import json
+    import re
+    from types import SimpleNamespace
+    url,_identity,owner,_second,memories=memory_context
+    for index in range(5):
+        _entry(memories,owner.principal,session='long-voice',index=index,text=f'Fact {index} '+('x'*15000))
+    calls=[]
+    failed=False
+    def page(text,**kwargs):
+        nonlocal failed
+        calls.append(text)
+        if len(calls)==2 and not failed:
+            failed=True
+            raise RuntimeError('Interrupted source window')
+        data=json.loads(text)
+        indexes=[int(i) for i in re.findall(r'\[entryIndex=(\d+)\]',data['evidence'])]
+        values=tuple(ReviewedMemoryCandidate(
+            replace(_candidate(content=f'Fact {i}'),memory_key=f'fact-{i}'),(i,)) for i in indexes)
+        return MemoryReview('Reviewed source window',values,'reviewer'),False
+    from dataclasses import replace
+    reviewer=SimpleNamespace(model_identity=lambda:('synthetic','reviewer'),review_page=page,
+        consolidate_summary=lambda _:('Complete source summary','reviewer'))
+    pipeline=MemoryPipeline(repository=memories,reviewer=reviewer)
+    arguments=dict(user_id=owner.principal.user_id,workspace_id=owner.principal.workspace_id,voice_session_id='long-voice')
+    with pytest.raises(RuntimeError,match='Interrupted source window'):
+        pipeline.finalize(**arguments)
+    with psycopg.connect(url) as connection:
+        assert connection.execute('SELECT count(*) FROM vault_private.vault_memory_records').fetchone()[0]==0
+        assert len(connection.execute('SELECT analysis_steps_json FROM vault_private.vault_memory_ingestions').fetchone()[0])==1
+    result=pipeline.finalize(**arguments)
+    assert result.memory_count>0 and calls.count(calls[0])==1
+    count=len(calls)
+    assert pipeline.finalize(**arguments).already_completed and len(calls)==count
+    with psycopg.connect(url) as connection:
+        rows=connection.execute('SELECT transcript_entry_id,evidence_kind,source_ref_json FROM vault_private.vault_memory_evidence').fetchall()
+        assert rows and all(entry and kind=='user_statement' and ref['sourceId']==entry for entry,kind,ref in rows)

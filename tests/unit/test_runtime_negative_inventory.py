@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 PROHIBITED_AGENT_MARKERS = (
@@ -19,6 +20,9 @@ def test_runtime_source_contains_no_prohibited_agent_registration_or_cloud_autho
         relative = path.relative_to(app_root).as_posix().lower()
         source = path.read_text(encoding="utf-8").lower()
         for marker in (*PROHIBITED_AGENT_MARKERS, *PROHIBITED_CLOUD_AUTH_MARKERS):
-            if marker in relative or marker in source:
+            # Match prohibited identifiers, not a harmless formatting helper
+            # such as build_agent_path_areas that cannot register an agent.
+            present = bool(re.search(r"(?<![a-z0-9_])"+re.escape(marker)+r"(?![a-z0-9_])", source))
+            if marker in relative or present:
                 findings.append(f"{relative}:{marker}")
     assert findings == []

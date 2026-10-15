@@ -28,3 +28,13 @@ def test_runtime_port_forwarder_publishes_listener(monkeypatch: pytest.MonkeyPat
         assert forwarder.routes()[0].host_port == host_port
     finally:
         forwarder.unpublish(host_port=host_port)
+
+
+def test_unpublish_during_select_exits_listener_cleanly(monkeypatch):
+    from threading import Event
+    stopped=Event()
+    def close_during_select(*args):
+        stopped.set()
+        raise OSError(9,"Bad file descriptor")
+    monkeypatch.setattr("app.vault_runtime.extensions.runtime_port_forwarder.select.select",close_during_select)
+    RuntimePortForwarder._accept_loop(object(),18092,stopped)

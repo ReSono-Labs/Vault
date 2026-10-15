@@ -13,10 +13,11 @@ from app.vault_runtime import web_search
 class _Credentials:
     def selected_provider(self, *, user_id: str, workspace_id: str):
         return "openai"
-    def background_access(self, *, user_id: str, workspace_id: str, provider_key: str = "openai"):
+    def background_access(self, *, user_id: str, workspace_id: str, provider_key: str = "openai", capability=None):
         assert user_id == "user-1"
         assert workspace_id == "workspace-1"
         assert provider_key == "openai"
+        assert capability == "web_search"
         return ProviderCredential("sk-secret"), "gpt-search"
 
 
@@ -170,3 +171,20 @@ def test_xai_search_uses_only_xai_endpoint_and_normalizes_citations(monkeypatch)
     assert captured["json"]["tools"] == [{"type":"web_search"}]
     assert result["metadata"]["provider"] == "xai"
     assert result["results"][0]["url"] == "https://example.test/xai"
+
+
+
+def test_openai_web_search_uses_the_api_key_capability_not_the_selected_oauth(monkeypatch):
+    seen = {}
+    class Selected(_Credentials):
+        def background_access(self, **kwargs):
+            seen.update(kwargs)
+            return ProviderCredential("sk-from-capability"), "gpt-search"
+    def search(*, api_key, model_key, query):
+        seen["api_key"] = api_key
+        return _provider_payload()
+    monkeypatch.setattr(web_search, "_responses_web_search", search)
+    result = web_search.run_web_search(credentials=Selected(), context=_context(), query="official documentation")
+    assert seen["capability"] == "web_search" and seen["api_key"] == "sk-from-capability"
+    assert result["results"][0]["url"] == "https://example.test/current"
+    assert "sk-from-capability" not in json.dumps(result)

@@ -159,7 +159,10 @@ def test_mcp_package_migration_conflict_requires_confirmation(tmp_path: Path) ->
     data_dir.mkdir(parents=True)
     (data_dir / "resono.db").write_bytes(_sqlite_bytes())
     files = {
-        "resono.business/mcp.package.json": _manifest(),
+        "resono.business/mcp.package.json": _manifest(migration={
+            "database": {"source": "migration/resono.db", "target": "resono.db"},
+            "onConflict": "ask",
+        }),
         "resono.business/config.schema.json": json.dumps({
             "$schema": "https://schemas.resonolabs.com/vault/plugin-config/v1.json",
             "fields": [],

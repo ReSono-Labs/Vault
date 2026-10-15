@@ -22,11 +22,15 @@ def test_unadmitted_donor_feature_families_are_absent_from_runtime() -> None:
     assert findings == []
 
 
-def test_mail_tools_are_capabilities_of_only_the_fixed_voice_agent() -> None:
+def test_mail_tools_use_only_the_two_existing_fixed_agent_identities() -> None:
     catalog = ToolCatalog(authorizer=lambda _definition, _context: True)
     register_email_tools(catalog=catalog, runtime=object())  # type: ignore[arg-type]
     expected = EMAIL_SIGNAL_CACHE_TOOLS | EMAIL_SIGNAL_SIDE_EFFECT_TOOLS
     voice = {item.name for item in catalog.definitions_for(AgentKind.VOICE)}
     background = {item.name for item in catalog.definitions_for(AgentKind.BACKGROUND)}
     assert expected <= voice
-    assert expected.isdisjoint(background)
+    # Current Mail and Agent Mail handlers are shared capabilities of the two
+    # fixed agents; grants remain a separate invocation-time requirement.
+    assert expected <= background
+    assert all(d.audiences <= frozenset({AgentKind.VOICE,AgentKind.BACKGROUND})
+               for d in catalog.definitions_for(AgentKind.VOICE))

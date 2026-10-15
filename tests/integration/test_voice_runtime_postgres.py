@@ -147,6 +147,161 @@ def test_provider_event_capture_enters_transcript_once(voice_context) -> None:
     assert len(entries) == 1 and entries[0].text_content == "Remember that I like tea."
 
 
+def _capture_parameters(principal, voice_session_id):
+    return dict(
+        user_id=principal.user_id, workspace_id=principal.workspace_id,
+        local_session_id=principal.session_id, voice_session_id=voice_session_id,
+        provider_event_id="atomic-final", event_type="transcription.completed",
+        event_role="user", payload={"kind": "final"}, transcript_text="Final tea preference.",
+        transcript_entry_index=0,
+    )
+
+
+def _source_counts(database_url, voice_session_id):
+    with psycopg.connect(database_url) as connection:
+        return tuple(connection.execute(
+            f"SELECT count(*) FROM vault_private.{table} WHERE voice_session_id=%s",
+            (voice_session_id,),
+        ).fetchone()[0] for table in ("vault_voice_provider_events", "vault_transcript_entries"))
+
+
+@pytest.mark.parametrize("failure_stage", ["before_transcript", "after_transcript"])
+def test_capture_failure_rolls_back_both_sources_and_retry_recovers(voice_context, monkeypatch, failure_stage):
+    url, _identity, owner, _second, memories, voices = voice_context
+    session = _new_session(voices, owner.principal)
+    arguments = _capture_parameters(owner.principal, session.voice_session_id)
+    capture = VoiceProviderEventCapture(sessions=voices, memories=memories)
+    original = memories.append_transcript_in_transaction
+    def fail(connection, **kwargs):
+        if failure_stage == "after_transcript":
+            original(connection, **kwargs)
+        raise RuntimeError("injected capture failure")
+    with monkeypatch.context() as patch:
+        patch.setattr(memories, "append_transcript_in_transaction", fail)
+        with pytest.raises(RuntimeError, match="injected capture failure"):
+            capture.capture(**arguments)
+    assert _source_counts(url, session.voice_session_id) == (0, 0)
+    assert capture.capture(**arguments).accepted is True
+    assert capture.capture(**arguments).accepted is False
+    assert _source_counts(url, session.voice_session_id) == (1, 1)
+
+
+def test_duplicate_provider_event_repairs_missing_legacy_transcript(voice_context):
+    url, _identity, owner, _second, memories, voices = voice_context
+    session = _new_session(voices, owner.principal)
+    arguments = _capture_parameters(owner.principal, session.voice_session_id)
+    provider_arguments = {key: value for key, value in arguments.items() if key != "transcript_text"}
+    assert voices.record_provider_event(**provider_arguments).accepted
+    assert _source_counts(url, session.voice_session_id) == (1, 0)
+    capture = VoiceProviderEventCapture(sessions=voices, memories=memories)
+    assert capture.capture(**arguments).accepted is False
+    assert capture.capture(**arguments).accepted is False
+    assert _source_counts(url, session.voice_session_id) == (1, 1)
+
+
+def test_same_provider_payload_with_changed_transcript_is_conflict(voice_context):
+    url, _identity, owner, _second, memories, voices = voice_context
+    session = _new_session(voices, owner.principal)
+    arguments = _capture_parameters(owner.principal, session.voice_session_id)
+    capture = VoiceProviderEventCapture(sessions=voices, memories=memories)
+    assert capture.capture(**arguments).accepted
+    with pytest.raises(VoiceSessionConflictError, match="Transcript index"):
+        capture.capture(**{**arguments, "transcript_text": "Changed preference."})
+    assert _source_counts(url, session.voice_session_id) == (1, 1)
+    entries = memories.transcript_entries(
+        user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
+        voice_session_id=session.voice_session_id,
+    )
+    assert entries[0].text_content == arguments["transcript_text"]
+
+
+def test_occupied_transcript_index_rolls_back_new_provider_event(voice_context):
+    url, _identity, owner, _second, memories, voices = voice_context
+    session = _new_session(voices, owner.principal)
+    arguments = _capture_parameters(owner.principal, session.voice_session_id)
+    memories.append_transcript(
+        user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
+        voice_session_id=session.voice_session_id, entry_index=0, role="user",
+        event_type=arguments["event_type"], text_content=arguments["transcript_text"],
+        metadata={"providerEventId": "different-event"},
+    )
+    capture = VoiceProviderEventCapture(sessions=voices, memories=memories)
+    with pytest.raises(VoiceSessionConflictError):
+        capture.capture(**arguments)
+    assert _source_counts(url, session.voice_session_id) == (0, 1)
+
+
+def test_concurrent_duplicate_capture_commits_one_source_pair(voice_context):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    url, _identity, owner, _second, memories, voices = voice_context
+    session = _new_session(voices, owner.principal)
+    arguments = _capture_parameters(owner.principal, session.voice_session_id)
+    capture = VoiceProviderEventCapture(sessions=voices, memories=memories)
+    barrier = Barrier(2)
+    def invoke():
+        barrier.wait(timeout=5)
+        return capture.capture(**arguments).accepted
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.submit(invoke), pool.submit(invoke)
+        assert sorted((first.result(timeout=10), second.result(timeout=10))) == [False, True]
+    assert _source_counts(url, session.voice_session_id) == (1, 1)
+
+
+def test_close_waits_for_shared_capture_transaction(voice_context, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+    from threading import Event
+    url, _identity, owner, _second, memories, voices = voice_context
+    session = _new_session(voices, owner.principal)
+    arguments = _capture_parameters(owner.principal, session.voice_session_id)
+    entered, release, close_started = Event(), Event(), Event()
+    original = memories.append_transcript_in_transaction
+    def paused(connection, **kwargs):
+        entered.set()
+        assert release.wait(timeout=5)
+        return original(connection, **kwargs)
+    def close():
+        close_started.set()
+        return voices.close_session(
+            user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
+            local_session_id=owner.principal.session_id, voice_session_id=session.voice_session_id,
+        )
+    monkeypatch.setattr(memories, "append_transcript_in_transaction", paused)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        capturing = pool.submit(VoiceProviderEventCapture(sessions=voices, memories=memories).capture, **arguments)
+        try:
+            assert entered.wait(timeout=3)
+            closing = pool.submit(close)
+            assert close_started.wait(timeout=2)
+            with pytest.raises(TimeoutError):
+                closing.result(timeout=0.1)
+        finally:
+            release.set()
+        assert capturing.result(timeout=5).accepted
+        assert closing.result(timeout=5).status == "closed"
+    assert _source_counts(url, session.voice_session_id) == (1, 1)
+
+
+@pytest.mark.parametrize("denial", ["wrong_scope", "revoked_login", "closed_voice"])
+def test_atomic_capture_denial_writes_neither_source(voice_context, denial):
+    url, _identity, owner, second, memories, voices = voice_context
+    session = _new_session(voices, owner.principal)
+    arguments = _capture_parameters(owner.principal, session.voice_session_id)
+    if denial == "wrong_scope":
+        arguments.update(user_id=second.principal.user_id, workspace_id=second.principal.workspace_id,
+                         local_session_id=second.principal.session_id)
+    elif denial == "revoked_login":
+        with psycopg.connect(url) as connection:
+            connection.execute("UPDATE vault_private.local_sessions SET status='revoked' WHERE session_id=%s",
+                               (owner.principal.session_id,))
+    else:
+        voices.close_session(user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
+                             local_session_id=owner.principal.session_id, voice_session_id=session.voice_session_id)
+    with pytest.raises((VoiceAuthorizationError, VoiceSessionNotFoundError)):
+        VoiceProviderEventCapture(sessions=voices, memories=memories).capture(**arguments)
+    assert _source_counts(url, session.voice_session_id) == (0, 0)
+
+
 def test_revocation_immediately_denies_open_voice_session(voice_context) -> None:
     _url, identity, owner, second, _memories, voices = voice_context
     identity.add_member(
