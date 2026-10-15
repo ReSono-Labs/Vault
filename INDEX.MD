@@ -21,7 +21,7 @@ repository map. Detailed decisions belong under `docs/`.
 | `GROUNDING.md` | Controlling product boundary and accepted facts |
 | `SKILLS.MD` | Mandatory developer, agent, security, packaging, and no-device-deployment rules |
 | `INDEX.MD` | Concise repository structure and ownership map |
-| `README.md`, `LICENSE.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md` | Public release orientation, rights, reporting, contribution and release-history boundary |
+| `README.md`, `LICENSE`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md` | Public release orientation, rights, reporting, contribution and release-history boundary |
 | `docs/README.md` | Documentation map and document authority |
 | `docs/PLATFORM-GUIDE.md` | Canonical grounded user/admin guide and complete current feature index |
 | `docs/planning/` | Feature scope, donor provenance, sequencing, and gates |

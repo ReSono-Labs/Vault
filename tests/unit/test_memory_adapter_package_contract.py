@@ -27,10 +27,10 @@ def test_user_guide_links_both_adapter_downloads() -> None:
     assert "/vault-local-ca.crt" in guide
 
 
-def test_plugin_packages_use_the_vault_noncommercial_license() -> None:
+def test_plugin_packages_use_the_vault_apache_license() -> None:
     hermes = (ROOT / "integrations/hermes-vault-memory/pyproject.toml").read_text()
     openclaw = json.loads(
         (ROOT / "integrations/openclaw-vault-memory/package.json").read_text()
     )
-    assert "LicenseRef-PolyForm-Noncommercial-1.0.0" in hermes
-    assert openclaw["license"] == "SEE LICENSE IN LICENSE.md"
+    assert 'license = "Apache-2.0"' in hermes
+    assert openclaw["license"] == "Apache-2.0"

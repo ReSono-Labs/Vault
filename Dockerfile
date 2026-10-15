@@ -8,7 +8,7 @@ RUN npm run build
 FROM python:3.12-slim-bookworm AS python-build
 WORKDIR /build
 RUN python -m pip install --no-cache-dir uv==0.8.14
-COPY pyproject.toml uv.lock README.md LICENSE.md ./
+COPY pyproject.toml uv.lock README.md LICENSE NOTICE ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY app/ app/
 COPY plugin-kit/ /build/plugin-kit/
@@ -20,8 +20,8 @@ RUN uv sync --frozen --no-dev
 COPY integrations/hermes-vault-memory/README.md integrations/hermes-vault-memory/pyproject.toml /build/adapter-packages/hermes-vault-memory/
 COPY integrations/hermes-vault-memory/src/resono_vault_hermes/__init__.py integrations/hermes-vault-memory/src/resono_vault_hermes/pairing.py integrations/hermes-vault-memory/src/resono_vault_hermes/plugin.yaml /build/adapter-packages/hermes-vault-memory/src/resono_vault_hermes/
 COPY integrations/openclaw-vault-memory/README.md integrations/openclaw-vault-memory/package.json integrations/openclaw-vault-memory/openclaw.plugin.json integrations/openclaw-vault-memory/index.js integrations/openclaw-vault-memory/pair.mjs /build/adapter-packages/openclaw-vault-memory/
-COPY LICENSE.md /build/adapter-packages/hermes-vault-memory/LICENSE.md
-COPY LICENSE.md /build/adapter-packages/openclaw-vault-memory/LICENSE.md
+COPY LICENSE NOTICE /build/adapter-packages/hermes-vault-memory/
+COPY LICENSE NOTICE /build/adapter-packages/openclaw-vault-memory/
 RUN mkdir -p /build/adapter-downloads \
     && python -c "import shutil; [shutil.make_archive('/build/adapter-downloads/resono-vault-' + name + '-memory-0.1.0', kind, root_dir='/build/adapter-packages', base_dir=name + '-vault-memory') for name in ('hermes', 'openclaw') for kind in ('zip', 'gztar')]"
 
@@ -54,7 +54,7 @@ COPY scripts /opt/resono-vault/help-source/codebase/scripts
 COPY tests /opt/resono-vault/help-source/codebase/tests
 COPY integrations /opt/resono-vault/help-source/codebase/integrations
 COPY docs /opt/resono-vault/help-source/codebase/docs
-COPY Dockerfile compose.yml pyproject.toml README.md LICENSE.md SECURITY.md CONTRIBUTING.md CHANGELOG.md CODE_OF_CONDUCT.md /opt/resono-vault/help-source/codebase/
+COPY Dockerfile compose.yml pyproject.toml README.md LICENSE NOTICE SECURITY.md CONTRIBUTING.md CHANGELOG.md CODE_OF_CONDUCT.md /opt/resono-vault/help-source/codebase/
 COPY docs/PLATFORM-GUIDE.md /opt/resono-vault/help-source/platform-documents/platform-guide.md
 COPY docs/WINDOWS-INSTALLATION.md /opt/resono-vault/help-source/platform-documents/windows-installation.md
 COPY docs/VAULT-PLUGIN-KIT.md /opt/resono-vault/help-source/platform-documents/vault-plugin-kit.md

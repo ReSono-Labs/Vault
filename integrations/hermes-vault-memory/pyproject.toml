@@ -7,7 +7,7 @@ name = "resono-vault-hermes-memory"
 version = "0.1.0"
 description = "Hermes MemoryProvider for a scoped local ReSono Vault"
 requires-python = ">=3.11"
-license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
+license = "Apache-2.0"
 dependencies = []
 
 [project.entry-points."hermes_agent.memory_providers"]

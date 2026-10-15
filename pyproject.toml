@@ -3,7 +3,8 @@ name = "resono-labs-vault"
 version = "0.1.0"
 description = "Local-first standalone ReSono Labs Vault"
 readme = "README.md"
-license = {file = "LICENSE.md"}
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{name = "ReSono Labs"}]
 requires-python = ">=3.11"
 dependencies = [

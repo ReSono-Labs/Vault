@@ -148,10 +148,9 @@ Vault is meant to be free for everyone. The vision is a free, easy-to-use, priva
 AI platform that people and businesses can run, study, modify and build on, on their
 own hardware.
 
-Today the code is **source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE.md).
-It is not an OSI-approved open-source license: noncommercial use, study and
-modification are permitted, and commercial use is not. Portions are adapted from
-third-party donor projects under their own licenses (for example, the live-input
-stream adapted from VoiceMem, Apache-2.0). Do not relicense until the rights to
-every donor-derived portion have been verified. Provenance is documented under
-`docs/planning/`.
+Vault is open source under the [Apache License 2.0](LICENSE). You can use, modify,
+self-host and share it, for personal or business use. Attribution and third-party
+notices are in [NOTICE](NOTICE). The live-input stream is adapted from VoiceMem
+(Apache-2.0). Feature provenance is documented under `docs/planning/`.
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
