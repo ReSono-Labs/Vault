@@ -46,17 +46,21 @@ export class VoiceLivePreparation {
   private clearDisplay() { this.stopPolling(); this.updateMemory(null); this.display(null); }
   /** Hide the indicator only; retrieved memory stays in the instructions until the next utterance. */
   private hideDisplay() { this.pollTimer = null; this.display(null); }
-  private async poll(epoch: number, utterance: string, revision: number) {
-    if (this.closed || epoch !== this.epoch || revision !== this.active?.revision) return;
+  /** Latest revision Vault has accepted for the active utterance. */
+  private posted = 0;
+  private async poll(epoch: number, utterance: string, _revision?: number) {
+    // A newer word arriving does not drop the fetch: it asks for the latest accepted words instead.
+    const revision = this.posted;
+    if (this.closed || epoch !== this.epoch || utterance !== this.active?.utterance) return;
     try {
       const value = await localApi.voicePreparation(this.session, utterance, revision);
-      if (this.closed || epoch !== this.epoch || revision !== this.active?.revision) return;
+      if (this.closed || epoch !== this.epoch || utterance !== this.active?.utterance) return;
       // "stale" only answers a superseded revision; transient states keep what is already shown.
       if (value.state === "stale" || value.state === "waiting") return;
       if (value.state === "off") { this.updateMemory(null); this.display(null); return; }
       this.updateMemory(value);
       this.display(value);
-      if (value.state === "searching") this.pollTimer = setTimeout(() => void this.poll(epoch, utterance, revision), 350);
+      if (value.state === "searching") this.pollTimer = setTimeout(() => void this.poll(epoch, utterance), 350);
       else this.pollTimer = setTimeout(() => this.hideDisplay(), 4000);
     } catch { /* A failed poll keeps the last good result; the next revision polls again. */ }
   }
@@ -90,6 +94,7 @@ export class VoiceLivePreparation {
     this.updateMemory(null);
     ++this.epoch;
     this.active = { item, utterance: crypto.randomUUID(), revision: 0, committed: false };
+    this.posted = 0;
     // Preserve retired item identities to reject their late deltas; bound transient state.
     if (this.items.size > 64) this.items.clear();
     const epoch=this.epoch,utteranceId=this.active.utterance;
@@ -127,7 +132,7 @@ export class VoiceLivePreparation {
       if (!this.closed && epoch === this.epoch && update.revision === this.active?.revision)
         return localApi.prepareVoice(this.session, update);
     }).then(result => { if (result?.enabled === false) { this.updateMemory(null); this.stopTranscription(); }
-        else if (result) void this.poll(epoch,update.utteranceId,update.revision); })
+        else if (result) { this.posted = Math.max(this.posted, update.revision); void this.poll(epoch, update.utteranceId); } })
       .catch(() => { this.stopTranscription(); }); // No continued draft upload after authority/transport failure.
   }
 

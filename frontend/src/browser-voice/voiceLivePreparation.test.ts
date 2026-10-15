@@ -160,3 +160,22 @@ it("hands the live tool route to the agent as a hint and reports it", async () =
   await vi.waitFor(() => expect(api.voicePreparationDelivered).toHaveBeenCalledWith("voice",expect.any(String),0,1));
   live.close();
 });
+
+it("shows results during continuous speech even when each word arrives before Vault answers the last", async () => {
+  const display=vi.fn(),live=new VoiceLivePreparation("voice",vi.fn(),display);
+  const pending:Array<() => void>=[];
+  api.prepareVoice.mockImplementation(() => new Promise(resolve => pending.push(() => resolve({}))));
+  api.voicePreparation.mockImplementation((_s,_u,revision) => Promise.resolve({...ready([{id:"m1",text:"Link platform"}]),revision}));
+  live.speechStarted("item");
+  await vi.waitFor(() => expect(pending.length).toBe(1)); pending.shift()!();  // speech-start reset
+  live.transcript(delta("So the Link"));
+  for (const word of [" platform"," I"," wanted"," to"," talk"]) {
+    await vi.waitFor(() => expect(pending.length).toBe(1));
+    live.transcript(delta(word));            // the next word lands while Vault is still answering the previous one
+    pending.shift()!();
+  }
+  // Still speaking (no speechStopped): the window already has the found memory.
+  await vi.waitFor(() => expect(display).toHaveBeenCalledWith(expect.objectContaining({memories:[expect.objectContaining({text:"Link platform"})]})));
+  expect(api.voicePreparation).toHaveBeenCalled();
+  live.close();
+});
