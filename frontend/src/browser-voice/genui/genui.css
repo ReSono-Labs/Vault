@@ -1,0 +1,74 @@
+/* Vault generative-UI cards: the "Today" glass language from design/mockups, sized for Chat. */
+.vault-card {
+  --card-ink: #121216; --card-ink-2: #4a4a55; --card-ink-3: #6b6b78; --card-pink: #d42a68;
+  margin: 10px 0; padding: 14px; border-radius: 22px; color: var(--card-ink); white-space: normal;
+  background: linear-gradient(160deg, rgba(255,255,255,.94), rgba(250,240,247,.9) 55%, rgba(236,248,247,.9));
+  border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 2px 4px rgba(20,10,40,.08), 0 24px 48px -22px rgba(236,63,122,.45);
+  animation: vault-card-in .55s cubic-bezier(.2,.9,.25,1.15) both;
+  font-size: 14px; line-height: 1.4;
+}
+@keyframes vault-card-in { from { opacity: 0; transform: translateY(12px) scale(.96); } to { opacity: 1; transform: none; } }
+.vault-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.vault-card h3 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; color: var(--card-ink); }
+.vault-card-sources { flex: none; font-size: 11px; font-weight: 600; color: var(--card-ink-2); padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.9); }
+.vault-card small { display: block; font-size: 12px; color: var(--card-ink-3); }
+
+.vault-card-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.vault-card-timeline li { display: grid; grid-template-columns: 52px 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 14px; background: rgba(255,255,255,.85); }
+.vault-card-timeline time { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--card-ink-2); }
+.vault-card-timeline b { font-weight: 600; }
+.vault-card-timeline em { font-style: normal; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 8px; background: #f0f0f3; color: var(--card-ink-2); }
+.vault-card-timeline em.is-needs_you { background: rgba(236,63,122,.12); color: var(--card-pink); }
+
+.vault-card-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.vault-card-options button { position: relative; text-align: left; min-height: 64px; padding: 12px 12px 12px 42px; border: 0; border-radius: 16px; background: #fff; color: var(--card-ink); font: inherit; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.06); transition: transform .15s ease, box-shadow .15s ease; }
+.vault-card-options button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--card-pink), 0 10px 22px -10px rgba(236,63,122,.6); }
+.vault-card-options button:focus-visible { outline: 3px solid var(--card-pink); outline-offset: 2px; }
+.vault-card-options button:disabled { cursor: default; opacity: .7; }
+.vault-card-options b { display: block; font-weight: 600; }
+.vault-card-option-mark { position: absolute; left: 12px; top: 12px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #ec3f7a, #9a6cf0); }
+
+.vault-card-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.vault-card-checklist li { display: flex; align-items: center; gap: 10px; }
+.vault-card-checklist li > span:first-child { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #c9c9d2; flex: none; }
+.vault-card-checklist li.is-done > span:first-child { border-color: var(--card-pink); background: var(--card-pink); }
+.vault-card-checklist li.is-done > span:nth-child(2) { color: var(--card-ink-3); text-decoration: line-through; }
+
+.vault-card-table-wrap { overflow-x: auto; border-radius: 14px; background: rgba(255,255,255,.85); }
+.vault-card-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.vault-card-table th, .vault-card-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #ececf0; }
+.vault-card-table thead th { font-size: 12px; color: var(--card-ink-2); font-weight: 600; }
+.vault-card-table tbody tr:last-child > * { border-bottom: 0; }
+.vault-card-table.is-comparison tbody th { font-weight: 600; color: var(--card-ink-2); }
+
+.vault-card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0; }
+.vault-card-metrics > div { padding: 10px 12px; border-radius: 14px; background: #fff; }
+.vault-card-metrics dt { font-size: 12px; color: var(--card-ink-3); }
+.vault-card-metrics dd { margin: 2px 0 0; }
+.vault-card-metrics strong { font-size: 22px; font-weight: 560; letter-spacing: -0.03em; }
+.vault-card-metrics .is-up { color: #138a5e; margin-left: 6px; }
+.vault-card-metrics .is-down { color: var(--card-pink); margin-left: 6px; }
+.vault-card-metrics .is-flat { color: var(--card-ink-3); margin-left: 6px; font-size: 10px; }
+
+.vault-card-chart { margin: 0; padding: 12px; border-radius: 16px; color: #fff;
+  background: radial-gradient(120% 120% at 100% 0%, #ff8fbb 0%, transparent 55%), linear-gradient(160deg, #e2336f, #c42660 60%, #e04f8a); }
+.vault-card-chart svg { display: block; width: 100%; height: 110px; }
+.vault-card-chart polyline { stroke: #fff; }
+.vault-card-chart rect { fill: rgba(255,255,255,.9); }
+.vault-card-chart figcaption { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-top: 6px; }
+
+.vault-card-body { margin: 0 0 8px; }
+.vault-card-points { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.vault-card-fallback { margin: 8px 0; }
+
+.vault-card.is-skeleton { display: grid; gap: 8px; }
+.vault-card.is-skeleton i { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, rgba(0,0,0,.05), rgba(0,0,0,.12), rgba(0,0,0,.05)); background-size: 200% 100%; animation: vault-card-shimmer 1.3s linear infinite; }
+.vault-card.is-skeleton i.is-row { height: 34px; border-radius: 12px; }
+@keyframes vault-card-shimmer { to { background-position: -200% 0; } }
+
+.vault-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-card, .vault-card.is-skeleton i, .vault-card-options button { animation: none; transition: none; }
+}

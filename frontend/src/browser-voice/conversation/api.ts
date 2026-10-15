@@ -2,7 +2,14 @@ import { request } from "@/browser-voice/localApi";
 
 export type TurnState = "submitted" | "running" | "completed" | "failed" | "interrupted";
 export type ChatAttachment = { id: string; name: string; mime: string; hash: string; size: number; coverage: string };
-export type ChatTurn = { turnId: string; input: string; answer: string | null; state: TurnState; attachments?: ChatAttachment[] };
+export type CardLayout = "timeline" | "options" | "checklist" | "comparison" | "table" | "metrics" | "chart" | "summary";
+export type CardItem = { title?: string; detail?: string; time?: string; state?: "done" | "needs_you" | "optional" | "pending";
+  text?: string; done?: boolean; label?: string; value?: string; trend?: "up" | "down" | "flat"; amount?: number };
+/** Server-validated display card (genui/catalog.py). Rendered only by registered Vault components. */
+export type VaultCard = { version: number; layout: CardLayout; title?: string; fallbackText: string; body?: string;
+  items?: CardItem[]; columns?: string[]; rows?: string[][]; chartKind?: "line" | "bar" };
+export type ChatCardPart = { cardId: string; card: VaultCard; sources: string[] };
+export type ChatTurn = { turnId: string; input: string; answer: string | null; state: TurnState; attachments?: ChatAttachment[]; ui?: ChatCardPart[] };
 export type ChatHeader = { conversationId: string; title: string; historyVersion: number; state: string };
 export type ChatHistory = ChatHeader & { turns: ChatTurn[]; nextBefore?: number | null };
 export type TurnStatus = { conversationId: string; turnId: string; input: string; historyVersion: number; state: TurnState };

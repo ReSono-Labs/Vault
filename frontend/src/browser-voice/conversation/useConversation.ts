@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { conversationApi as api, type ChatAttachment, type ChatHeader, type ChatTurn, type SendRequest, type TurnState } from "./api";
+import { conversationApi as api, type CardLayout, type ChatAttachment, type ChatCardPart, type ChatHeader, type ChatTurn, type SendRequest, type TurnState } from "./api";
 import { useLivePreparation } from "./useLivePreparation";
 
 const activeTurn = (state: string) => state === "submitted" || state === "running";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Chat request failed.";
+const LAYOUTS: readonly string[] = ["timeline", "options", "checklist", "comparison", "table", "metrics", "chart", "summary"];
+/** Shape check only; the server already validated content. Unknown layouts are dropped, never rendered. */
+const isCardPart = (value: any): value is ChatCardPart => Boolean(value) && typeof value.cardId === "string"
+  && Boolean(value.card) && LAYOUTS.includes(value.card.layout) && typeof value.card.fallbackText === "string"
+  && Array.isArray(value.sources);
 
 export function useConversation(active: boolean) {
   const [items, setItems] = useState<ChatHeader[]>([]);
@@ -19,6 +24,8 @@ export function useConversation(active: boolean) {
   const [version, setVersion] = useState(0);
   const [running, setRunning] = useState<string | null>(null);
   const [liveText, setLiveText] = useState("");
+  const [liveCards, setLiveCards] = useState<ChatCardPart[]>([]);
+  const [liveHint, setLiveHint] = useState<CardLayout[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -81,6 +88,8 @@ export function useConversation(active: boolean) {
     if (!active || !selected || !running) return;
     const stream = api.stream(selected, running);
     let current = true, cursor = 0, answer = "";
+    let cards: ChatCardPart[] = [];
+    setLiveCards([]); setLiveHint([]);
     setStatus("Preparing response…");
     stream.addEventListener("conversation", event => {
       if (!current) return;
@@ -92,6 +101,11 @@ export function useConversation(active: boolean) {
           answer += value.payload.text; setLiveText(answer); setStatus("Responding…");
         } else if (value.kind === "assistant_final" && typeof value.payload.text === "string") {
           answer = value.payload.text; setLiveText(answer);
+        } else if (value.kind === "ui_hint" && Array.isArray(value.payload.layouts)) {
+          setLiveHint(value.payload.layouts.filter((layout: string) => LAYOUTS.includes(layout)) as CardLayout[]);
+        } else if (value.kind === "ui" && isCardPart(value.payload)) {
+          cards = [...cards, { cardId: value.payload.cardId, card: value.payload.card, sources: value.payload.sources }];
+          setLiveCards(cards);
         } else if (value.kind === "tool_status") {
           setStatus(`Tool ${value.payload.name}: ${value.payload.state}`);
         } else if (value.kind === "error") {
@@ -99,8 +113,8 @@ export function useConversation(active: boolean) {
         } else if (value.kind === "terminal") {
           current = false; stream.close();
           setTurns(previous => previous.map(turn => turn.turnId === running
-            ? { ...turn, answer: answer || null, state: value.payload.state as TurnState } : turn));
-          setRunning(null); setStatus(""); setReload(value => value + 1);
+            ? { ...turn, answer: answer || null, state: value.payload.state as TurnState, ...(cards.length ? { ui: cards } : {}) } : turn));
+          setRunning(null); setStatus(""); setLiveCards([]); setLiveHint([]); setReload(value => value + 1);
         }
       } catch { setError("Invalid response event. Reopen the session to reload canonical history."); stream.close(); }
     });
@@ -128,21 +142,24 @@ export function useConversation(active: boolean) {
     selectionEpoch.current += 1;
     drafts.current.set(selected ?? "new", draft);
     setSelected(id); setDraft(id === null ? "" : drafts.current.get(id) ?? "");
-    setTurns([]); setNextBefore(null); setVersion(0); setRunning(null); setLiveText(""); setStatus(""); setError(null);
+    setTurns([]); setNextBefore(null); setVersion(0); setRunning(null); setLiveText(""); setLiveCards([]); setLiveHint([]); setStatus(""); setError(null);
     pending.current = null; setRetryable(false);
     if (id === null) createKey.current = crypto.randomUUID();
   }
 
-  async function send(retry = false) {
-    if (sendLock.current || running || loading || uploadLock.current || (!retry && (retryable || !draft.trim()))) return;
+  /** ``text`` sends a card choice (for example a tapped option) instead of the draft; the draft is kept. */
+  async function send(retry = false, text?: string) {
+    const input = text ?? draft;
+    if (sendLock.current || running || loading || uploadLock.current || (!retry && (retryable || !input.trim()))) return;
+    if (text !== undefined && attachments.length) return;
     preparation.clear(false);
-    if (!retry && (draft.includes("\0") || new TextEncoder().encode(draft).length > 65536)) {
+    if (!retry && (input.includes("\0") || new TextEncoder().encode(input).length > 65536)) {
       setError("Message must be valid text within 65536 UTF-8 bytes. Shorten it before sending.");
       return;
     }
     sendLock.current = true; setSending(true); setError(null);
     const work = retry ? pending.current : {
-      conversation: selected, request: { submissionKey: crypto.randomUUID(), input: draft, expectedHistoryVersion: version, ...(attachments.length ? { attachmentIds: attachments.map(a => a.id) } : {}) },
+      conversation: selected, request: { submissionKey: crypto.randomUUID(), input, expectedHistoryVersion: version, ...(attachments.length ? { attachmentIds: attachments.map(a => a.id) } : {}) },
     };
     if (!work) { sendLock.current = false; setSending(false); return; }
     pending.current = work;
@@ -152,10 +169,10 @@ export function useConversation(active: boolean) {
       const value = await api.send(work.conversation, work.request);
       if (!mounted.current) return;
       setSelected(work.conversation); setVersion(value.historyVersion);
-      setDraft(previous => previous === work.request.input ? "" : previous);
+      if (text === undefined) setDraft(previous => previous === work.request.input ? "" : previous);
       for (const item of attachments) { if (item.preview) URL.revokeObjectURL(item.preview); }
       setAttachments([]);
-      drafts.current.delete(selected ?? "new");
+      if (text === undefined) drafts.current.delete(selected ?? "new");
       setTurns(previous => previous.some(turn => turn.turnId === value.turnId) ? previous : [...previous, {
         turnId: value.turnId, input: value.input, answer: null, state: value.state,
       }]);
@@ -227,6 +244,6 @@ export function useConversation(active: boolean) {
     try { await api.stop(selected, running); if (mounted.current && epoch === selectionEpoch.current) setStatus("Stopping…"); }
     catch (error) { if (mounted.current && epoch === selectionEpoch.current) setError(errorText(error)); }
   }
-  return { items, selected, turns, draft, setDraft: editDraft, running, liveText, status, loading, sending, error,
+  return { items, selected, turns, draft, setDraft: editDraft, running, liveText, liveCards, liveHint, choose: (text: string) => send(false, text), status, loading, sending, error,
     preparation, retryable, select, send, stop, attachments, uploading, attachFiles, removeAttachment, nextBefore, loadingOlder, loadOlder, refresh: () => setReload(value => value + 1) };
 }

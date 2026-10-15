@@ -5,13 +5,25 @@ import { BrowserVoiceMicrophoneIcon } from "@/browser-voice/presentation/Browser
 import { useConversation } from "./useConversation";
 import { useChatViewport } from "./useChatViewport";
 import { LivePreparationPanel } from "./LivePreparationPanel";
+import type { ChatCardPart } from "./api";
+import { CardActionsContext, VaultCardPart, VaultCardSkeletonPart } from "@/browser-voice/genui/VaultCard";
 import "./conversation.css";
 
+// Registered generative-UI parts; any other data part name renders nothing.
+const PARTS = { data: { by_name: { "vault-card": VaultCardPart, "vault-card-skeleton": VaultCardSkeletonPart } } };
 function Message({ user = false }: { user?: boolean }) {
   return <MessagePrimitive.Root className={`vault-chat-message${user ? " is-user" : ""}`}>
     <span className="vault-chat-message-author">{user ? "You" : "Vault"}</span>
-    <MessagePrimitive.Content />
+    <MessagePrimitive.Content components={PARTS} />
   </MessagePrimitive.Root>;
+}
+type Part = { type: "text"; text: string } | { type: `data-${string}`; data: unknown };
+function assistantParts(text: string | null, cards: ChatCardPart[] | undefined, skeleton?: string): Part[] {
+  const parts: Part[] = [];
+  if (text) parts.push({ type: "text", text });
+  for (const card of cards ?? []) parts.push({ type: "data-vault-card", data: card });
+  if (skeleton) parts.push({ type: "data-vault-card-skeleton", data: { layout: skeleton } });
+  return parts;
 }
 function UserMessage() { return <Message user />; }
 
@@ -33,12 +45,17 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
     const result: ThreadMessageLike[] = [];
     for (const turn of chat.turns) {
       result.push({ id: `${turn.turnId}-user`, role: "user", content: [{ type: "text", text: turn.input + (turn.attachments?.length ? "\n\nAttachments: " + turn.attachments.map(a => `${a.name} (${a.coverage})`).join(", ") : "") }] });
-      if (turn.answer) result.push({ id: `${turn.turnId}-answer`, role: "assistant", content: [{ type: "text", text: turn.answer }] });
+      if (turn.answer || turn.ui?.length) result.push({ id: `${turn.turnId}-answer`, role: "assistant",
+        content: assistantParts(turn.answer, turn.ui) });
     }
-    if (chat.running && chat.liveText) result.push({ id: `${chat.running}-live`, role: "assistant",
-      content: [{ type: "text", text: chat.liveText }] });
+    // A predicted layout shows a skeleton until the first real card streams in.
+    const skeleton = chat.liveCards.length ? undefined : chat.liveHint[0];
+    if (chat.running && (chat.liveText || chat.liveCards.length || skeleton)) result.push({ id: `${chat.running}-live`,
+      role: "assistant", content: assistantParts(chat.liveText, chat.liveCards, skeleton) });
     return result;
-  }, [chat.turns, chat.running, chat.liveText]);
+  }, [chat.turns, chat.running, chat.liveText, chat.liveCards, chat.liveHint]);
+  const cardActions = useMemo(() => ({ choose: (text: string) => { void chat.choose(text); },
+    busy: Boolean(chat.running) || chat.sending || chat.loading }), [chat.choose, chat.running, chat.sending, chat.loading]);
   const runtime = useExternalStoreRuntime({ messages, isRunning: Boolean(chat.running),
     convertMessage: (message: ThreadMessageLike) => message,
     onNew: async () => { await chat.send(); }, onCancel: chat.stop });
@@ -78,6 +95,7 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
             <rect x="3" y="4" width="18" height="16" rx="3" /><path d="M15 4v16M18 9h.01M18 12h.01M18 15h.01" />
           </svg>
         </button></header>
+      <CardActionsContext.Provider value={cardActions}>
       <AssistantRuntimeProvider runtime={runtime}>
         <ThreadPrimitive.Root className="vault-chat-thread">
           <ThreadPrimitive.Viewport className="vault-chat-scroll">
@@ -95,6 +113,7 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
           <ThreadPrimitive.ScrollToBottom className="browser-voice-pill vault-chat-jump">Latest message</ThreadPrimitive.ScrollToBottom>
         </ThreadPrimitive.Root>
       </AssistantRuntimeProvider>
+      </CardActionsContext.Provider>
       <div className="vault-chat-status" role="status">{chat.loading ? "Loading chat…" : chat.sending ? "Sending…" : chat.status}</div>
       <LivePreparationPanel value={chat.preparation.value} />
       {chat.error ? <div className="vault-chat-error" role="alert"><p>{chat.error}</p>
