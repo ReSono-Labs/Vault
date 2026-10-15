@@ -38,6 +38,11 @@ class ConversationRuntime:
         self.decision_review = None
         self.memory_learning = None
         self._review_dispatcher = None
+        # Generative UI (removable): display-only present_ui cards, and an optional
+        # Decisions presentation hint computed in parallel with turn preparation.
+        self.genui_enabled = False
+        self.presentation_transport_factory = None
+        self.presentation_timeout_seconds = 1.5
 
     def start_review_recovery(self,resolve_principal):
         from app.vault_runtime.local_identity.repository import LocalSessionError
@@ -147,12 +152,45 @@ class ConversationRuntime:
                         self._slots.release()
                 raise
 
+    def _start_presentation_hint(self,principal,turn):
+        """Run the optional Decisions layout hint beside history/memory preparation."""
+        if not self.genui_enabled or self.presentation_transport_factory is None:
+            return None
+        from app.vault_runtime.genui.presentation import predict
+        holder = {}
+        def run():
+            try:
+                transport = self.presentation_transport_factory(principal)
+                holder['hint'] = predict(transport,turn.input_text,timeout_seconds=self.presentation_timeout_seconds)
+            except Exception:
+                holder['hint'] = None  # No API key or provider failure: full catalog, no hint.
+        thread = Thread(target=run,name="vault-presentation-hint",daemon=True)
+        thread.start()
+        return thread,holder,monotonic()
+
+    def _finish_presentation_hint(self,pending):
+        if pending is None:
+            return None
+        thread,holder,started = pending
+        # Never hold the turn beyond the hint's own deadline.
+        thread.join(max(0.0,self.presentation_timeout_seconds+0.25-(monotonic()-started)))
+        return holder.get('hint')
+
+    def _genui_instructions(self,presentation):
+        from app.vault_runtime.genui.catalog import prompt_section
+        if presentation is None:
+            return prompt_section()
+        if presentation['textLikely']:
+            return prompt_section(text_likely=True)
+        return prompt_section(tuple(presentation['layouts']) or None)
+
     def _work(self,principal,turn,owner,execution_lock,stop):
         started = monotonic()
         def canceled():
             return self._closing.is_set() or stop.is_set() or monotonic()-started>=self.turn_seconds or self.store.canceled(principal,turn,owner)
         tools = ConversationToolRuntime(catalog=self.catalog,authority=self.authority,store=self.store,
-            principal=principal,turn=turn,owner=owner,canceled=canceled)
+            principal=principal,turn=turn,owner=owner,canceled=canceled,genui=self.genui_enabled)
+        hint_thread = None
         try:
             if canceled():
                 raise asyncio.CancelledError()
@@ -161,6 +199,7 @@ class ConversationRuntime:
                 workspace_id=principal.workspace_id,provider_key=provider)
             if provider not in {"openai","xai","gemini"}:
                 raise InputError("Selected text provider requires its conversation adapter; no provider was substituted.")
+            hint_thread = self._start_presentation_hint(principal,turn)
             history = self.store.history(principal,turn.conversation_id,segment_id=turn.segment_id)
             previous_summary = self.memory_learning.previous_summary(principal,turn.conversation_id,turn.segment_id) if self.memory_learning else None
             attached,input_parts=[],[]
@@ -198,6 +237,9 @@ class ConversationRuntime:
                 toolProposals=[dict(id=c.definition_id,name=c.value,description=c.applicability_description)
                     for c in prepared.decisions] if prepared is not None else [],
                 executionAuthority=False)
+            presentation = self._finish_presentation_hint(hint_thread)
+            if presentation is not None:
+                final_preparation['presentation'] = presentation
             self.store.append(principal,turn,owner,"context",dict(provider=provider,model=model,memories=context,
                 finalPreparation=final_preparation,captureVersion=3,historySegmentId=turn.segment_id,
                 previousSummary=previous_summary,
@@ -224,6 +266,10 @@ class ConversationRuntime:
                     self.store.append(principal,turn,owner,"text_delta",dict(text=text))
             # The existing shared runner owns all provider construction/SDK loops.
             # History is server-owned data, never client-supplied provider history.
+            if presentation is not None and presentation['layouts'] and not presentation['textLikely']:
+                # Lets the client show a skeleton of the likely card before the model writes.
+                self.store.append(principal,turn,owner,"ui_hint",dict(layouts=presentation['layouts'],
+                    visualProbability=presentation['visualProbability']))
             text_input=json.dumps(dict(history=history,authorizedMemory=context,currentFinalTurnId=turn.turn_id,
                 finalPreparation=final_preparation),ensure_ascii=False)
             model_input=([dict(role='user',content=[dict(type='input_text',text=text_input),*input_parts])]
@@ -241,7 +287,8 @@ class ConversationRuntime:
                     "instead of deliberating; otherwise ignore it. "
                     "History includes this activity segment only; earlier conversations are not exhaustively supplied. "
                     "Use memory_lookup for earlier relevant facts; if context is missing, ask rather than invent. "
-                    +(previous_summary_context(previous_summary['text']) if previous_summary else "")),
+                    +(previous_summary_context(previous_summary['text']) if previous_summary else "")
+                    +(" "+self._genui_instructions(presentation) if self.genui_enabled else "")),
                 input_text=model_input,
                 base_url=("https://generativelanguage.googleapis.com/v1beta/openai/" if provider=="gemini" else
                     "https://api.x.ai/v1" if provider=="xai" else

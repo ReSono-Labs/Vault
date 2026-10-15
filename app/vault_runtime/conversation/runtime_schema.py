@@ -35,11 +35,22 @@ STATEMENTS = (
        user_id text NOT NULL,workspace_id text NOT NULL,conversation_id text NOT NULL,
        turn_id text NOT NULL,sequence bigint NOT NULL CHECK(sequence>0),
        kind text NOT NULL CHECK(kind IN ('waiting','context','model_response','tool_status',
-         'text_delta','assistant_final','error','terminal')),
+         'text_delta','assistant_final','error','terminal','ui_hint','ui')),
        payload jsonb NOT NULL CHECK(octet_length(payload::text)<=131072),
        created_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(turn_id,sequence),
        FOREIGN KEY(user_id,workspace_id,conversation_id,turn_id) REFERENCES
          vault_private.vault_conversation_turns(user_id,workspace_id,conversation_id,turn_id) ON DELETE CASCADE)""",
+    # Generative UI (2026-10-15): display-only card and layout-hint events. Existing
+    # installs keep the original inline CHECK name; replace it in place, idempotently.
+    """DO $$ BEGIN
+       IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='vault_conversation_events_kind_check'
+         AND conrelid='vault_private.vault_conversation_events'::regclass
+         AND pg_get_constraintdef(oid) LIKE '%ui_hint%') THEN
+         ALTER TABLE vault_private.vault_conversation_events DROP CONSTRAINT IF EXISTS vault_conversation_events_kind_check;
+         ALTER TABLE vault_private.vault_conversation_events ADD CONSTRAINT vault_conversation_events_kind_check
+           CHECK(kind IN ('waiting','context','model_response','tool_status','text_delta','assistant_final',
+             'error','terminal','ui_hint','ui'));
+       END IF; END $$""",
     """ALTER TABLE vault_private.vault_voice_tool_invocations
        ALTER COLUMN voice_session_id DROP NOT NULL,
        ADD COLUMN IF NOT EXISTS conversation_id text,

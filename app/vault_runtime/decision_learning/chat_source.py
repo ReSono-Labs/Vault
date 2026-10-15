@@ -99,8 +99,8 @@ def project_chat(*, conversation_id, segment_id, turns, events, invocations, def
                 sources.append(dict(source_id=summary_id, kind="reasoning_summary", text=_text(summaries)))
                 summary_ids.append(summary_id)
             for item in payload.get("output", ()):
-                if item.get("type") != "function_call":
-                    continue
+                if item.get("type") != "function_call" or item.get("name") == "present_ui":
+                    continue  # Display-only cards are not tool decisions to learn from.
                 call_id = item["call_id"]
                 if call_id in turn["calls"]:
                     raise ReviewConflictError("Original Chat call identity was repeated.")

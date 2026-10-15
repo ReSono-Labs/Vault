@@ -39,6 +39,9 @@ class VaultLocalApiConfig:
     plugin_service_url: str = "https://127.0.0.1:8765/plugin-services/v1"
     decision_review_enabled: bool = True
     indexed_memory_enabled: bool = True
+    genui_enabled: bool = True
+    # Network-calling hint: off for directly constructed configs (tests); from_env enables it.
+    genui_presentation_hints: bool = False
 
     @classmethod
     def from_env(cls) -> "VaultLocalApiConfig":
@@ -112,6 +115,8 @@ class VaultLocalApiConfig:
             or "https://127.0.0.1:8765/plugin-services/v1",
             decision_review_enabled=_bool_env("RESONO_VAULT_DECISION_REVIEW_ENABLED",True),
             indexed_memory_enabled=_bool_env("RESONO_VAULT_INDEXED_MEMORY_ENABLED",True),
+            genui_enabled=_bool_env("RESONO_VAULT_GENUI_ENABLED",True),
+            genui_presentation_hints=_bool_env("RESONO_VAULT_GENUI_PRESENTATION_HINTS",True),
         )
 
     def database_url_value(self) -> str:

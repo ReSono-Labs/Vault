@@ -346,6 +346,11 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     conversation_runtime = ConversationRuntime(database_url=database_url,credentials=provider_credentials,
         memories=memory_service,catalog=catalog,authority=tool_authority)
     conversation_runtime.ensure_schema()
+    conversation_runtime.genui_enabled = config.genui_enabled
+    if config.genui_enabled and config.genui_presentation_hints:
+        from app.vault_runtime.decision_routing.openai_transport import OpenAIDecisionTransport
+        conversation_runtime.presentation_transport_factory = lambda principal: OpenAIDecisionTransport(
+            credential_resolver=provider_credentials, principal=principal)
     from app.vault_runtime.conversation.attachments import ConversationAttachments
     conversation_runtime.attachments=ConversationAttachments(database_url=database_url,storage=workspace_storage)
     conversation_runtime.attachments.ensure_schema()

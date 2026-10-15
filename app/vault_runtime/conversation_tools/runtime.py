@@ -8,10 +8,15 @@ from app.vault_runtime.voice.tools import canonical_arguments_sha256
 
 
 class ConversationToolRuntime:
-    def __init__(self,*,catalog,authority,store,principal,turn,owner,canceled):
+    def __init__(self,*,catalog,authority,store,principal,turn,owner,canceled,genui=False):
         self.catalog,self.authority,self.store = catalog,authority,store
         self.principal,self.turn,self.owner,self.canceled = principal,turn,owner,canceled
         self.original_calls = {}
+        # Chat-only display tool: not in the shared catalog, so it never reaches Voice
+        # realtime sessions, Decisions candidates, grants or the execution ledger.
+        self.genui = genui
+        self.used_tools = []
+        self.cards = 0
 
     def observe_calls(self,calls):
         for identity,value in calls.items():
@@ -36,7 +41,41 @@ class ConversationToolRuntime:
                 return json.dumps(result.mcp_result(),ensure_ascii=False)
             tools.append(FunctionTool(name=definition.name,description=definition.description,
                 params_json_schema=definition.input_schema,on_invoke_tool=invoke,strict_json_schema=False))
+        if self.genui:
+            tools.append(self._present_tool())
         return tools
+
+    def _present_tool(self):
+        from agents import FunctionTool
+        from app.vault_runtime.genui import catalog as genui
+        async def invoke(context,raw_arguments):
+            call_id = getattr(context,"tool_call_id",None)
+            args = parse_json_object_bytes(raw_arguments.encode())
+            result = await asyncio.to_thread(self.present,args,call_id)
+            return json.dumps(result,ensure_ascii=False)
+        return FunctionTool(name=genui.TOOL_NAME,description=genui.TOOL_DESCRIPTION,
+            params_json_schema=genui.INPUT_SCHEMA,on_invoke_tool=invoke,strict_json_schema=False)
+
+    def present(self,arguments,call_id):
+        """Validate one card and append it as a display-only ui event. Performs no action."""
+        from uuid import uuid4
+        from app.vault_runtime.genui import catalog as genui
+        if self.canceled():
+            raise asyncio.CancelledError()
+        if not isinstance(call_id,str) or self.original_calls.get(call_id)!=(genui.TOOL_NAME,canonical_arguments_sha256(arguments)):
+            raise ValueError("Card is not linked to an original captured model proposal.")
+        if self.cards>=genui.MAX_CARDS_PER_TURN:
+            return dict(shown=False,error="Card limit reached for this reply; answer in text.")
+        try:
+            card = genui.validate(arguments)
+        except genui.SpecError as error:
+            return dict(shown=False,error=str(error)+" Fix the card or answer in text.")
+        self.cards += 1
+        card_id = str(uuid4())
+        # Provenance is what actually ran this turn, never what the model claims.
+        self.store.append(self.principal,self.turn,self.owner,"ui",dict(cardId=card_id,callId=call_id,
+            card=card,sources=list(dict.fromkeys(self.used_tools))))
+        return dict(shown=True,cardId=card_id)
 
     def invoke(self,name,arguments,call_id):
         if self.canceled():
@@ -72,4 +111,6 @@ class ConversationToolRuntime:
         # The canonical result is already committed. Capture failure here must
         # fail the turn, never retry or undo an executed effect.
         event("succeeded",invocationId=claim.invocation_id,isError=result.is_error)
+        if not result.is_error:
+            self.used_tools.append(name)
         return result

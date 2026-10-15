@@ -378,7 +378,11 @@ class ConversationRuntimeStore(ConversationRepository):
                 (SELECT e.payload->>'text' FROM vault_private.vault_conversation_events e
                  WHERE e.user_id=t.user_id AND e.workspace_id=t.workspace_id
                    AND e.conversation_id=t.conversation_id AND e.turn_id=t.turn_id
-                   AND e.kind='assistant_final' ORDER BY e.sequence DESC LIMIT 1),t.ordinal
+                   AND e.kind='assistant_final' ORDER BY e.sequence DESC LIMIT 1),t.ordinal,
+                (SELECT jsonb_agg(jsonb_build_object('cardId',u.payload->'cardId','card',u.payload->'card',
+                   'sources',u.payload->'sources') ORDER BY u.sequence) FROM vault_private.vault_conversation_events u
+                 WHERE u.user_id=t.user_id AND u.workspace_id=t.workspace_id
+                   AND u.conversation_id=t.conversation_id AND u.turn_id=t.turn_id AND u.kind='ui')
                 FROM vault_private.vault_conversation_turns t
                 WHERE t.user_id=%s AND t.workspace_id=%s AND t.conversation_id=%s
                   AND (%s::bigint IS NULL OR t.ordinal<%s)
@@ -387,7 +391,7 @@ class ConversationRuntimeStore(ConversationRepository):
             rows = cursor.fetchall()
         more = len(rows)>limit
         rows = rows[:limit]
-        return dict(turns=[dict(turnId=r[0],input=r[1],state=r[2],answer=r[3])
+        return dict(turns=[dict(turnId=r[0],input=r[1],state=r[2],answer=r[3],**({"ui":r[5]} if r[5] else {}))
                            for r in reversed(rows)],
                     nextBefore=rows[-1][4] if more and rows else None)
 
