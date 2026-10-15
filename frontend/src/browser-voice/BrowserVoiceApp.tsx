@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { LivePreparationPanel } from "./conversation/LivePreparationPanel";
+import type { Preparation } from "./conversation/api";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { AccountPanel } from "@/browser-voice/AccountPanel";
 import { CapabilitiesPanel } from "@/browser-voice/CapabilitiesPanel";
 import { ConnectionsPanel } from "@/browser-voice/ConnectionsPanel";
@@ -11,6 +13,7 @@ import { PluginImportDialogHost } from "@/browser-voice/PluginImportDialogHost";
 import { overlayLiveBrowserLocalSearch, tryFulfillBrowserLocalVoiceTool } from "@/browser-voice/computerFoldersVoiceTools";
 import { normalizeWorkspaceToolArguments } from "@/browser-voice/workspaceToolArguments";
 import { NotificationsMenu } from "@/browser-voice/NotificationsMenu";
+import { VoiceLivePreparation } from "./voiceLivePreparation";
 import {
   localApi,
   type LocalUser,
@@ -28,9 +31,17 @@ import {
 } from "@/browser-voice/presentation/BrowserVoiceIcons";
 
 type VoiceState = "idle" | "connecting" | "live" | "responding" | "error";
+const ChatPanel = lazy(() => import("@/browser-voice/conversation/ChatPanel").then(module => ({ default: module.ChatPanel })));
 type OnboardingStep = "name" | "hello" | "experience" | "credentials";
 
+export async function countFailedTranscriptWrites(pending: Promise<unknown>[]): Promise<number> {
+  const settled = await Promise.allSettled(pending);
+  return settled.filter((result) => result.status === "rejected").length;
+}
+
 export function BrowserVoiceApp() {
+  const [chatMounted, setChatMounted] = useState(false);
+  const voicePreparationRef = useRef<VoiceLivePreparation | null>(null);
   const [onboardingDraft] = useState(readOnboardingDraft);
   const [ready, setReady] = useState(false);
   const [setupComplete, setSetupComplete] = useState(false);
@@ -41,6 +52,22 @@ export function BrowserVoiceApp() {
       return query.has("memoryPairing") ? "memory" : query.has("providerOAuth") ? "connections" : "home";
     });
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [voicePreparation, setVoicePreparation] = useState<Preparation | null>(null);
+  const [voiceActivity, setVoiceActivity] = useState<string[]>([]);
+  const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function clearVoiceActivity() {
+    if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
+    activityTimerRef.current = null;
+    setVoiceActivity([]);
+  }
+  function showVoiceActivity(text: string) {
+    if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
+    activityTimerRef.current = null;
+    setVoiceActivity(items => [...items, text].slice(-20));
+  }
+  useEffect(() => () => { if (activityTimerRef.current) clearTimeout(activityTimerRef.current); }, []);
+
+  useEffect(() => { if (destination === "chat") setChatMounted(true); }, [destination]);
   const [statusText, setStatusText] = useState("Touch to Start");
   const [subStatus, setSubStatus] = useState("Press to start a voice session");
   const [error, setError] = useState<string | null>(null);
@@ -306,6 +333,14 @@ export function BrowserVoiceApp() {
         offerSdp,
       });
       voiceSessionIdRef.current = started.voiceRealtimeSessionId;
+      // Live memory search needs a live text feed: the dedicated transcription session (API key)
+      // or the conversation connection's own transcript events (ChatGPT OAuth).
+      // The conversation may run on OAuth while a dedicated API-key transcription session supplies the text.
+      const nativeTranscript = !started.liveTranscription && provider.authMethod === "chatgpt_oauth";
+      if (provider.providerKey === "openai" && (started.liveTranscription || nativeTranscript)) voicePreparationRef.current = new VoiceLivePreparation(
+        started.voiceRealtimeSessionId,event => sendProviderEventRef.current?.(event),
+        setVoicePreparation, nativeTranscript);
+      clearVoiceActivity();
       transcriptEntryIndexRef.current = 0;
       pendingTranscriptWritesRef.current = [];
       lastUserUtteranceRef.current = null;
@@ -344,7 +379,7 @@ export function BrowserVoiceApp() {
         pendingConnectGreetingRef.current = started.connectGreetingEvent;
         if (started.sessionUpdate && Object.keys(started.sessionUpdate).length > 0) {
           awaitingInitialSessionUpdateRef.current = true;
-          channel.send(JSON.stringify(started.sessionUpdate));
+          channel.send(JSON.stringify(voicePreparationRef.current?.sessionUpdate(started.sessionUpdate) ?? started.sessionUpdate));
         } else {
           sendConnectGreeting();
         }
@@ -352,6 +387,14 @@ export function BrowserVoiceApp() {
         setStatusText("Listening");
         setSubStatus("I’m listening");
       };
+      if (started.liveTranscription && voicePreparationRef.current) {
+        const preparation = voicePreparationRef.current;
+        void preparation.start(stream,waitForIceGathering).catch(() => {
+          preparation.stopTranscription(); // The conversation itself is unaffected.
+          if (voicePreparationRef.current===preparation)
+            setError("Live transcription unavailable; Voice continues without live memory search.");
+        });
+      }
     } catch (caught) {
       await closeVoice(voiceSessionIdRef.current !== null);
       setVoiceState("error");
@@ -376,7 +419,7 @@ export function BrowserVoiceApp() {
     await new Promise<void>((resolve, reject) => {
       socket.onopen = () => {
         sendProviderEventRef.current = (event) => socket.send(JSON.stringify(event));
-        if (started.sessionUpdate) socket.send(JSON.stringify(started.sessionUpdate));
+        if (started.sessionUpdate) socket.send(JSON.stringify(voicePreparationRef.current?.sessionUpdate(started.sessionUpdate) ?? started.sessionUpdate));
         startPcmCapture(stream, started.inputSampleRate ?? 24_000, started.protocol, socket);
         setVoiceState("live"); setStatusText("Listening"); setSubStatus("I’m listening"); resolve();
       };
@@ -410,6 +453,7 @@ export function BrowserVoiceApp() {
         for (const part of modelTurn?.parts ?? []) {
           const inline = part.inlineData as Record<string, unknown> | undefined;
           if (typeof inline?.data === "string") playPcmAudio(inline.data, outputRate);
+          if (part.thought === true && typeof part.text === "string") showVoiceActivity(part.text);
         }
         const input = content?.inputTranscription as Record<string, unknown> | undefined;
         const output = content?.outputTranscription as Record<string, unknown> | undefined;
@@ -419,7 +463,11 @@ export function BrowserVoiceApp() {
         for (const call of toolCall?.functionCalls ?? []) void executeVoiceToolCall({
           type: "gemini.tool_call", name: call.name, call_id: call.id, arguments: JSON.stringify(call.args ?? {}),
         });
-        if (content?.turnComplete) { setVoiceState("live"); setStatusText("Listening"); }
+        if (content?.turnComplete) {
+          setVoiceState("live"); setStatusText("Listening");
+          if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
+          activityTimerRef.current = setTimeout(() => setVoiceActivity([]), 4000);
+        }
         return;
       }
       if (event.type === "response.output_audio.delta" && typeof event.delta === "string") playPcmAudio(event.delta, outputRate);
@@ -438,6 +486,9 @@ export function BrowserVoiceApp() {
       transcriptEntryIndex: entryIndex, providerPayload: payload,
     });
     pendingTranscriptWritesRef.current.push(write);
+    // Observe rejection now, but retain the original promise for close-time
+    // acknowledgment. Catching it must not turn failed capture into success.
+    void write.catch(() => setError("A transcript update could not be saved."));
   }
 
   function playPcmAudio(encoded: string, sampleRate: number) {
@@ -456,12 +507,33 @@ export function BrowserVoiceApp() {
     try {
       const event = JSON.parse(raw) as Record<string, unknown>;
       const type = String(event.type || "");
+      if (type === "response.reasoning_summary_text.done" && typeof event.text === "string")
+        showVoiceActivity(event.text);
+      if (type === "response.done") {
+        const response = event.response as { output?: Array<{ type?: string; summary?: Array<{ text?: string }> }> } | undefined;
+        for (const item of response?.output ?? [])
+          if (item.type === "reasoning") for (const summary of item.summary ?? [])
+            if (summary.text) setVoiceActivity(items => items.includes(summary.text!) ? items : [...items, summary.text!].slice(-20));
+        if (!(response?.output ?? []).some(item => item.type === "function_call"))
+          activityTimerRef.current = setTimeout(() => setVoiceActivity([]), 4000);
+      }
+
+      if ((type === "response.done" || type === "response.function_call_arguments.done") && voiceSessionIdRef.current) {
+        const write = localApi.captureVoiceEvent(voiceSessionIdRef.current, {
+          providerEventId: typeof event.event_id === "string" ? event.event_id : crypto.randomUUID(),
+          eventType: type, role: "assistant", providerPayload: event,
+        });
+        pendingTranscriptWritesRef.current.push(write);
+        void write.catch(() => setError("Original response evidence could not be saved."));
+      }
       if (type === "session.updated" && awaitingInitialSessionUpdateRef.current)
         sendConnectGreeting();
       if (type === "response.function_call_arguments.done") {
         toolCallQueueRef.current = toolCallQueueRef.current
           .then(() => executeVoiceToolCall(event))
           .catch((caught) => {
+            showVoiceActivity("Tool execution failed.");
+            activityTimerRef.current = setTimeout(() => setVoiceActivity([]), 4000);
             setError(
               caught instanceof Error
                 ? caught.message
@@ -469,12 +541,16 @@ export function BrowserVoiceApp() {
             );
           });
       }
+      if (type === "conversation.item.input_audio_transcription.delta") voicePreparationRef.current?.conversationDelta(event);
       if (type === "input_audio_buffer.speech_started") {
+        clearVoiceActivity();
+        if (typeof event.item_id === "string") voicePreparationRef.current?.speechStarted(event.item_id);
         setVoiceState("live");
         setStatusText("Listening");
         setSubStatus("Listening…");
       }
       if (type === "input_audio_buffer.speech_stopped") {
+        if (typeof event.item_id === "string") voicePreparationRef.current?.speechStopped(event.item_id);
         setVoiceState("responding");
         setStatusText("Responding");
         setSubStatus("Generating reply…");
@@ -529,6 +605,12 @@ export function BrowserVoiceApp() {
             providerPayload: event,
           });
           pendingTranscriptWritesRef.current.push(write);
+          if (userFinal && typeof event.item_id === "string") {
+            const preparation=voicePreparationRef.current, item=event.item_id;
+            void write.then(() => {
+              if (voicePreparationRef.current === preparation) preparation?.completedTranscript(item,text);
+            }).catch(() => {});
+          }
           void write.catch((caught) =>
             setError(
               caught instanceof Error
@@ -568,6 +650,7 @@ export function BrowserVoiceApp() {
     } else if (event.arguments && typeof event.arguments === "object" && !Array.isArray(event.arguments)) {
       args = event.arguments as Record<string, unknown>;
     }
+    showVoiceActivity(`Running ${name}`);
     args = normalizeWorkspaceToolArguments(name, args);
     const utterance = lastUserUtteranceRef.current;
     const browserResult = await tryFulfillBrowserLocalVoiceTool(name, args);
@@ -581,7 +664,8 @@ export function BrowserVoiceApp() {
     if (!browserResult) {
       result = await overlayLiveBrowserLocalSearch(name, args, result);
     }
-    if (result.resonoSessionUpdate) send(result.resonoSessionUpdate);
+    showVoiceActivity(`${name}: ${result.isError ? "failed" : "completed"}`);
+    if (result.resonoSessionUpdate) send(voicePreparationRef.current?.sessionUpdate(result.resonoSessionUpdate) ?? result.resonoSessionUpdate);
     if (providerProtocolRef.current === "google-live-bidi") {
       send({ toolResponse: { functionResponses: [{ id: callId, name, response: result }] } });
       return;
@@ -598,6 +682,8 @@ export function BrowserVoiceApp() {
   }
 
   async function closeVoice(notifyServer: boolean) {
+    clearVoiceActivity();
+    voicePreparationRef.current?.close(); voicePreparationRef.current = null;
     const id = voiceSessionIdRef.current;
     voiceSessionIdRef.current = null;
     channelRef.current?.close();
@@ -615,9 +701,11 @@ export function BrowserVoiceApp() {
     streamRef.current = null;
     if (notifyServer && id) {
       const pending = pendingTranscriptWritesRef.current.splice(0);
-      await Promise.allSettled(pending);
+      const transcriptCaptureFailures = await countFailedTranscriptWrites(pending);
       try {
-        await localApi.closeVoice(id);
+        await localApi.closeVoice(id, { transcriptCaptureFailures });
+        if (transcriptCaptureFailures)
+          setError("Some transcript updates could not be saved. Session review was blocked to avoid learning from incomplete history.");
       } catch (caught) {
         setError(
           caught instanceof Error
@@ -647,7 +735,7 @@ export function BrowserVoiceApp() {
     );
 
   const shellTitle =
-    destination === "capabilities"
+    destination === "chat" ? "Chat" : destination === "capabilities"
       ? "Capabilities"
       : destination === "documents"
         ? "Documents"
@@ -677,7 +765,7 @@ export function BrowserVoiceApp() {
         style={{ display: "none" }}
       />
       <section
-        className={`browser-voice-card ${activeUser ? `browser-voice-app-frame${destination === "workspace" ? " is-workspace-page" : ""}` : "is-login-page"}`}
+        className={`browser-voice-card ${activeUser ? `browser-voice-app-frame${destination === "chat" ? " is-chat-page" : destination === "workspace" ? " is-workspace-page" : ""}` : "is-login-page"}`}
       >
         {activeUser ? (
           <aside className="browser-voice-desktop-rail">
@@ -919,13 +1007,18 @@ export function BrowserVoiceApp() {
             )}
           </section>
         ) : (
-          <div className={`browser-voice-content-surface ${destination === "workspace" ? "is-workspace" : "is-management"}`}>
+          <div className={`browser-voice-content-surface ${destination === "chat" ? "is-chat" : destination === "workspace" ? "is-workspace" : "is-management"}`}>
+            {chatMounted ? <Suspense fallback={destination === "chat" ? <p role="status">Loading Chat…</p> : null}>
+              <ChatPanel key={`${activeUser.userId}:${activeUser.activeWorkspaceId}`} active={destination === "chat"}
+                voiceActive={isLive} voiceBusy={voiceState === "connecting"} onToggleVoice={() => void toggleVoice()} />
+            </Suspense> : null}
             {destination === "home" ? (
               <HomeVoice
                 voiceState={voiceState}
                 statusText={statusText}
                 subStatus={subStatus}
                 isLive={isLive}
+                activity={voicePreparation ? [] : voiceActivity}
                 onToggle={() => void toggleVoice()}
               />
             ) : null}
@@ -1000,6 +1093,7 @@ export function BrowserVoiceApp() {
           />
         ) : null}
       </section>
+      {activeUser && destination === "home" && voicePreparation ? <div className="browser-voice-live-preparation"><LivePreparationPanel value={voicePreparation} /></div> : null}
       {activeUser ? <PluginImportDialogHost /> : null}
     </main>
   );
@@ -1047,12 +1141,14 @@ function HomeVoice({
   subStatus,
   isLive,
   onToggle,
+  activity,
 }: {
   voiceState: VoiceState;
   statusText: string;
   subStatus: string;
   isLive: boolean;
   onToggle: () => void;
+  activity: string[];
 }) {
   const responseTextRef = useRef<HTMLParagraphElement>(null);
 
@@ -1122,6 +1218,10 @@ function HomeVoice({
           </div>
         </section>
       </div>
+      {activity.length ? <aside className="browser-voice-live-activity" aria-label="Voice reasoning and tool activity" aria-live="polite">
+        <strong>Live activity</strong>
+        {activity.map((text, index) => <p key={index}>{text}</p>)}
+      </aside> : null}
     </>
   );
 }

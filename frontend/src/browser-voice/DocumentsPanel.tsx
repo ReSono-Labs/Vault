@@ -11,7 +11,7 @@ const documents: DocumentDefinition[] = [
   { id: "link", title: "ReSono Labs Link", summary: "Add a Custom HTTP/WebSocket Link service for Vault remote access.", href: "/resono-labs-link.md" },
   { id: "bridge", title: "Local Connection Bridge", summary: "Connect trusted local applications that need HTTP or WebSockets.", href: "/local-connection-bridge.md" },
   { id: "agent-memory", title: "Hermes & OpenClaw Memory", summary: "Connect agents to shared Vault memory and session recall.", href: "/hermes-openclaw-memory.md" },
-  { id: "plugin-kit", title: "Vault Plugin Kit", summary: "Build Agent Plugins, including package-data migration, Workspace file import, and local folder linking.", href: "/vault-plugin-kit.md" },
+  { id: "plugin-kit", title: "Vault Plugin Kit", summary: "Create Agent Plugins, including package-data migration, Workspace file import, and local folder linking.", href: "/vault-plugin-kit.md" },
   { id: "mcp-kit", title: "Vault MCP Package Kit", summary: "Ship hosted MCP packages with migration ingestion, companion plugins, and supervised sidecars.", href: "/vault-mcp-package-kit.md" },
 ];
 

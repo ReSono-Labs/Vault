@@ -170,6 +170,20 @@ export function ConnectionsPanel() {
       }
     } catch (caught) { setError(caught instanceof Error ? caught.message : "OAuth could not be connected."); }
   }
+  // Both a saved API key and OAuth can stay connected; this chooses which one the conversation uses.
+  // Live transcription and Web search use the API key either way.
+  async function switchMethod() {
+    if (!provider) return;
+    setError(null); setOauthMessage(null);
+    const oauthMethod = providerKey === "openai" ? "chatgpt_oauth" : providerKey === "xai" ? "xai_oauth" : "gemini_oauth";
+    const next = provider.authMethod === "api_key" ? oauthMethod : "api_key";
+    try {
+      const current = await localApi.selectProviderAuth(providerKey, next);
+      setProvider({ ...provider, ...current });
+      setProviders((items) => items.map((item) => item.providerKey === providerKey ? { ...item, ...current } : item));
+      setOauthMessage(next === "api_key" ? "API key selected." : "OAuth selected.");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Connection could not be switched."); }
+  }
   async function disconnectOAuth() {
     setError(null); setOauthMessage(null);
     try {
@@ -282,12 +296,12 @@ export function ConnectionsPanel() {
       {activeTab === "provider" ? <section aria-labelledby="connections-provider-tab" className="browser-voice-management-section browser-voice-connection-tab-panel" id="connections-provider-panel" role="tabpanel">
       <div className="browser-voice-section-head"><div><span className="browser-voice-eyebrow-label">AI &amp; Voice</span><h3>Provider settings</h3><p>The selected provider runs Voice and all background AI work. Embeddings remain separate.</p></div><span className={`browser-voice-state ${provider?.configured ? "is-ready" : ""}`}>{provider?.selected ? "Selected" : provider?.configured ? "Configured" : "Needs setup"}</span></div>
       <form className="browser-voice-form is-two-column" onSubmit={(event) => void saveProvider(event)}>
-        <p className="browser-voice-form-note">{provider?.oauthConnected && provider.authMethod !== "api_key" ? "OAuth is active. Leave the API key blank to save model and voice settings only." : "The API key is encrypted locally and is never returned to the browser."}</p>
+        <p className="browser-voice-form-note">{provider?.oauthConnected && provider.authMethod !== "api_key" ? "OAuth is active. An API key saved here is used for live transcription and Web search. Leave it blank to save model and voice settings only." : "The API key is encrypted locally and is never returned to the browser."}</p>
         <label><span>AI provider</span><select aria-label="AI provider" onChange={(event) => chooseProvider(event.target.value)} value={providerKey}>{providers.map((item) => <option key={item.providerKey} value={item.providerKey}>{item.displayName ?? item.providerKey}</option>)}</select></label>
-        <label><span>{provider?.displayName ?? "Provider"} API key</span><input autoComplete="off" onChange={(event) => setApiKey(event.target.value)} placeholder={provider?.oauthConnected && provider.authMethod !== "api_key" ? "Optional — leave blank to keep OAuth" : undefined} required={!(provider?.oauthConnected && provider.authMethod !== "api_key")} type="password" value={apiKey} /></label>
+        <label><span>{provider?.displayName ?? "Provider"} API key</span><input autoComplete="off" onChange={(event) => setApiKey(event.target.value)} placeholder={provider?.oauthConnected && provider.authMethod !== "api_key" ? "Optional — used for live transcription and Web search" : undefined} required={!(provider?.oauthConnected && provider.authMethod !== "api_key")} type="password" value={apiKey} /></label>
         <label><span>Voice model</span>{voiceModelOptions.length ? <select onChange={(event) => setModelKey(event.target.value)} value={modelKey}>{voiceModelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select> : <input onChange={(event) => setModelKey(event.target.value)} required value={modelKey} />}</label>
         <label><span>Background text model</span><select onChange={(event) => setBackgroundModelKey(event.target.value)} value={backgroundModelKey}>{backgroundModelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-        {providerKey === "openai" || providerKey === "gemini" || providerKey === "xai" ? <div className="browser-voice-inline-actions">{provider?.oauthConnected ? <button className="browser-voice-pill" onClick={() => void disconnectOAuth()} type="button">Disconnect OAuth</button> : <button className="browser-voice-pill" onClick={() => void connectOAuth()} type="button">{providerKey === "openai" ? "ChatGPT OAuth" : providerKey === "xai" ? "xAI OAuth" : "Gemini OAuth"}</button>}{oauthMessage ? <span className="browser-voice-form-note" role="status">{oauthMessage}</span> : null}</div> : null}
+        {providerKey === "openai" || providerKey === "gemini" || providerKey === "xai" ? <div className="browser-voice-inline-actions">{provider?.oauthConnected ? <button className="browser-voice-pill" onClick={() => void disconnectOAuth()} type="button">Disconnect OAuth</button> : <button className="browser-voice-pill" onClick={() => void connectOAuth()} type="button">{providerKey === "openai" ? "ChatGPT OAuth" : providerKey === "xai" ? "xAI OAuth" : "Gemini OAuth"}</button>}{provider?.oauthConnected && provider.apiKeyConnected ? <button className="browser-voice-pill" onClick={() => void switchMethod()} type="button">{provider.authMethod === "api_key" ? "Use OAuth" : "Use API key"}</button> : null}{oauthMessage ? <span className="browser-voice-form-note" role="status">{oauthMessage}</span> : null}</div> : null}
         <div className="browser-voice-inline-actions"><button className="browser-voice-submit" type="submit">Save settings</button>{provider?.configured && !provider.selected ? <button className="browser-voice-pill" onClick={() => void useProvider()} type="button">Use provider</button> : null}</div>
       </form>
       </section> : null}

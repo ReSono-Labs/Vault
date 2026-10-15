@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BrowserVoiceApp,
   voiceStartErrorMessage,
+  countFailedTranscriptWrites,
 } from "@/browser-voice/BrowserVoiceApp";
 
 function response(value: unknown, status = 200) {
@@ -15,6 +16,18 @@ function response(value: unknown, status = 200) {
 }
 
 describe("standalone Browser Voice shell", () => {
+  it("counts failed transcript writes after every queued capture settles", async () => {
+    let finish: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    let settled = false;
+    const result = countFailedTranscriptWrites([pending, Promise.reject(new Error("capture failed")), Promise.resolve()])
+      .then((count) => { settled = true; return count; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finish!();
+    expect(await result).toBe(1);
+    expect(await countFailedTranscriptWrites([])).toBe(0);
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     sessionStorage.clear();
@@ -255,7 +268,7 @@ describe("standalone Browser Voice shell", () => {
     expect(
       screen.getAllByRole("button", { name: "Library" }).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Agents" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Agent2Agent" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Devices" }),
     ).not.toBeInTheDocument();
@@ -273,7 +286,7 @@ describe("standalone Browser Voice shell", () => {
     expect(screen.getByRole("heading", { name: "Plugins" })).toBeInTheDocument();
     expect(screen.getByText("Let Voice and the Background Agent talk to other A2A agents.")).toBeInTheDocument();
     expect(screen.queryByText("Collab")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agent2Agent" }));
     expect(screen.getByRole("button", { name: "Connect agent" })).toBeDisabled();
     expect(screen.getByText(/Turn on Agent2Agent under Library/)).toBeInTheDocument();
     expect(screen.queryByText("Inbound Agent Card")).not.toBeInTheDocument();
@@ -285,7 +298,7 @@ describe("standalone Browser Voice shell", () => {
     expect(await screen.findByRole("heading", { name: "OpenClaw" })).toBeInTheDocument();
     expect(screen.getAllByText("Background Agent").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Finished the requested repository review.")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
+    fireEvent.click(screen.getByRole("button", { name: "Background Agent" }));
     expect(await screen.findByRole("heading", { name: "Delegated work" })).toBeInTheDocument();
     expect(screen.getByText("Review work delegated by Voice. This page does not start runs.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run logs" })).toBeInTheDocument();
@@ -327,12 +340,39 @@ describe("standalone Browser Voice shell", () => {
     );
     render(<BrowserVoiceApp />);
     await screen.findByRole("heading", { name: "Voice" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agent2Agent" }));
     expect(await screen.findByRole("heading", { name: "Inbound Agent Card" })).toBeInTheDocument();
     expect(screen.getByText("http://127.0.0.1:8768/.well-known/agent-card.json")).toBeInTheDocument();
     expect(screen.getByText("inbound-secret")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect agent" })).toBeEnabled();
     expect(screen.queryByText("Agent2Agent Collab")).not.toBeInTheDocument();
+  });
+
+  it("lets the owner switch between OAuth and the saved API key without disconnecting either", async () => {
+    const user = { userId: "u", username: "owner", displayName: "Local Owner", experienceStyle: "strict",
+      isDeviceOwner: true, activeWorkspaceId: "w" };
+    const openai = { providerKey: "openai", configured: true, modelKey: "gpt-realtime-2.1-mini",
+      backgroundModelKey: "gpt-5.6-luna", voice: "marin", updatedAt: null, selected: true,
+      authMethod: "chatgpt_oauth", apiKeyConnected: true, oauthConnected: true };
+    const posts: { path: string; body: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (init?.method === "POST") posts.push({ path, body: String(init.body) });
+      if (path === "/identity/status") return response({ setupComplete: true });
+      if (path === "/me") return response({ user });
+      if (path === "/extensions") return response({ items: [] });
+      if (path === "/extensions/runtime") return response({ safeMode: true });
+      if (path === "/providers/openai") return response(openai);
+      if (path === "/providers/openai/auth-method") return response({ ...openai, authMethod: "api_key" });
+      return response({}, 404);
+    }));
+    render(<BrowserVoiceApp />);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Connections" }))[0]);
+    expect(await screen.findByText(/An API key saved here is used for live transcription and Web search/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Use API key" }));
+    expect(await screen.findByRole("button", { name: "Use OAuth" })).toBeInTheDocument();
+    expect(posts).toContainEqual({ path: "/providers/openai/auth-method", body: JSON.stringify({ authMethod: "api_key" }) });
+    expect(screen.getByRole("button", { name: "Disconnect OAuth" })).toBeInTheDocument();
   });
 
   it("connections exposes Voice infrastructure, agent memory, Mail, Calendar, and modular MCP", async () => {

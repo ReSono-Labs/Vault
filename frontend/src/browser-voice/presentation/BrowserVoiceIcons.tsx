@@ -1,3 +1,4 @@
+import { useRef } from "react";
 type IconProps = {
   className?: string;
 };
@@ -137,7 +138,11 @@ export function BrowserVoiceSettingsIcon({ className }: IconProps) {
   );
 }
 
-export type BrowserVoiceDestination = "account" | "agent2agent" | "background" | "capabilities" | "connections" | "documents" | "home" | "memory" | "settings" | "workspace";
+export type BrowserVoiceDestination = "account" | "agent2agent" | "background" | "capabilities" | "chat" | "connections" | "documents" | "home" | "memory" | "settings" | "workspace";
+
+function ChatIcon({ className }: IconProps) {
+  return <svg {...sharedIconProps} className={className}><path d="M4 4h16v12H9l-5 4V4Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>;
+}
 
 export function BrowserVoiceFutureNavigation({
   activeDestination = "home",
@@ -148,8 +153,10 @@ export function BrowserVoiceFutureNavigation({
   onNavigate?: (destination: BrowserVoiceDestination) => void;
   placement: "desktop" | "mobile";
 }) {
+  const drawer = useRef<HTMLDialogElement>(null);
   const items = [
     { key: "home", label: placement === "desktop" ? "Overview" : "Voice", icon: BrowserVoiceHomeIcon },
+    { key: "chat", label: "Chat", icon: ChatIcon },
     { key: "workspace", label: placement === "desktop" ? "Workspace" : "Files", icon: BrowserVoiceWorkspaceIcon },
     { key: "capabilities", label: placement === "desktop" ? "Library" : "Library", icon: BrowserVoiceAgentsIcon },
     { key: "connections", label: placement === "desktop" ? "Connections" : "Connect", icon: BrowserVoiceConnectionsIcon },
@@ -160,7 +167,7 @@ export function BrowserVoiceFutureNavigation({
     { key: "settings", label: "Settings", icon: BrowserVoiceSettingsIcon },
     { key: "account", label: "Accounts", icon: BrowserVoiceDevicesIcon },
   ];
-  return (
+  const navigation = (
     <nav aria-label={`${placement === "desktop" ? "Desktop" : "Mobile"} future navigation`} className={`browser-voice-future-nav is-${placement}`}>
       {items.map((item) => {
         const Icon = item.icon;
@@ -171,7 +178,7 @@ export function BrowserVoiceFutureNavigation({
             className={onNavigate && activeDestination === item.key ? "is-active" : ""}
             disabled={!available || !onNavigate}
             key={item.key}
-            onClick={() => onNavigate?.(item.key as BrowserVoiceDestination)}
+            onClick={() => { onNavigate?.(item.key as BrowserVoiceDestination); drawer.current?.close(); }}
             title={available ? item.label : `${item.label} is not available yet`}
             type="button"
           >
@@ -182,4 +189,12 @@ export function BrowserVoiceFutureNavigation({
       })}
     </nav>
   );
+  if (placement === "desktop") return navigation;
+  return <div className="browser-voice-mobile-menu">
+    <button className="browser-voice-mobile-menu-trigger" type="button" onClick={() => drawer.current?.showModal()} aria-haspopup="dialog">Menu</button>
+    <dialog ref={drawer} className="browser-voice-mobile-menu-drawer" aria-label="Navigation" onClick={event => { if (event.target === event.currentTarget) drawer.current?.close(); }}>
+      <header><strong>Navigation</strong><button type="button" onClick={() => drawer.current?.close()} aria-label="Close navigation">Close</button></header>
+      {navigation}
+    </dialog>
+  </div>;
 }
