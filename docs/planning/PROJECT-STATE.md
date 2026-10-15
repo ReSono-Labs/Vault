@@ -1,6 +1,762 @@
-# Project state (index)
+# Project state
 
-Date: 2026-09-17  
+## CURRENT — completion under existing contracts
+
+Current working-tree application is now built and deployed to the existing local
+Docker package at https://127.0.0.1:8765. Latest Chat drawer image `bd7a2fbfdb45`, healthy services;
+all243 runtime Python files match workspace source. Backup and prior image retained.
+See the latest section in existing local-deployment evidence. Historical learning
+submission still needs code; real-provider/installed-data acceptance remains open.
+Deployment health is not a declaration of full feature completion.
+
+Latest approved action: complete explicit-user semantic forgetting in the existing
+Chat/Voice factual learning path. C13D now records the shared reviewer comparison,
+original retained-history digest resolution, atomic forget fence and existing
+explicit-remember override. No new agent/store/capture system or contract document.
+Missing retained meaning fails closed and remains retryable; full-project build
+readiness and real-provider acceptance are not claimed by this scoped change.
+
+Previous owner instruction narrowed that action to wiring Voice into the existing
+Chat learning path and stopping. Voice now shares the procedural publisher,
+reconciler and activation path; existing session logs supply answer and candidate
+user feedback evidence. No server-side capture system was implemented. See the
+owner-directed correction in existing C14G. Other remaining work is not part of
+this narrow action and full build readiness is not claimed.
+
+Owner instruction: resolve drift and finish the existing feature scope. Reuse
+existing contracts; create no new contracts. The contract register is the only
+current allocation/status list. Historical checkpoints below are evidence only.
+
+Use register r49 as the only remaining-work queue. Do not restart implemented
+history, Chat memory/provider adaptation, private input staging or Voice retry
+work because an older absence statement says it is missing. Extend the actual
+owners and verify their remaining acceptance scenarios before deployment.
+Existing modules, stores, providers, tool authority and workers remain owners.
+No parent/child contract is an additional implementation of already delivered work.
+Completion means demonstrated behavior, not contract count or isolated test count.
+Completion pass now implements paginated display history, Chat memory confirmations
+and explicit remember over existing owners, Gemini via the shared SDK protocol,
+private submitted image/document inputs, and Voice factual checkpoints/windows with
+shared durable retry intent. Contracts C03A/C08A/C04D were amended in place; no new
+contract document was created. Frontend41 checks and production build pass; frozen
+Docker build has succeeded. Full backend regression is running and source is newer
+than the earlier deployed image. Remaining parent gaps stay explicit in register
+r48; compile success is not evidence of full feature/release acceptance.
+
+## HISTORICAL — October8 mounted Chat procedural learning and live learned rules
+
+Owner now authorizes local package deployment. Register r46 owns status.
+Current bounded package is deployed and healthy; exact image/source verification,
+backup and outstanding scope: [deployment evidence](../evidence/2026-10-08-live-memory-local-deployment.md).
+Use existing production compose/configuration and backup workflow, preserve both
+production volumes and prior image, verify current source in the running image
+and health/static/unauthenticated-denial boundaries. Deployment is not full-build
+acceptance. No new agent/model/scheduler/storage architecture is allocated.
+Chat provenance suppression now uses validated source_ref_json in the SAME
+canonical guard;7 isolated-DB checks pass, including same-source paraphrase replay.
+Changed-identity/new-source semantic suppression and controlled rebuild stay open.
+
+C04H automatically rotates continuous Chat at completed-turn boundaries using
+the existing seal/queue/worker/context path (32 turns or48000 input/event bytes).
+No idle wait, new model, schema, scheduler or transcript copy. Same conversation
+and history_version semantics are preserved. Individual oversized turns, source
+qualification/windowing and display pagination remain open. Register r45 owns
+current status; older entries below retain their dated proof boundaries.
+[Contract/evidence](../contracts/2026-10-08-LMD-C04H-active-segment-boundary.md).
+
+C04G adds resumable procedural ASSESSMENT/OUTPUT windows in the existing shared
+reviewer/lease/stage path. Each call retains ALL captured source evidence while
+assessing at most16 points;32-proposal pages have explicit continuation, visible
+prior behavior records and fixed assessments. Saved pages survive retry, exact
+duplicate behavior unions evidence, and only the full validated aggregate proceeds
+to existing reconciliation/publication. No second worker/model/source store.
+[Exact proof/bounds](../reviews/2026-10-08-C04G-procedural-window-evidence.md).
+Input-source overflow/oversized individual evidence, full semantic consolidation,
+Voice qualification/recovery and other audited remaining seams are still open.
+
+C04F follows the owner's instruction to reuse Voice session context rather than
+invent a separate long-history compaction subsystem. Voice and Chat share the
+unchanged4096-character prior-summary formatter. Chat supplies its actual active
+segment, latest already-completed earlier summary from the same conversation,
+and existing selected memory. Original saved history/analysis evidence is intact.
+Version3 context qualification verifies segment history and original summary
+references; old version2 stays on its original verification path. Mounted proof:
+[C04F](../reviews/2026-10-08-C04F-session-context-evidence.md).
+Remaining: active-segment overflow handling, display-history pagination and
+procedural/Voice windows, plus the other audited seams. No separate compaction
+model/service is allocated by the older prose below.
+
+C04D2 now mounts resumable factual Chat review over the complete sealed source,
+including oversized entries and more than32 facts. Validated pages are durably
+bound to source/provider/model/input; retry reuses them. Exact-key cross-window
+corrections and bounded summaries are consolidated by the same configured review
+model, then published through the existing atomic MemoryPipeline transaction.
+No new worker/model identity or copied transcript. See
+[C04D2 evidence](../reviews/2026-10-08-C04D2-chat-window-evidence.md).
+This supersedes factual Chat window absence below only. C04F separately closes
+bounded model-context handoff by Voice reuse; active-segment overflow, procedural/
+Voice windows and the other audited remaining seams are still open.
+
+Owner-requested remaining-build audit completed against the working tree after
+C04E; [feature-by-feature code evidence](../reviews/2026-10-08-remaining-build-code-revalidation.md).
+All six remaining groups are confirmed partial/missing at the specific seams
+listed there; none authorizes a greenfield replacement. Corrected stale parent
+entries for delivered indexed cutover, setting UI, Chat recovery and actual
+Decisions HTTP transport. No code, tests, provider/installed-history access or
+implementation in this audit. Next build remains reviewed long-Chat context/
+analysis delta; C04D1 spans and C04E idle/coverage are already delivered.
+
+C04E now triggers review after Chat inactivity (120s default, existing dispatcher
+polls every30s) without ending the saved conversation. Typing sends only throttled
+text-free activity; active responses/new traffic prevent stale idle sealing.
+Existing worker/checkpoints record independent memory/decision coverage and exact
+turn boundaries. Successful consumer is skipped on retry; empty output is reviewed
+with no proposal, not unreviewed. Original publication/activation states remain
+distinct. Authenticated review-status exposes scoped markers. Full windowing and
+large-history compaction remain unfinished, not implied by idle checkpointing.
+[C04E contract/evidence](../contracts/2026-10-08-LMD-C04E-idle-review.md).
+
+C04D1 now mounts exact original Chat source references on canonical factual
+evidence, through the existing shared publication transaction. Pure bounded
+source-span partition/coverage validation is implemented and checked against a
+long session and altered ranges. No second reviewer, store or worker. This is the
+provenance prerequisite, not full windowed analysis: current overflow guards stay
+until resumable steps, dense-candidate continuation and cross-window consolidation
+are built. [Contract/evidence](../contracts/2026-10-08-LMD-C04D1-exact-source-spans.md).
+
+C06F closes the supported Voice live mount by reusing the SAME VoiceMem host,
+parallel preparation, worker budget, selector and indexed memory engine as Chat.
+Actual Voice conversation/capture/tools/factual review were already wired; those
+were not rebuilt. API-key OpenAI uses dedicated live transcription and controlled
+final-context handoff. Other providers/OAuth retain ordinary Voice. OAuth sidecar
+entitlement and actual microphone/provider performance remain unverified; Voice
+procedural source qualification remains separately open.
+
+C04C adds durable Chat review dispatch/restart recovery on existing sealed segment
+metadata and bounded workers. No new learning model/queue store or tool replay.
+Current authority is revalidated; old unqueued sessions are not backfilled.
+This closes Chat scheduling recovery only, not long-session windows or Voice.
+
+Branch `feature/live-memory-decisions`; register r45 owns status. The mounted Chat
+path captures original final/model/tool/context evidence, seals resumable session
+segments, runs the existing configured review model with the separate procedural
+v3 prompt, assesses resolution/usefulness/context/tool/results/satisfaction, and
+publishes real indexed examples. Current-source/grant-gated read-only activation
+now feeds the SAME VoiceMem/parallel memory preparation path and Decisions selector.
+The actual mounted test proves learned preview before Send, exact final reuse,
+second-segment example-only version advance without duplicate definitions, current
+grant denial and source-erasure invalidation. Catalog context is bound to the
+original review; activation does not invalidate its own fingerprint. No paid calls.
+
+Not a full-build/release completion: Voice causal source qualification, complete-session
+windows/Voice recovery, Chat confirmations/provider parity,
+attachments, full semantic suppression/rebuild, historical audit and representative
+quality/latency/cost/removal evidence remain in the reconciled parent scope. Old
+CURRENT sections below are dated checkpoints, not permission to duplicate work.
+[October8 evidence](../reviews/2026-10-08-C14H-C13D-evidence.md).
+The remaining full-session audit also found legacy factual reviewer input/candidate
+clipping. C04A now fails explicitly before falsely publishing a completed prefix;
+48 focused tests pass. This safety guard is NOT full bounded-window analysis.
+
+C14N now adds post-analysis HNSW candidate search and a second structured call to
+the SAME configured background review model before learned-rule save. Its prompt
+classifies example-only reuse, additive nuance/revision, genuinely distinct behavior,
+or deferral; code preserves assessments/citations and existing safeguards. Stages
+are retry checkpoints in the existing scoped review row, not another agent/store.
+[Exact implementation and bounded proof](../reviews/2026-10-08-C14N-reconciliation-evidence.md).
+
+C08B now mounts ended-segment factual Chat review independently of Decisions,
+reusing Voice's configured factual reviewer and canonical memory reconciliation,
+not copying Chat into Voice transcript rows. Canonical saves/checkpoint are one
+transaction; retry skips completed analysis/publication. Existing scoped real
+embedding store handles accepted active facts. Current short-session limits remain
+explicit; full C04 windows/recovery and the larger release are NOT closed.
+[Current bounded evidence](../reviews/2026-10-08-C08B-chat-factual-evidence.md).
+This grouping is internally verified; source revocation during review blocks saves,
+failed atomic publication leaves no canonical partial fact, and procedural review
+continues independently. Next existing parent grouping is C04 complete-session
+analysis/recovery; do not rebuild C08A/B or verified C14 children.
+
+October8 no-duplication correction: Chat had repeated the candidate publication
+and embedding loops despite reusing canonical storage. Those loops now live ONLY
+in MemoryPipeline and both channels call them. Citations validate before writes;
+a partial Voice summary cannot masquerade as completed ingestion. C04B extends the
+EXISTING Chat checkpoint with reviewed/completed state; failed save retry reuses
+validated model output, bound to source/provider/model, before atomic publication.
+No new table/worker/model runner was added for that retry. Scope/code reconciliation:
+[current evidence](../reviews/2026-10-08-scope-and-duplication-reconciliation.md).
+
+## HISTORICAL — C06E Chat live preparation and C13C indexed startup
+
+Owner requested completion for watching memory/tool choices while typing. Existing
+VoiceMem/canonical parallel ports now have a production Chat host plus authenticated
+revision/status/discard routes and real provisional UI observer. Existing selector
+uses standalone Decisions HTTP transport, current grants/catalog finite cold-start
+tool choices (not learned rules). First mounted isolated DB check passed after
+correcting per-tool grant-read latency with a canonical batched read. Two new
+frontend observer checks pass. Exact immutable-final recall handoff added; its
+mounted acceptance and indexed startup now pass. Learned catalog integration and
+remaining full-build gates are still in progress, not release-complete.
+[Current bounded evidence](../reviews/2026-10-07-LMD-C06E-C13C-evidence.md).
+[C06E contract](../contracts/2026-10-07-LMD-C06E-chat-live-mount.md). No paid calls,
+installed database experiments, new agent or duplicate memory/decision loop.
+
+## HISTORICAL — Chat mic hidden, Voice page preserved
+
+Owner BP-R05 supersedes visible Chat-mic requirement only. C09C hides the existing
+button without layout/accessibility presence; original Voice callback/state props
+remain intact for simple restoration. Voice page/host/transport unchanged. Exact
+[restoration and verification](../reviews/2026-10-07-LMD-C09C-evidence.md).
+Register r24 owns current status. No remaining live/learning requirement removed.
+
+## HISTORICAL — mobile Chat inspected and corrected
+
+C09B actual Chrome mobile/tablet emulation at 360×800, 390×844, 768×1024 and
+667×375 found/fixed short-landscape composer/navigation overlap. Chat-owned viewport
+measurement, compact sessions/composer and 44px controls preserve existing Voice
+shell/navigation. Long text/URLs wrap; screenshots/geometry are saved in
+[mobile evidence](../reviews/2026-10-07-LMD-C09B-mobile-evidence.md). Production build
+and 21 focused checks pass. Physical mobile keyboard and full Markdown formatting
+acceptance remain open. Register r23 owns status; live display is still planned.
+
+## HISTORICAL owner addition — live preparation display, planned
+
+[LC-R05–07](2026-10-07-live-recall-context-grounding.md) captures the requested
+compact display inside Chat while typing: actual memory selection and proposed
+decision/tool route, evolving with the current draft, disappearing immediately on
+Send. Safe backend diagnostics remain for stress-test analysis; no durable draft
+learning or display-only model/search loop. Existing C06/C06D/C09 own this, after
+real shared live preparation is proved. Not implemented by the current Chat panel.
+Register r22 controls allocation; the verified C08A/C09A build is not being rebuilt.
+
+## HISTORICAL — submitted-text backend and separate Chat mounted, 2026-10-07
+
+C08A is mounted in actual production composition/local API: immutable final Send,
+configured text model/shared SDK, canonical memory context, original readable model
+source before tool dispatch, real conversation/turn claims in the existing tool
+authority, replayable durable SSE, Stop and shutdown. No fake Voice session or new
+agent/grant ledger. Initial two mounted checks passed; subsequent history source
+rehydration found an incorrect existing-column reference, corrected to prepared_at.
+Final three mounted checks and 54 focused units pass, including actual writes,
+post-effect capture failure without repetition, revoked grants, ownership, Stop,
+failed worker startup and stale orphan recovery. [C08A evidence](../reviews/2026-10-07-LMD-C08A-build-evidence.md).
+Separate Chat is lazily mounted over that API, with pinned React18-compatible
+assistant-ui primitives, transient scope-owned drafts, canonical history, durable
+stream replay and existing Voice mic delegation. Navigation preserves Voice and
+does not cancel/rerun text work. [C09A evidence](../reviews/2026-10-07-LMD-C09A-build-evidence.md).
+Register r21 owns status. Full responsive/scroll visual acceptance, production
+live producer/parallel recall and Decisions, complete
+learning/activation/maintenance and remaining full-build contracts are NOT complete.
+Original grounding is unchanged. Do not substitute this checkpoint for full flow review.
+[Mounted grouping and current hashes](../reviews/2026-10-07-LMD-C08A-C09A-checkpoint.md).
+
+## HISTORICAL — production Voice review/capture gate/original proposal links wired, 2026-10-07
+
+C03F also captures actual original final function-call/completion provider events
+through the existing API and close acknowledgment, with bounded redacted browser-
+origin fields in existing provider rows. Scoped call/name correlation retains
+original versus executed arguments and rejects ambiguous association. Ten distinct
+DB checks across grouped/corrected runs, 29 capture/projector units and 14 frontend
+checks verified; [C03F evidence](../reviews/2026-10-07-LMD-C03F-build-evidence.md).
+Register r19 owns statuses. This does not fabricate readable Voice summaries or
+complete causal/context/feedback coverage. Next group remains trusted source/context
+and actual submitted-text model/tools mount, then shared live producer integration.
+
+On feature/live-memory-decisions, actual build_local_app now mounts C14G into
+existing VoiceMemoryLearning and close/finalize, reusing the same configured memory
+model with a separate procedural goal/prompt. Durable current-source checkpoints,
+scoped review status and content-free logs are connected. C03E records browser
+transcript-write failures in the existing session close transaction and blocks
+both reviewers on incomplete capture. No replacement memory pipeline/source ledger.
+Final nine actual mounted/regression DB checks, 57 focused units and thirteen
+focused frontend checks pass; production frontend build passes. [Evidence](../reviews/2026-10-07-LMD-C14G-C03E-build-evidence.md).
+Register r19 owns
+status. Existing Voice coverage remains unknown: analyze handling, never fabricate
+original reasoning/context/satisfaction or publish rules from that incomplete proof.
+Full Chat/live producer/qualified learning/Background goal scheduling remain open;
+this checkpoint does not certify full-build completion.
+
+## HISTORICAL — catalog activation/active reads/outcome review verified, 2026-10-07
+
+Continued larger backend grouping on feature/live-memory-decisions: C14E additive
+catalog compilation/atomic pointer/source-erasure invalidation; C15B actual guarded
+active indexed reads; C14F owner-requested separate correctness and aspect-specific
+satisfaction/unknown/failure analysis with explicit goal and durable v2 checkpoints.
+[Register r17](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns bounded statuses. 159 targeted units and 16 distinct actual DB checks verified
+(intermediate fixture failures/corrected reruns documented, not inflated counts).
+No memory-analysis replacement/new agent/production activation. Original grounding
+unchanged; owner outcome clarification additive. Next necessary source-first group:
+real captured context/feedback/answer/original-summary association and coverage,
+production qualification/forget suppression/provider binding, existing goal-based
+worker mount, then actual Chat/Voice live and final runtime integration. Whole-flow
+review follows completed build, not now. Backend logging integrated review remains
+after mounts. No placeholder True source gate is approved for production.
+
+## HISTORICAL — backend learning/eligibility/logging group and C03D source claim verified, 2026-10-07
+
+Continued through C14C/C06D/C14D/C15A without requesting owner continuation, then
+actual C03D Voice producer metadata. Existing invocation path now preserves matched
+source index/hash from already supplied client context; cached replay cannot add
+hindsight. [C03D evidence](../reviews/2026-10-07-LMD-C03D-build-evidence.md): 23 actual
+DB passes including Voice/credential regressions, 22 focused units. It remains
+client-claimed linkage, not model causality, finality or user acceptance.
+[Register r16](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns statuses. Original groundings unchanged; branch preserved, no commits/reset.
+Remaining production dependencies are real source/provider qualification, worker
+mount and active catalog/activation; full Chat/Voice live integration and original
+release scope remain. Backend logging component review done; integrated review
+must follow those mounts. Existing memory analysis remains untouched.
+
+## HISTORICAL — C14D end-to-end learning and C15A eligibility verified, 2026-10-07
+
+Larger backend grouping completed without waiting for owner prompts: C14C actual
+inactive rule/example/pgvector/HNSW publication; C06D live diagnostic hooks plus
+postbuild privacy/coverage review; C14D service joining model review/durable result/
+publication/vector resume; C15A current explicit capability read over actual catalog
+and grants. Evidence: three C14C DB + two C14D DB; 160 C06D targeted units and 110
+C15A targeted units (overlap, not additive test count). Each exact evidence artifact
+records limits. Harness stopped, no production DB/provider calls, branch unchanged.
+[Register r15](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns lifecycle. Next production blockers remain qualified source/forget/provider
+binding, worker/process mount and active catalog compilation/pointer; Chat/Voice
+enrollment and full release evidence remain. No placeholder source guard/mount.
+Owner's backend logging request implemented/reviewed at component level; final
+integrated production log review stays open until actual mounts exist.
+
+## HISTORICAL — C14C inactive rule vectors and C06D diagnostics verified, 2026-10-07
+
+[C14C](../reviews/2026-10-07-LMD-C14C-build-evidence.md): actual inactive
+generation/definition/example publication, checked real pgvector writes, owned
+concurrent HNSW and scoped SQL candidate inspection/removal; three actual DB passes.
+[C06D logging review](../reviews/2026-10-07-LMD-C06D-logging-review.md): JSON local
+non-content live/selector operational logs, actual transition/privacy/sink-failure
+checks, 160 targeted units. Owner requested logging plus review; bounded review
+done, integrated production review remains after mount. No raw drafts persisted.
+Next full integration: current capability/activation and qualified source/worker
+mount; production Chat/Voice remains unmounted. [Register r14](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns lifecycle. Harness stopped, branch unchanged, owner work preserved.
+
+## HISTORICAL — C14B durable procedural reviews verified, 2026-10-07
+
+[C14B evidence](../reviews/2026-10-07-LMD-C14B-build-evidence.md) closes the bounded
+scoped review-result store: duplicate-safe claims, expiring fenced leases, immutable
+completion/retry, current source gate and existing conversation-erasure cascade.
+31 distinct targeted passes (28 units/3 actual DB). No copied session payload,
+memory-analysis rebuild, production hook or active learned rules. Harness stopped.
+Next: qualified source input and actual definitions/examples/generation publisher,
+vector index and current-capability/activation gates. Required source/forget gate
+is not production-implemented merely because the repository requires a callback.
+[Register r13](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns lifecycle. Branch feature/live-memory-decisions; owner work preserved.
+
+## HISTORICAL — C14A shared model reviewer verified, 2026-10-07
+
+Owner clarified Decisions should reuse the memory model or execution logic,
+parallel or after. [C14A evidence](../reviews/2026-10-07-LMD-C14A-build-evidence.md)
+records shared selected-provider/model execution, separate procedural prompt and
+validated proposal DTOs, sequential independent callbacks; 23 targeted passes.
+Memory capture/analysis/finalization remains intact. New reviewer/coordinator is
+unmounted: next full Decisions work is qualified source input and durable scoped
+rules/review/examples publication, not another memory-analysis implementation.
+[Register r12](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns status. No production after-session learning or rule activation claimed.
+Branch remains feature/live-memory-decisions; uncommitted owner work preserved.
+
+## HISTORICAL — C06C canonical recall adapter verified, 2026-10-07
+
+[C06C evidence](../reviews/2026-10-07-LMD-C06C-build-evidence.md) closes the bounded
+adapter joining existing indexed search with guard/shared controller, not rebuilding
+either: 55 distinct targeted passes including actual pgvector evolving drafts,
+exact final reuse and Off invalidation. Synthetic embedding/decision callbacks;
+no production context interpretation, learned decision retrieval or Chat/Voice mount.
+Next dependency is trusted source-linked context/capture (C03C), then actual
+interpretation/eligibility and production enrollment; no placeholder mount.
+[C03C source revalidation](../reviews/2026-10-07-LMD-C03C-source-revalidation.md)
+now checks actual capture owners feature by feature: provider hash is not summary
+content, current tool observer is not all-attempt/durable wiring, and rejected
+browser writes do not currently prevent close/finalize. Next bounded source
+projection must represent unknown coverage honestly; no duplicate ledger approved.
+
+[Owner build-policy grounding](2026-10-07-live-memory-build-policy-grounding.md)
+records all three replies: per-user/workspace Live Memory initially On; automatic
+validated read-only rule activation; retained history with forgotten-fact
+relearning suppressed. These are implementation requirements, not delivered
+features. [C13B evidence](../reviews/2026-10-07-LMD-C13B-build-evidence.md)
+records the implemented bounded state loader/epochs, 18 units and 28 actual DB
+tests. [C07A evidence](../reviews/2026-10-07-LMD-C07A-build-evidence.md)
+records scoped initially-On persistence/API and shared authority extraction:
+69 distinct targeted passes including real HTTP/CSRF and current-authority locks.
+[C06B evidence](../reviews/2026-10-07-LMD-C06B-build-evidence.md) records coherent
+canonical state/final guard and scoped invalidation of existing VoiceMem handles,
+including actual Off API wiring tests; 100 units/20 actual DB tests distinct.
+Next: full C06 factual recall/relevance/source/procedural adapters and production
+enrollment. Off hook/registry exists but is not production mounted; Chat/UI remain.
+
+[Document authority](2026-10-07-live-memory-document-authority.md) still controls
+the set; original groundings unchanged. Work remains on feature/live-memory-decisions,
+uncommitted; owner work preserved. [Register r11](../contracts/2026-10-05-live-memory-build-contract-register.md)
+alone owns lifecycle. [C02 build evidence](../reviews/2026-10-07-LMD-C02-build-evidence.md)
+records actual SQL/HNSW/GIN, natural plans, scoped recall, interrupted-index recovery,
+backup/restore and 39 DB passes; 25 focused units and 487 full-unit passes with four
+previous failures. Indexed-search composition/cutover unchanged. Test harness stopped,
+volume retained. C17A/C02/live-component hashes unchanged; C13A/C13B/C07A/C06B
+deliberately evolved canonical/identity/API seams, with new evidence/manifests
+preserved rather than overwriting historical approvals.
+
+Closed bounded group: [C05A/C06A/r2 evidence](../reviews/2026-10-07-LMD-C05A-C06A-build-evidence.md)
+records actual unmounted extraction, 41 new tests, 239 focused passes and 528 full
+unit passes with the same four prior failures. Pinned-source/rights and frozen
+candidate reviewed before build; full C05/C06 remain conditional. Honoring latest
+[shared-context clarification LC-R01–04](2026-10-07-live-recall-context-grounding.md).
+One evolving context feeds recall and decisions in parallel; candidates retain
+only after current-context validation, otherwise drop/re-search through turn end.
+Fresh pinned donor acquisition is isolated under /tmp, no existing donor modified;
+source review/rights/exact copied subset recorded in the bounded child contract.
+The transient loop exists as an unmounted component; no production live path,
+Chat or procedural store delivered. No blanket readiness.
+Closed [C13A evidence](../reviews/2026-10-07-LMD-C13A-build-evidence.md): reproduced
+baseline check/upsert race, fixed through existing helper locks/producer versions;
+49 distinct real DB tests, 243 focused units, full units 532 passes/four prior
+failures. No schema/store/loader added. Foundation service/repository hashes
+intentionally evolve here; old manifests remain historical, not overwritten.
+Closed: C13B epoch/scoped state loader, preserving canonical DTOs/store.
+Owner requests full build and targeted tests, not repeated broad suites. Scope
+counters cover new facts as well as cached record changes. Full C06 guards,
+maintenance, comparative quality and mounts remain separate. No blanket readiness.
+C13 maintenance/production cutover remains outstanding, not forgotten/rebuilt.
+
+Progress tracking: the register owns each allocation's lifecycle; this CURRENT
+checkpoint owns the active group and next action; linked build evidence owns test
+results and implementation hashes. Update these at review/build/verification
+boundaries. Planned or source-reviewed work is never counted as implemented, and
+historical checkpoints never override the current register. Full C05 comparative
+quality and C06/C13 production gates remain, not another build of this component.
+
+## HISTORICAL — aligned document set and bounded C03R repair, 2026-10-07
+
+In-progress continuation: reviewed C02/r1 SQL/index adapter is built; final SQL,
+scope, interrupted-index, backup/restore and legacy regressions are closing out.
+Current test command/evidence will be recorded in C02 build evidence; not production
+cutover. Latest owner [shared-context clarification](2026-10-07-live-recall-context-grounding.md)
+keeps C05 VoiceMem and C06 retain/drop/re-search controller next: one parallel
+memory/decision context path. Actual donor review is starting; live loop not built.
+Register owns lifecycle. Continue at delivery-group boundaries; preserve branch.
+
+Start at [document authority](2026-10-07-live-memory-document-authority.md).
+Original October4–5 grounding and bounded October7 amendment remain unchanged.
+Work is on `feature/live-memory-decisions`; changes remain uncommitted and owner
+work is preserved. [Register](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns status; [C03R evidence](../reviews/2026-10-07-LMD-C03R-build-evidence.md)
+records one existing Voice capture transaction repair, 19 focused unit passes,
+31 real PostgreSQL passes, and 462 full-unit passes with four previously recorded
+failures. No new source table, tool replay, provider calls or production DB access.
+Existing C01/C03A/C17A implementations remain hash-identical.
+Next safe step: source-backed C02 indexed-query contract review; no later build
+is READY. HNSW, general Chat, live revisions and complete evidence/learning are
+not claimed delivered. Test harness restored stopped; its data volume retained.
+
+## HISTORICAL — grounded source-of-truth consolidation, 2026-10-07
+
+Start at [current document authority](2026-10-07-live-memory-document-authority.md).
+Original October4–5 grounding R01–37 and bounded October7 amendment are unchanged.
+Register r4 alone owns allocation/build status; master r11/module r8/analysis r7/
+reconciled r3 correct the five alignment findings without adding product scope.
+Current phase: document correction/internal verification, no new runtime build.
+Next authorized step: review one bounded existing-source crash-consistency delta
+against actual code, then update the register only if that contract earns READY.
+No new implementation is authorized by consolidation. No owner branch lookup.
+
+All checkpoints below are HISTORICAL. Their old CURRENT/READY/next instructions
+are retained as dated chronology, never restart/build authority. Old frozen
+manifests remain untouched and do not validate the corrected current documents.
+
+## HISTORICAL — feature-by-feature source validation and reconciliation, 2026-10-07
+
+[Eight feature reports](../reviews/2026-10-07-feature-validation-index.md) compare
+complete owned plans against actual storage, execution callers and tests. Existing
+memory/reviewer/embeddings/Voice/Help/files/grants and built C01/C03A/C17A are retained.
+Missing deltas are merged into [reconciled scope r2](2026-10-07-live-memory-reconciled-build-scope.md)
+and register r3/master r10/module r7/analysis r6. No production schema/data/history
+or provider entitlement is claimed inspected. No runtime changes or new build READY.
+C03B extra event remains withdrawn; next is bounded existing-source repair review.
+No owner branch lookup required. Older checkpoints below are chronological history;
+their CURRENT/READY/next-action wording cannot override this checkpoint.
+
+Fresh unit groups and unperformed checks are listed in the feature index; overlapping
+counts are not summed as unique tests. Original source-ledger/schema proposals remain
+designs requiring necessity/reuse review, not permission to duplicate existing code.
+
+## HISTORICAL — document-to-code audit, VoiceMem specifically, 2026-10-07
+
+Owner clarified VoiceMem was part of the full implementation. No branch name is
+required to audit documents against code. [VoiceMem validation](../reviews/2026-10-07-VoiceMem-code-validation.md)
+traces exact pinned donor, named adapter/functions and searches app/frontend/tests/
+dependencies/main inventory/installed source. Documented integration is not
+verified here; existing VoiceMemoryLearning is not upstream VoiceMem proof.
+Resolve this documentation/code mismatch through source evidence; do not rebuild,
+declare everything pending, or require owner to locate code. Earlier baseline
+hold phrased as needing owner branch information is superseded. No runtime edits.
+
+## HISTORICAL — expected completed-build baseline unlocated, 2026-10-07
+
+Owner reports full branch build a few days ago with only Decisions API pending.
+Do not infer unfinished features from the new register. [Baseline discrepancy](../reviews/2026-10-07-LMD-completed-build-baseline-discrepancy.md)
+records refs/reflog/unreachable objects, old planning checkpoints and installed
+September21 image/source listing. None identifies that reported completed build.
+[All-contract audit](../reviews/2026-10-07-LMD-all-contracts-code-audit.md) covers
+every contract/allocation against main and current built files ONLY; missing-code
+labels are provisional, not proof against owner's report or build authority.
+Focused180 tests pass; full units443 pass/four known failures. Runtime unchanged.
+No READY build route; locate correct completed-build artifact before further
+contract revision/rebuilding. C03B READY remains withdrawn; no deletion/refactor.
+
+## HISTORICAL — implementation halted for duplication audit, 2026-10-07
+
+Owner challenged duplication and required actual code validation. No new runtime
+implementation. C03B READY withdrawn: a separate user-final event repeats source
+identity/fingerprint already persisted in submitted turns; necessity not proved.
+Historical READY hash/review is superseded, not a build instruction.
+See [code audit](../reviews/2026-10-07-LMD-duplication-audit.md).
+Confirmed repeated authorization predicate in new conversation repository versus
+existing Voice repository. Existing memory/reviewer/embedding stores were not
+duplicated by the three built slices. New conversation session/history ownership
+overlap still requires necessity/reuse review. Do not build/mount/delete/refactor.
+Next route: continue code-backed reconciliation of every pending package, then
+correct and re-review affected contracts; no valid remaining-build count yet.
+
+## HISTORICAL — C03B/r1 reviewed and READY, 2026-10-07
+
+Owner continued next readiness phase. Phase02 only: corrected master r9/modules
+r6/analysis r5/register r2 against actual verified C03A and C17A. Exact next
+[C03B/r1 contract](../contracts/2026-10-07-LMD-C03B-submitted-turn-evidence.md)
+captures submitted final text and canonical user-final evidence in one transaction.
+[Internal review](../reviews/2026-10-07-LMD-C03B-contract-review.md) PASS bounded
+scope, not independent review/owner acceptance. No runtime code changed this turn.
+
+Frozen current identities: [READY manifest](2026-10-07-C03B-build-ready.sha256),
+[source manifest](2026-10-07-C03B-review-source.sha256). DRAFT candidate manifest
+is historical pre-lifecycle identity, intentionally not a current hash-check target.
+Existing C01/C03A/C17A implementation manifests verified unchanged. Previous broad
+unit failures remain known; no new implementation tests executed in this review.
+
+Next authorized route: Phase03 C03B/r1 ONLY, recheck current READY/source and parent
+manifests, implement allowed files, run required isolated DB/units and stop after
+checkpoint. No production schema/API/UI/provider/learning activation. C03C allocates
+remaining trusted Voice/model/tool/reasoning/causal/source-coverage capture; still
+NOT READY. User-final ledger pages never establish complete-session coverage.
+Full parent C03 cannot be implemented directly. Dirty owner work preserved.
+All previous CURRENT entries below are historical, not next-action authority.
+
+## HISTORICAL — C17A/r1 verified offline selector, 2026-10-07
+
+Owner requested next build. C17A/r1 implemented and internally reviewed:
+immutable finite mapping, documented projection, strict typed response/fallback,
+cancel/deadline/current-token guards and transport=None no-op. No execution authority.
+[Build evidence](../reviews/2026-10-07-LMD-C17A-build-evidence.md),
+[exact four-file manifest](../reviews/2026-10-07-LMD-C17A-implementation.sha256).
+107 selector tests and181 combined focused units/regressions PASS. Full unit suite
+443 PASS/four existing unrelated failures; whole suite not green. C01/C03A manifests
+intact. VERIFIED, not CLOSED/independent review/owner acceptance.
+
+Three new decision_routing files and one new test; no existing runtime change in
+this slice, SDK/key/network/DB/production/Voice/Chat mount. All staged root slices
+C01/C03A/C17A now internally verified, not complete feature or release.
+Pre-existing dirty work preserved. Frozen input history unchanged; source/lifecycle
+differences from prior builds remain intentional and evidenced separately.
+
+Next authorized route: Phase02 C03B attributed finalized-evidence capture contract
+against verified conversation identities and selector observations. Parent C03/C17
+drafts remain NOT READY; correct stale C08 dependency and freeze exact capture SQL,
+producer/auth/causal/duplicate/recovery/erasure/coverage limits before implementation.
+Do not install/call a Decisions provider or implement the blocked parent directly.
+No new activation/retention questions required to review bounded finalized capture.
+All previous CURRENT sections below are historical authority.
+
+## HISTORICAL — C03A/r1 verified conversation foundation, 2026-10-07
+
+Owner continued implementation. Phase03 C03A/r1 completed and internally reviewed:
+private scoped conversation/segment IDs, immutable final-text submissions,
+idempotent retry, atomic history version/ordinal and current local authority.
+[Build evidence](../reviews/2026-10-07-LMD-C03A-build-evidence.md),
+[exact seven-file manifest](../reviews/2026-10-07-LMD-C03A-implementation.sha256).
+26 new units and 51 real isolated-Postgres tests PASS (no skips); combined focused
+units/regressions74 PASS, existing identity integrations14 PASS. VERIFIED,
+not independent review/owner acceptance or CLOSED. C01 manifest remains intact.
+
+New unmounted conversation package and two tests; existing local_identity repository
+adds only optional scoped conversation erasure entry. No production schema/API/UI/
+model/SDK/provider/learning/history changes. Test fixture removed test-only schema;
+test harness stopped afterward, volume preserved. Dirty owner docs/code preserved.
+Earlier source/READY manifests are input history, intentionally superseded only by
+verified C01/C03A implementation and lifecycle changes; original planning intact.
+
+Next authorized route: restart and Phase03 C17A/r1 only, offline selector boundary.
+Stop after that slice. C03B/C08 still require review against actual parent identities.
+Broader suite has prior recorded unrelated failures, not asserted green here.
+All earlier CURRENT sections below are historical, not next-action authority.
+
+## HISTORICAL — C01/r3 verified build checkpoint, 2026-10-07
+
+Owner authorized implementation. Phase03 C01/r3 only completed: replaceable
+memory-search protocol and default legacy adapter, unchanged callers/ranking.
+[Build evidence](../reviews/2026-10-07-LMD-C01-build-evidence.md) and exact
+[implementation manifest](../reviews/2026-10-07-LMD-C01-implementation.sha256).
+Internal same-context review PASS, not independent/owner acceptance; VERIFIED,
+not CLOSED. Required tests: 41 passed. Broader suite: 310 passed, four unrelated
+failures reproduced with baseline service; whole suite not green.
+
+Only existing runtime edit memory/service.py; three memory_search module files,
+two new unit test files. Existing dirty owner docs preserved. No schema/provider/
+SDK/DB/UI/history/production changes. Original build-input/source/READY hashes were
+verified before editing; source/contract metadata now intentionally changed.
+Next authorized action: restart and Phase03 C03A/r1 only (conversation identity),
+using its existing reviewed frozen inputs and this checkpoint. Stop after each slice.
+Later C17A remains READY; live API adapter/SDK upgrade deferred to C17B. All prior
+CURRENT sections below are historical authority, not current implementation status.
+
+## HISTORICAL — reviewed build entry, 2026-10-07
+
+Owner continued readiness work, no implementation. Master r8/module r5/selector r3;
+grounding original r11 + DA r2 unchanged. [Split-contract review](../reviews/2026-10-07-decisions-split-contract-review.md)
+LMD-DA-CR02-r1 INTERNAL SAME-CONTEXT SELF-REVIEW. No independent/owner acceptance.
+Exact current identities: decisions-build-inputs.sha256, decisions-build-source.sha256,
+decisions-build-ready.sha256 under this directory. Earlier hashes/checkpoints history.
+
+READY roots:
+- [C01/r3](../contracts/2026-10-07-LMD-C01-memory-search-boundary-r3.md): next sequential
+  search boundary/legacy parity; no model/DB/UI changes.
+- [C03A/r1](../contracts/2026-10-07-LMD-C03A-conversation-identity.md): private header,
+  segment and immutable final turn, exact SQL/transactions/erasure and isolated tests;
+  no production mount/model/UI. Removes C03/C08 identity cycle.
+- [C17A/r1](../contracts/2026-10-07-LMD-C17A-selector-boundary.md): offline documented
+  finite mapper/parser, no-op and current-result validity; no SDK/account/network.
+
+Build sequence C01 -> C03A -> C17A, with per-slice verification/checkpoint. Each is
+standalone dependency-ready, not permission to build whole roadmap in one turn.
+Once verified, review dependent capture C03B, text C08 and live provider C17B against
+actual outputs. Production activation/history replay/retention and paid experiments
+remain disabled/deferred; no new policy answers needed for these root slices.
+
+Current assurance: ready to START staged builds, not complete feature/release.
+Baseline unchanged;20 existing tests pass0.22s; isolated test DB stopped (read-only
+Compose status). Startup of existing isolated harness permitted only during reviewed
+C03A build; production untouched. No code/schema/install/provider/history mutation.
+If owner authorizes implementation, execute Phase03 C01/r3 only, not another planning
+loop; don't ask owner to repeat protocol prompt. Review record/manifest checks govern.
+All CURRENT sections below are historical, not today's next-action authority.
+
+## HISTORICAL — Decisions/evidence Phase02 reviewed checkpoint, 2026-10-07
+
+Owner: finish tight planning and review before implementation. Phase02 prompt
+executed, correction cycle1 and re-review. [Review](../reviews/2026-10-07-decisions-plan-and-contract-review.md)
+LMD-DA-PR02-r1 is INTERNAL SAME-CONTEXT SELF-REVIEW, not independent or owner acceptance.
+Original r11 + amendment r2; master r7/module r4/selector r2/learning r4 and corrected
+evidence-storage section. Exact identities: 2026-10-07-decisions-reviewed-plan.sha256,
+2026-10-07-decisions-review-source.sha256 and 2026-10-07-decisions-review-package.sha256.
+Prior October7/October5 manifests/checkpoints retained as historical inputs.
+
+Plan PASS FOR C01 FOUNDATION, CONDITIONAL OVERALL. Source-informed wiring, finite
+provider mapping, storage ownership/keys/indexes, atomic capture and rejection cases
+reviewed. [C01/r2](../contracts/2026-10-07-LMD-C01-memory-search-boundary.md) READY only
+for unchanged replaceability foundation. [C03/r1](../contracts/2026-10-07-LMD-C03-evidence-capture-contract.md)
+and [C17/r1](../contracts/2026-10-07-LMD-C17-decisions-adapter-contract.md) DRAFT/BLOCKED.
+Remaining parent-identity, actual isolated DB migration/SDK/account/budget and
+activation/retention/release prerequisites explicit; not every contract frozen/READY.
+
+Baseline HEAD ea39a6f9da89a2999c4f7e14f686428d2088f480 and feature/live-memory-decisions
+unchanged.20 focused baseline tests pass0.21s. No runtime/schema/provider/history
+audit/branch/install/deployment changes. Existing dirty documentation preserved.
+Owner asked review BEFORE implementation; no build this turn. If later authorized,
+only Phase03 C01/r2; no need to copy prompt back. Other feature slices stay Phase02
+until prerequisites resolved. All CURRENT headings below are historical authority.
+
+## HISTORICAL — Decisions/evidence Phase01 candidate, 2026-10-07
+
+Owner instructed agent to read/follow the continuation prompt directly rather
+than ask owner to relay it. Phase01 prompt executed; candidate drafted, conditional,
+not reviewed/accepted/build-ready. Grounding amendment r1 verified; original r11
+unchanged. Runtime HEAD ea39a6f9da89a2999c4f7e14f686428d2088f480, branch
+feature/live-memory-decisions; no runtime/DB/provider/branch mutations.
+
+Plan: master r6 plus [selector r1](2026-10-07-decisions-selector-plan.md), learning
+r3 and October7 owned-plan refinements. Exact input identity:
+2026-10-07-decisions-plan-candidate.sha256. Architecture owns modules/ports in
+module plan October7 section; decisions/mapping gates in selector/grounding.
+All DA-R01–12 trace to O-DA-A–D; existing outcomes and reserved policies retained.
+
+Next phase is Phase02: read and execute protocol review prompt directly on owner
+continuation; no need to ask owner to copy it. Review frozen candidate against
+original owner requests, then update contract readiness honestly. Do not implement.
+Historical audit/data access, activation, retention/replay and numeric release
+budgets remain conditional. No old READY record approves expanded API/evidence work.
+The October7 Phase00 and October5 checkpoints below are history, not next-action
+authority. Checks: saved hashes, whitespace and local reference checks; no new
+runtime tests, endpoint experiment, actual session audit or semantic review claimed.
+
+## HISTORICAL — Decisions/evidence Phase00 amendment, 2026-10-07
+
+Owner resumed Decisions research, declined GPT-Live, and requested ongoing
+planning updates/process. [Amendment](2026-10-07-decisions-api-evidence-grounding.md)
+LMD-DA-G-2026-10-07-r1 supplements original grounding r11. Phase00 recorded;
+same-context grounding self-check only; no owner acceptance or build readiness.
+Branch remains feature/live-memory-decisions; all pre-existing edits preserved.
+
+Next authorized route: Phase01 only for affected planning. Reconcile API mapping,
+speculative/final causal evidence, historical coverage audit, learning proposals,
+text/voice controller and module removal; then freeze a candidate for Phase02.
+Prior Phase02/C01 records are historical and cannot authorize expanded API work.
+No Phase03 now; unchanged C01 needs restart identity revalidation before build.
+No GPT-Live, runtime/DB/model calls, branch switch or historical learning performed.
+Activation/effects, retention/forgotten-source replay and numerical budgets remain
+reserved; no new owner questions needed to record this bounded amendment.
+
+The following October5 CURRENT section is historical, superseded as next-action
+authority by this checkpoint. Historical manifests are preserved, not rewritten.
+
+
+## HISTORICAL — live-memory Phase02 checkpoint,2026-10-05
+
+This is the controlling checkpoint for the live-memory change; later older dated
+sections are preserved history, not next-action authority. Branch
+`feature/live-memory-decisions`; runtime base ea39a6f9da89a2999c4f7e14f686428d2088f480.
+Grounding r11/master r5/module r3. Phase02 COMPLETE FOR NEXT FOUNDATION CONTRACT,
+overall plan conditional. Same-context internal self-review, no owner acceptance.
+
+[Plan review](../reviews/2026-10-05-live-memory-phase02-review.md) LMD-PR02-r1:
+37 requirement traces,11 findings; source-compatible corrections applied.
+[LMD-C01/r1](../contracts/2026-10-05-LMD-C01-memory-search-boundary.md) READY after
+[contract review](../reviews/2026-10-05-LMD-C01-contract-review.md) LMD-CR01-r1.
+[Contract register](../contracts/2026-10-05-live-memory-build-contract-register.md)
+owns next allocations; all others unready/deferred. Exact Phase02 candidate identity
+`2026-10-05-live-memory-phase02-candidate.sha256`; underlying current plan/source
+manifests must verify on restart. Status/checkpoint/changelog excluded from hashes.
+
+NEXT AUTHORIZED ROUTE: Phase03 ONLY LMD-C01/r1, restart/verify input hashes and diff,
+implement replaceable search port+legacy adapter/narrow MemoryService injection,
+run specified compatibility tests, save implementation evidence, STOP. No index/
+DB/schema/provider/Voice/Chat implementation in C01. C01 outcome is replaceability
+foundation, not HNSW/live-speed delivery. If any input stale, return Phase02.
+
+Remaining dependent blockers: dedicated OAuth live transcription access/controlled
+response audio; retention/forgotten-source replay, activation/effects, Live Memory
+initial scope/default, numeric release/cost capacity; actual isolated Postgres/query
+and model/UI/audio proof. These do not block C01 unchanged compatibility slice.
+Existing Voice page and mode persist, Chat separate, assistant-ui MIT approved.
+Decisions build/API deferred. Separate Background executor remains untouched.
+
+Current edits: documentation only, including new reviews/contracts/manifests. No
+runtime/scaffold/dependency install/DB/provider call. Preserve ALL pre-existing
+working docs; don't reset/commit unrelated work. Current baseline23 focused tests
+passed0.88s; no new implementation tests exist yet. Npm metadata read only confirms
+React18/19 peers for candidate packages, not actual frontend integration.
+
+Resume in days: read this checkpoint, protocol Phase03 prompt, original/current
+grounding, reviewed plan/module and C01 review; validate hashes before writing.
+Do not continue from conversation summary alone or implement register placeholders.
+
+
+Date: 2026-10-05
 Role: index and current-state file. It does not replace existing frozen authorities.
 
 ## Controlling sources
@@ -16,6 +772,7 @@ Role: index and current-state file. It does not replace existing frozen authorit
 | Vault A2A + Link-native (this change) | Phase 00 grounding; Phase 01 plan r2; C01 VERIFIED; C02 VERIFIED; C03 VERIFIED | this file |
 | First-class Link Companion / C04 | Link+Vault grounding **r4**; plan r2; O4 next (not READY) | `/home/christian/Documents/Projects/ReSono-Labs-Link/docs/planning/2026-09-15-vault-first-class-link-integration.md` |
 | Method | Anti-drift constitution | `/home/christian/Documents/Projects/drift-protection/AI-PLANNING-PROTOCOL.md` |
+| Live memory / learned decisions / Vault chat | Grounding `LMD-G-2026-10-04-r7`; Phase 01 research/planning IN PROGRESS | [2026-10-04-live-memory-decisions-grounding.md](2026-10-04-live-memory-decisions-grounding.md) |
 
 Do not copy constitution or phase prompts into this repository.
 
@@ -817,6 +1574,79 @@ Contract `VA2A-C05` r1: Docker compose + listen host. Forbidden: C04 Link `vault
 
 ## Current state
 
+### Active checkpoint — 2026-10-05
+
+Branch `feature/live-memory-decisions`, created before research; base
+`ea39a6f9da89a2999c4f7e14f686428d2088f480`. Phase 01 IN PROGRESS.
+Controlling change grounding is r7. Working feature drafts and research are
+indexed in [the planning index](2026-10-05-live-memory-delivery-plan.md).
+Current inventory/overlap/wiring evidence:
+[implementation review](../research/2026-10-05-current-memory-implementation-review.md)
+`LMD-CURRENT-MEMORY-REVIEW-r1`.
+
+Owner confirms OpenAI live transcription, live-only On/Off, preservation of
+existing memory agent/analysis/store/embedding pipeline, no separate Background
+Agent involvement, actual HNSW search and complete-session analysis replacing
+silent truncation. VoiceMem factual/live subset is under evaluation, not adopted.
+25 relevant unit tests passed; database tests inspected only, no live-provider
+or installed-database proof. No runtime changes or READY build contract.
+
+Current requested handoff: quick implementation rundown for owner correction.
+Then finish Phase 01 plan/ownership/sequence, freeze for Phase 02, and stop.
+Prior r5/r6 state below is historical and cannot approve the new inputs.
+
+
+### Active documentation change — 2026-10-04
+
+Owner requested full review and grounding for modular live voice/text memory,
+learned procedural decisions, future Decisions API adaptation and Vault chat.
+The sole change requirement/decision authority is
+[2026-10-04-live-memory-decisions-grounding.md](2026-10-04-live-memory-decisions-grounding.md)
+(`LMD-G-2026-10-04-r5`); source inventory/self-review and baseline checks are
+[the review](../research/2026-10-04-live-memory-decisions-code-review.md)
+(`LMD-REVIEW-2026-10-04-r2`). Phase 00 complete; owner acceptance not claimed.
+
+Later clarification incorporated in r2: capture available session reasoning
+summaries as procedural-review evidence; wire the text conversational model;
+interpret typing/deleting dynamically while relevant memory arrives in parallel.
+Presentation capture was inspected read-only; Vault's own SDK observation and
+Background reasoning persistence already provide a closer reuse path. Voice
+summary availability remains provider-specific and unverified. r1 is superseded
+by r2; any downstream work relying on r1 must revalidate these additions.
+
+r3 records the requested live-edit/Send handling, recommended code/model memory
+selection split, optional reranking, and latency/cost/quality measurement cases.
+Those recommendations remain conditional; no benchmark or final default is
+claimed. r3 supersedes grounding r2. Owner said to wait; this documentation
+addition does not start Phase 01 or implementation. Evidence review remains r2.
+
+r4 records explicit owner confirmation: Vault is the Link Personal/Business
+Agent package (U01 resolved). Grounding r3 superseded.
+
+r5 records owner permission for partial drafts to reach configured providers
+before Send for testing (U02 resolved provisionally). Reassess after evidence;
+revision invalidation and no pre-Send tool execution/learning still apply.
+Grounding r4 superseded; no planning or implementation started by this update.
+
+Confirmed gap: real vectors exist, but current semantic retrieval scores in
+Python; no inspected HNSW index/query. General Home chat, live input revisions,
+and procedural decision storage/learning remain absent. The API contract is
+theoretical. Unresolved dependent choices are indexed in the grounding,
+including activation/deletion and lifecycle. Product mapping and experimental
+draft disclosure were resolved in r4/r5; live-switch semantics resolved in r7.
+
+Edits: these two documents, this index, product-grounding pointer,
+documentation/repository map links, changelog and change index. No runtime,
+frontend, database, provider, donor, Link or drift-protection changes. Relevant
+baseline tests: 25 backend and 11 frontend passed; no live/integration proof.
+
+Next authorized workflow step on continuation: Phase 01 for this change only,
+preserving prior valid decisions. No active build contract is READY for it.
+Candidate file hashes are recorded in `docs/CHANGE-INDEX.md`. If either
+controlling artifact changes, update identity and invalidate dependent review.
+
+### Prior checkpoints (preserved; not current instructions for this change)
+
 2026-09-17: xAI device-code OAuth is implemented on Connections (start/poll `/providers/xai/oauth/*`, `xai_oauth` tokens, refresh against `auth.x.ai`). Background executor already sends the selected xAI credential to `https://api.x.ai/v1`. Owner must approve the device login in a browser to mint a live token. Agent does not grant acceptance.
 
 Phase 03 implementer-complete for Voice Goal Intake (`voice_mode_switch` / `goal_start`) and Background progress page. Empty requested tool names freeze all Background-visible tools; MCP grants restore at run start; executor uses selected-provider `background_access`. Agent does not grant acceptance.
@@ -828,3 +1658,102 @@ Last verified candidate: Docker compose publishes `127.0.0.1:${VAULT_A2A_PORT:-8
 C04 / Link-native first-class Vault: grounding **r4**. `LV-C04` apply implemented. Docker companion is the Link routing layer through the host connector companion gateway (unsigned `0.2.78`). Agent TLS is unchanged. O5 unmet. Not owner-accepted. Do not ship mixed Link security trees.
 
 Exact next authorized action: install unsigned `0.2.78`, recreate this Vault image. Pairing/Connect stay as already set. Agent does not grant acceptance.
+
+
+### Latest controlling checkpoint — 2026-10-05 Phase 01 candidate
+
+Branch `feature/live-memory-decisions`; grounding `LMD-G-2026-10-04-r8` supersedes
+r7. Phase01 planning DRAFTED/CONDITIONAL, not reviewed, accepted or build-ready.
+[Master plan](2026-10-05-live-memory-delivery-plan.md) LMD-PLANNING-INDEX-r2 owns
+sequence/current state; [module plan](2026-10-05-modular-codebase-integration-plan.md)
+owns exact new-module boundaries and narrow host wiring. Separate indexed-storage,
+OAuth transcription, complete-session analysis, chat, live/donor, learning and
+evaluation plans are indexed there. Exact snapshot identities are in
+`2026-10-05-live-memory-plan-candidate.sha256`; no implementation changes.
+
+Latest owner request is explicit all-pieces planning plus modularity and regrounding
+after compaction, completed as conditional design. OAuth transcription entitlement,
+setting default/scope, conversation lifecycle, activation/deletion policy and numeric
+release budgets remain unproved/reserved; no guessed Decisions API schema.
+Next authorized action is Phase02 review only, against original request and exact
+candidate. Earlier IN PROGRESS/r5–r7 checkpoint wording above is historical.
+
+
+### Latest controlling checkpoint — Chat expansion,2026-10-05
+
+Grounding r9 and master LMD-PLANNING-INDEX-r3 supersede r8/r2. Owner explicitly
+keeps current Voice page/functionality and persistent mode, adds separate Chat,
+complete UX basics, shared live search, prior-session continuation without duplicate
+ingestion, image/document import/capture and existing tool/write parity. Research
+and separate feature plans indexed in master; original candidate r2 is historical
+and stale for affected scope. Latest SHA manifest freezes r3 candidate. Phase01
+drafted/conditional; no implementation or provider/DB calls. Next Phase02 review
+only, using latest request/image; unresolved capability/grant differences, input
+limits/retention and UI library compatibility remain conditional.
+
+### Latest checkpoint — assistant-ui selection
+
+Grounding r10/master r4: owner-approved open-source assistant-ui primitives; MIT
+verified. Version/React18/adapter compatibility still requires technical proof.
+Latest manifest supersedes r3; planning only, Phase02 review next, no install.
+# CURRENT — 2026-10-08 continuation
+
+Branch `feature/live-memory-decisions`; register r41 owns current allocation/status.
+C14H–N and C15C now mount bounded sealed-Chat procedural review, indexed semantic
+reconciliation, publication, read-only activation and live learned-rule reading.
+C08B/C04B mount factual learning and durable reviewed-output reuse; C04C adds
+bounded restart dispatch through existing workers and authority. These supersede
+the earlier r30 “activation next” restart note. C06F now mounts Voice partials and
+captured-final validation through the same preparation host as Chat (API-key
+OpenAI path). Parent acceptance, Voice procedural source qualification/OAuth live
+acceptance, full windows and remaining history/attachment/provider acceptance stay open.
+
+Resumed source/reuse review for C04D complete-session factual windowing:
+`docs/contracts/2026-10-08-LMD-C04D-window-source-review.md`. Inspected current
+256-turn/tool, 16,384-character evidence, 100,000-character review, 32-candidate
+and 150,000-character checkpoint boundaries. Canonical publication also slices
+oversized evidence excerpts; future span handling must preserve exact attribution.
+C04D remains DRAFT/NOT READY pending exact source-span persistence, bounded
+candidate overflow/consolidation and compatibility/transaction review. Preserve
+existing checkpoints, dispatcher, shared MemoryPipeline and canonical repository;
+no duplicate queue, worker or store. Next: finish this bounded contract review,
+then implement only its reviewed delta. No runtime/schema changes in this review.
+
+Verification: 10 focused publication/reviewer unit checks passed; diff whitespace
+check passed. No provider calls, database migration, deployment or history backfill.
+
+Subsequent C04D1 checkpoint supersedes the source-span absence above: optional
+canonical evidence metadata and pure lossless partition validation are implemented;
+mounted Chat publication/real-vector/recall/retry and 15 focused units pass. Full
+C04D coordinator remains NOT READY pending resumable bounded output checkpoints,
+explicit dense-candidate continuation and cross-window correction consolidation.
+Extend the existing segment worker/checkpoint and shared model/publication ports;
+do not create a second job scheduler or memory authority.
+
+
+### 2026-10-09 local embeddings deployed
+
+Owner-selected EmbeddingGemma 300M is packaged with CPU-only Ollama in the current
+Docker image. Existing factual/procedural embedding paths now use `ollama` /
+`embeddinggemma:300m` / 768-dimensional vectors; additive indexes exclude old model
+vectors. Two inference threads, serialized requests, lower process priority, batch
+32 and two-memory maintenance batches keep CPU work bounded. Real offline inference
+and production semantic recall verified. 731 units and 20 relevant PostgreSQL checks
+passed. See existing local-deployment evidence for image/backup and measured limits.
+Historical qualification and broader feature acceptance remain explicitly open.
+
+2026-10-09 correction deployed: physical batch 256 and complete bounded input
+windowing supersede batch 32 above. Full submitted passage encoded in 14.452s on
+the deployed image. 734 unit and 23 PostgreSQL review checks passed. Existing
+procedural lease renewal deployed, but the original segment's real retry failed
+with DecisionReviewError before lease expiry; procedural acceptance remains open.
+See existing deployment evidence for image, backup, and limits. Further changes
+require informing the owner before implementation.
+
+2026-10-09 owner correction: live Chat/Voice preparation searches current upcoming
+input, without appended past-chat text. Shared host corrected; existing validity
+fences remain. Live selection uses the existing configured shared model runner and
+OAuth credential through the current selector contract. 123 focused checks passed;
+real tool-free OAuth selection passed in 6.024s. See local deployment evidence.
+The separate completed-session procedural review remains unresolved; this is not
+whole-project completion or native Decisions endpoint acceptance.

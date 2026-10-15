@@ -350,3 +350,20 @@ Feature implementation can begin only after the first feature slice has:
 
 Unresolved material questions stay `OPEN` or `CONDITIONAL`; they are not filled
 in by developer preference.
+
+## 2026-10-04 live memory, learned decisions, and chat change
+
+Current change authority: original grounding r11 plus the bounded
+[2026-10-07 Decisions/evidence amendment](docs/planning/2026-10-07-decisions-api-evidence-grounding.md),
+LMD-DA-G-2026-10-07-r2. Decisions is documented; GPT-Live is excluded now.
+Separate Chat/persistent Voice supersedes the old Home replacement interpretation.
+The paragraph below is an initial historical checkpoint, not current phase or UX
+authority. Current phase/next action is in PROJECT-STATE; no implementation added.
+
+The owner-directed change grounding is
+[docs/planning/2026-10-04-live-memory-decisions-grounding.md](docs/planning/2026-10-04-live-memory-decisions-grounding.md),
+revision `LMD-G-2026-10-04-r5`. That record alone owns this change's
+requirements, narrow Home-screen visual exception, material decisions and
+unresolved choices. It does not supersede unrelated product boundaries or
+authorize implementation. Source findings and verification limits are linked
+there; no Decisions API schema or production readiness is asserted.

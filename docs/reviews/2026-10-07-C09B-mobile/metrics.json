@@ -1,0 +1,238 @@
+[
+  {
+    "viewport": [
+      360,
+      800
+    ],
+    "width": 360,
+    "height": 800,
+    "chat": {
+      "x": 14,
+      "y": 92,
+      "width": 332,
+      "height": 569.625,
+      "bottom": 661.625,
+      "right": 346
+    },
+    "composer": {
+      "x": 14,
+      "y": 560.84375,
+      "width": 332,
+      "height": 58,
+      "bottom": 618.84375,
+      "right": 346
+    },
+    "mic": {
+      "x": 223.625,
+      "y": 567.84375,
+      "width": 48,
+      "height": 44,
+      "bottom": 611.84375,
+      "right": 271.625
+    },
+    "send": {
+      "x": 275.625,
+      "y": 567.84375,
+      "width": 63.375,
+      "height": 44,
+      "bottom": 611.84375,
+      "right": 339
+    },
+    "nav": {
+      "x": 0,
+      "y": 673.625,
+      "width": 360,
+      "height": 126.375,
+      "bottom": 800,
+      "right": 360
+    },
+    "scroll": {
+      "x": 14,
+      "y": 274.484375,
+      "width": 332,
+      "height": 260.359375,
+      "bottom": 534.84375,
+      "right": 346
+    },
+    "horizontalOverflow": false,
+    "messageScroll": true,
+    "textareaFont": "16px"
+  },
+  {
+    "viewport": [
+      390,
+      844
+    ],
+    "width": 390,
+    "height": 844,
+    "chat": {
+      "x": 14,
+      "y": 92,
+      "width": 362,
+      "height": 613.625,
+      "bottom": 705.625,
+      "right": 376
+    },
+    "composer": {
+      "x": 14,
+      "y": 604.84375,
+      "width": 362,
+      "height": 58,
+      "bottom": 662.84375,
+      "right": 376
+    },
+    "mic": {
+      "x": 253.625,
+      "y": 611.84375,
+      "width": 48,
+      "height": 44,
+      "bottom": 655.84375,
+      "right": 301.625
+    },
+    "send": {
+      "x": 305.625,
+      "y": 611.84375,
+      "width": 63.375,
+      "height": 44,
+      "bottom": 655.84375,
+      "right": 369
+    },
+    "nav": {
+      "x": 0,
+      "y": 717.625,
+      "width": 390,
+      "height": 126.375,
+      "bottom": 844,
+      "right": 390
+    },
+    "scroll": {
+      "x": 14,
+      "y": 274.484375,
+      "width": 362,
+      "height": 304.359375,
+      "bottom": 578.84375,
+      "right": 376
+    },
+    "horizontalOverflow": false,
+    "messageScroll": true,
+    "textareaFont": "16px"
+  },
+  {
+    "viewport": [
+      768,
+      1024
+    ],
+    "width": 768,
+    "height": 1024,
+    "chat": {
+      "x": 18,
+      "y": 92,
+      "width": 732,
+      "height": 797.625,
+      "bottom": 889.625,
+      "right": 750
+    },
+    "composer": {
+      "x": 248,
+      "y": 798.234375,
+      "width": 502,
+      "height": 66,
+      "bottom": 864.234375,
+      "right": 750
+    },
+    "mic": {
+      "x": 619.625,
+      "y": 809.234375,
+      "width": 48,
+      "height": 44,
+      "bottom": 853.234375,
+      "right": 667.625
+    },
+    "send": {
+      "x": 675.625,
+      "y": 809.234375,
+      "width": 63.375,
+      "height": 44,
+      "bottom": 853.234375,
+      "right": 739
+    },
+    "nav": {
+      "x": 0,
+      "y": 901.625,
+      "width": 768,
+      "height": 122.375,
+      "bottom": 1024,
+      "right": 768
+    },
+    "scroll": {
+      "x": 248,
+      "y": 136.484375,
+      "width": 502,
+      "height": 635.75,
+      "bottom": 772.234375,
+      "right": 750
+    },
+    "horizontalOverflow": false,
+    "messageScroll": true,
+    "textareaFont": "16px"
+  },
+  {
+    "viewport": [
+      667,
+      375
+    ],
+    "width": 667,
+    "height": 375,
+    "chat": {
+      "x": 18,
+      "y": 92,
+      "width": 631,
+      "height": 144.625,
+      "bottom": 236.625,
+      "right": 649
+    },
+    "composer": {
+      "x": 148,
+      "y": 178.625,
+      "width": 501,
+      "height": 58,
+      "bottom": 236.625,
+      "right": 649
+    },
+    "mic": {
+      "x": 526.625,
+      "y": 185.625,
+      "width": 48,
+      "height": 44,
+      "bottom": 229.625,
+      "right": 574.625
+    },
+    "send": {
+      "x": 578.625,
+      "y": 185.625,
+      "width": 63.375,
+      "height": 44,
+      "bottom": 229.625,
+      "right": 642
+    },
+    "nav": {
+      "x": 0,
+      "y": 248.625,
+      "width": 667,
+      "height": 126.375,
+      "bottom": 375,
+      "right": 667
+    },
+    "scroll": {
+      "x": 148,
+      "y": 92,
+      "width": 501,
+      "height": 66.625,
+      "bottom": 158.625,
+      "right": 649
+    },
+    "horizontalOverflow": false,
+    "messageScroll": true,
+    "textareaFont": "16px"
+  }
+]

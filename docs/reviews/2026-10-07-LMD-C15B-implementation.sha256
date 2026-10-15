@@ -1,0 +1,4 @@
+4dd2eeea0e3955708c06692be1d466d80c8614262043ca8278ad9fd371ec9549  app/vault_runtime/decision_routing/example_index.py
+5ee72045584e46d848a79ad3c4c5dc78f77c88c43838b463ad39591df91c2e3e  tests/integration/test_decision_activation_postgres.py
+69826cb934d36603beaeac892954f7ef0ea050579e007d76401351b2d19d2c06  docs/contracts/2026-10-07-LMD-C15B-active-retrieval.md
+d2652582c919fbe1a8f5684bb08166ca8aa8104279a0418764856c27f878845f  docs/reviews/2026-10-07-LMD-C15B-build-evidence.md

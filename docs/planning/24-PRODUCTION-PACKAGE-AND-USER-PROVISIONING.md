@@ -120,3 +120,55 @@ Docker socket mount or broad `SYS_ADMIN`. A later package revision may add a
 narrow donor-derived host capability broker, with its own anti-drift review and
 negative isolation tests. Until then, executable imported capabilities are
 unavailable rather than unsafe.
+
+
+### Local embedding package — 2026-10-09
+
+The current Docker package includes Google EmbeddingGemma 300M (Ollama BF16
+artifact, 768 dimensions) and the CPU-only Ollama runtime, isolated on container
+loopback port 11435. It requires no OpenAI embedding credits or Hugging Face token
+at runtime. Reuse the installed Ollama runtime/cache when building:
+
+```sh
+ollama pull embeddinggemma:300m
+python3 scripts/stage_local_embeddings.py --models /path/to/ollama-models
+docker build -t resono-labs-vault:local .
+```
+
+`packaging/local-embeddings/` is generated build input, excluded from Git. Its
+SHA256SUMS are checked during Docker build; the staging script rejects a changed
+model manifest. This deployment reused Ollama 0.32.14 and the external drive cache.
+The image carries the original model license layer. Original records and source
+evidence remain in PostgreSQL; maintenance regenerates only vector representations.
+Inference has two threads, one concurrent request and lower scheduling priority.
+No model API port is published to the host.
+
+
+### Embedding context/batch correction — 2026-10-09
+
+Ollama embeddings require physical batch size at least the input token count.
+The initial batch-32 setting was incorrect; the current batch is 2048 for the
+2048-token context. This does not increase the two inference threads. Inputs
+up to 32768 characters are tokenized by Ollama with `truncate=false`; only its
+explicit token-context overflow triggers recursive source-preserving windows.
+All windows must succeed within a shared deadline and 31-request ceiling. Their
+token-weighted normalized mean occupies the existing one-vector record; no new
+store or learning job is introduced. Input contents never enter error logs.
+The lock wait and inference share one deadline, rather than doubling the budget.
+Local live preparation may use the existing adapter's 30-second bound for long
+inputs; the stream's finalization deadline still prevents delaying Chat for it.
+
+The shared procedural reviewer now renews its existing owner/attempt-fenced lease
+while model work is pending, rechecking canonical source and local authority on
+each renewal and before completion. Renewal is bounded to ten minutes and writes
+no analysis output. Revocation, changed source, reclaimed ownership or budget
+exhaustion prevent publication. No new reviewer, scheduler or capture path.
+
+
+The memory-limited verification refined the physical batch to **256**. A 2048
+batch exhausted a 1.5 GB container's memory on long windows; smaller windows now
+respond to explicit physical-batch/token-context overflow using the same complete
+source-preserving split. Each accepted window is verified at no more than 256
+model-tokenized tokens, including the prompt prefix. This supersedes the initial
+2048-batch correction above, while retaining the 2048 model context, two threads,
+shared request deadline and no truncation.

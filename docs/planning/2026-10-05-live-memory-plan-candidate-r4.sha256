@@ -1,0 +1,16 @@
+24ad56dd1acc10096029f2667e5a9288d4455ed4bf65d9a77eac0adb86907f91  docs/planning/2026-10-04-live-memory-decisions-grounding.md
+7e4fc7cd1138fe6d39c006a76f24f5ccca4b0a0f15be672d53a007e5cbc995ef  docs/planning/2026-10-05-chat-attachments-and-tool-parity-plan.md
+4ed7d9ff29af12821dccdb0eb2a0e39b3cbdc40eda5f7bebab9439aa52fe6781  docs/planning/2026-10-05-chat-session-history-plan.md
+6fd3a95b9db3091dee5a641db07dd3b74db0f446d2d59d4d8af0eab93fcc4803  docs/planning/2026-10-05-complete-session-memory-analysis-plan.md
+d9a2de49ac8f0748606b1e04d4479638deebabdaa29ea7f922aa61d45b0783a8  docs/planning/2026-10-05-decision-learning-plan.md
+180a36951fccf609ad1d42c6f56f81ed9defc1fc92f2cb84d4532b04abc1e497  docs/planning/2026-10-05-live-memory-delivery-plan.md
+74b6867d0b86c66a556fd8fb006ecaf3e71d252131ea0b8b33efded06d99504b  docs/planning/2026-10-05-live-memory-evaluation-plan.md
+1a90a9f05c3bcdd5bf1e20f6342a0591d78d16025ecfd57d9c07215c9cde049a  docs/planning/2026-10-05-live-memory-runtime-plan.md
+aaa58e7947fe4af83fcad80c457c64d60e8641e98b85f5e3600d5833060cbe22  docs/planning/2026-10-05-modular-codebase-integration-plan.md
+a234490d47023d6386761d25842cb9594a744b4d9b26e2cbf626aebaa18b1036  docs/planning/2026-10-05-openai-live-transcription-and-oauth-plan.md
+1b49abd238e12715c124a685e95100f9f34b280128f42b48f73f5103f91a533a  docs/planning/2026-10-05-pgvector-storage-and-embedding-plan.md
+7c993e146e653d5f01621ba478fa83e5ee5c49e33760dcc149b08a0004ea184b  docs/planning/2026-10-05-vault-conversation-plan.md
+b262655b8da944f9e224233fb652672d9e4065ebfb07ea490e3c16db7e496375  docs/research/2026-10-05-chat-history-attachments-and-tools-research.md
+56cccbaac02c75725fadf755cbf14d1eb0a3880d8b53bfcb6e4b1838e0db458f  docs/research/2026-10-05-chat-static-tool-inventory.md
+932302bf17f05502dbd4fe2beafdd2f946d8b1db80dfbb633b226824a4b73407  docs/research/2026-10-05-current-memory-implementation-review.md
+6fce0284ec885a7867f5981d86567c57f07fbbe67726037d3c36a65a9ba4e1f8  docs/research/2026-10-05-live-memory-retrieval-research.md

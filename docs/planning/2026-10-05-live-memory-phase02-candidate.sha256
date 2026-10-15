@@ -1,0 +1,6 @@
+eca40289b283ce7df6acd502e5fc6ec01ee879c0cdf7a9554699d24bd30aecfe  docs/planning/2026-10-05-live-memory-plan-candidate.sha256
+e16fa20426d10024b027ac5ebd905f445fe167e254214c15f48b86c350a2477b  docs/planning/2026-10-05-live-memory-review-source.sha256
+09a3be4e357199f084479ebc10254e8a5ca6ede2720d248972769da5f443d991  docs/reviews/2026-10-05-live-memory-phase02-review.md
+e04b41782e62d0624b4f2f886e2ae36ac79cecc286f19ef18762997294781c0a  docs/reviews/2026-10-05-LMD-C01-contract-review.md
+03aca35dd4f7903c08b875529a6b2affc932d4feef49acf0832ada254fe8acc0  docs/contracts/2026-10-05-LMD-C01-memory-search-boundary.md
+458f824f45427f6bbf7fdd2da19bc84f31f1986f6bb6f4df868a0772231e497a  docs/contracts/2026-10-05-live-memory-build-contract-register.md

@@ -1,11 +1,30 @@
 # Vault Documentation
 
+For live memory, Chat and learned decisions, start ONLY at the
+[current source-of-truth document set](planning/2026-10-07-live-memory-document-authority.md).
+Original October4–5 grounding controls the goal; that map assigns one owner per
+concern and links current allocation/status. No old review or READY manifest is
+a build instruction. [PROJECT-STATE](planning/PROJECT-STATE.md) top CURRENT owns
+next action; older checkpoints are historical.
+
+Historical evidence, not current status: [split review](reviews/2026-10-07-decisions-split-contract-review.md),
+[earlier Phase02 review](reviews/2026-10-07-decisions-plan-and-contract-review.md)
+and old candidate manifests. Preserve them for chronology; use the current set
+for any restart/review/build decision.
+
 The canonical current-platform user and administrator manual is
 `PLATFORM-GUIDE.md`. Start there for installation, accounts, sharing,
 connections, agents, memory, extensions, backup, removal, and current limits.
 Its **Common issues** section provides dashboard-friendly fixes for Plugin and
 Skill imports, MCP address warnings, missing capabilities, local bridge sign-in
 confusion, and package startup problems.
+
+The 2026-10-04 modular live-memory, learned-decision and Vault-chat change is
+grounded in [planning/2026-10-04-live-memory-decisions-grounding.md](planning/2026-10-04-live-memory-decisions-grounding.md).
+Its [code review](research/2026-10-04-live-memory-decisions-code-review.md)
+distinguishes existing runtime behavior from missing components and theoretical
+Decisions API integration. Phase 00 only; no implementation plan/build readiness.
+The [change index](CHANGE-INDEX.md) records this documentation checkpoint.
 
 User-facing setup and connection guides:
 

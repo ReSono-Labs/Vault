@@ -1,0 +1,5 @@
+9639cbd8874586dbea409ecbca3fed241826433608d991fcb12aa8acab34e9d1  app/vault_runtime/voice/schema.py
+a6904a4d58036f292dd5f411e2967dc1d376b2ee68018568150a163201502f50  app/vault_runtime/voice/tools.py
+9b182d01bd0f1d45af14328f37ac2f6cfcc9e132d2ed73236a06945724fedbb7  tests/integration/test_voice_decision_source_postgres.py
+18052d3f2a672ad12975b5542f6027cd6514ef0818b39b3bd578d5e09fa983c8  docs/contracts/2026-10-07-LMD-C03D-voice-source-claims.md
+520f809249c10b9151c6d553164c5aa50079c1e49f4ba99d2a8c48bb24c992dd  docs/reviews/2026-10-07-LMD-C03D-build-evidence.md

@@ -1,5 +1,14 @@
 # ReSono Labs Vault Index
 
+Current live-memory/Chat/Decisions entry:
+[source-of-truth document set](docs/planning/2026-10-07-live-memory-document-authority.md).
+Original October4–5 grounding controls the goal; one current owner per concern.
+
+Current live-memory change: original grounding r11 supplemented by
+`docs/planning/2026-10-07-decisions-api-evidence-grounding.md`. PROJECT-STATE owns
+current phase; older Phase00-only statements below are historical. No runtime
+module locations or ownership changed in this documentation amendment.
+
 Vault is a fully local, standalone voice and agent platform intended for public
 open-source release. Optional Hermes/OpenClaw memory and credential access is an
 additional use case, not a redefinition of the platform. This file is the short
@@ -16,6 +25,7 @@ repository map. Detailed decisions belong under `docs/`.
 | `docs/README.md` | Documentation map and document authority |
 | `docs/PLATFORM-GUIDE.md` | Canonical grounded user/admin guide and complete current feature index |
 | `docs/planning/` | Feature scope, donor provenance, sequencing, and gates |
+| `docs/CHANGE-INDEX.md` | Change links and frozen documentation identities; does not duplicate requirement or status authority |
 | `docs/research/` | Evidence gathered from donor projects and standards |
 | `docs/protocols/` | Copied project-control protocols, including anti-drift |
 | `docs/reviews/` | Frozen semantic reviews, findings, and readiness results |
@@ -60,14 +70,23 @@ repository map. Detailed decisions belong under `docs/`.
 | `app/vault_runtime/workspace_paths.py` | Voice key normalization plus local traversal/symlink staging guard |
 | `app/vault_runtime/memory/contracts.py` | Exact R1 memory contract v2 labels plus local private/workspace visibility validation |
 | `app/vault_runtime/memory/schema.py` | PostgreSQL transcript, summary, lifecycle, evidence, ingestion, pending-action and real pgvector embedding schema, including upgrades from the earlier JSON-only vector relation |
-| `app/vault_runtime/memory/repository.py` | Scoped Voice/R1 transcript, ingestion, reconciliation, profile, lexical, pgvector and confirmed-action persistence |
+| `app/vault_runtime/memory/repository.py` | Scoped Voice/R1 transcript, ingestion, reconciliation, profile, lexical, pgvector and confirmed-action persistence; canonical forget/replay suppression enforced through `memory/suppression.py` |
 | `app/vault_runtime/memory/models.py` | Local immutable memory, transcript and pending-action records |
-| `app/vault_runtime/memory/retrieval.py` | R1 lexical/exact/real-provider semantic ranking with offline fallback |
+| `app/vault_runtime/memory/retrieval.py` | One R1 lexical/exact/semantic merge policy; default legacy candidate hooks and optional SQL adapter reuse it |
+| `app/vault_runtime/memory_search/` | Scoped PostgreSQL HNSW/GIN retrieval and owned startup index validation/cutover; bounded canonical-vector repair lifecycle, explicit legacy rollback |
+| `app/vault_runtime/live_memory/` | Shared Chat/Voice-mounted VoiceMem lifecycle, transient parallel memory/tool preparation, scoped channel source adapters, authenticated revisions and exact-final handoff; current-state guards and one bounded worker budget; no speculative execution |
+| `app/vault_runtime/conversation/` | Scoped immutable final text plus mounted bounded text-model execution, canonical response events, source capture, replayable SSE and Stop; idle review through existing segment/worker/checkpoints with independent consumer coverage; no Background goal or third agent |
+| `app/vault_runtime/conversation_tools/` | Real conversation/turn adapter into existing interactive ToolCatalog/grants/durable invocation owner; no fake Voice session, independent grant store or duplicated handlers |
+| `frontend/src/browser-voice/conversation/` | Separate lazy Chat page, scoped transient controller, existing authenticated API/SSE/history/Stop, pinned assistant-ui headless primitives and existing Voice toggle delegation; no client inference/tool execution or durable drafts |
 | `app/vault_runtime/memory/service.py` | Bounded search and confirmed correction/forget capability; not an agent |
 | `app/vault_runtime/memory/pipeline.py` | R1 citation-required, fingerprint-idempotent session finalize capability; not an agent |
 | `app/vault_runtime/memory/openai_reviewer.py` | Direct R1 structured memory-review capability using the locally configured encrypted workspace provider; never a system agent |
 | `app/vault_runtime/memory/openai_embeddings.py` | Direct R1 real OpenAI embedding provider adapted to each Vault user/workspace's shared-or-individual encrypted provider authority; no fake-vector fallback |
 | `app/vault_runtime/memory/voice_learning.py` | Voice donor final-event/close composition joined to the R1 reviewer and reconciliation pipeline under local user/workspace authority |
+| `app/vault_runtime/memory/chat_learning.py` | Sealed Chat channel adapter into the same factual reviewer/canonical reconciliation and embedding store; exact original-source evidence references, scoped atomic publication checkpoint, no copied Voice transcript or new memory authority |
+| `app/vault_runtime/memory/analysis_spans.py` | Pure lossless source-span partition/coverage validation for bounded factual review; not a worker, reviewer, store or mounted full-window coordinator |
+| `app/vault_runtime/memory/analysis_windows.py` | Bounded factual Chat model-step continuation/consolidation using exact spans; Chat learning owns scoped durable steps, existing worker and MemoryPipeline own scheduling/publication |
+| `app/vault_runtime/decision_learning/analysis_windows.py` | Bounded procedural assessment/output coordinator with full source visibility; reuses shared configured reviewer and existing fenced stage/reconciliation/publication owners, not a worker/source store |
 | `app/vault_runtime/memory/evidence.py` | R1 recursive secret redaction and 16 KiB tool-evidence bound |
 | `app/vault_runtime/memory/tools.py` | R1 lookup/explain/explicit-remember and confirmation-protected correction/forget tools in the fixed-agent catalog |
 | `app/vault_runtime/system_agents/inventory.py` | Immutable two-entry Voice/Background system-agent inventory; no registration API |
@@ -78,6 +97,7 @@ repository map. Detailed decisions belong under `docs/`.
 | `app/vault_runtime/voice/schema.py` | Local Voice session, provider-event, tool-grant and support-safe invocation schema; no hosted teardown/route grants |
 | `app/vault_runtime/voice/repository.py` | Voice donor session lifecycle and idempotent provider events under Phase 2 authority |
 | `app/vault_runtime/voice/instructions.py`, `voice/context.py` | Source-traced R1 Voice/tool guidance plus deterministic local profile/style, eight scoped memories, prior completed summary and enabled-Skill disclosure |
+| `voice/context.py::previous_summary_context` | Existing bounded untrusted-summary formatting shared by Voice startup and Chat segment handoff; no separate compaction model/store |
 | `app/vault_runtime/voice/tools.py` | Built-in grant bootstrap, scoped extension authorization and Voice donor exact-once/effect-unknown invocation recovery |
 | `app/vault_runtime/voice/evidence.py` | R1/Voice bounded redacted tool results appended to scoped Phase 3 transcripts |
 | `app/vault_runtime/voice/events.py` | Voice provider-event idempotency mapped into bounded scoped Phase 3 transcripts |
@@ -125,6 +145,11 @@ architecture.
 Do not create planned paths merely to make this table true. Create them only
 under an accepted build contract, and update this index when their ownership is
 proven or changes.
+
+Live-memory/learned-decision/chat change authority is indexed from
+`docs/planning/PROJECT-STATE.md` and owned by
+`docs/planning/2026-10-04-live-memory-decisions-grounding.md`. It is Phase 00
+grounding only; existing runtime owners remain unchanged.
 
 The controlling donor implementation rule is
 `docs/planning/DONOR-PORTING-RULE.md`: existing features are copied/extracted

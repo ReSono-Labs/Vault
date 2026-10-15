@@ -1,0 +1,5 @@
+3b3a96f2f49c71e156ae53d2516771f8044f13da0d58fd791603074754895be6  app/vault_runtime/decision_routing/capabilities.py
+a9fe43c70179da714c1ee241326371d30bbe6bf7b0e2499119dec9702887472f  tests/unit/test_decision_capabilities.py
+22e17f300414a4ee98d99e02d5777fc565feb8a5b4e123a6b7fc9e5e31b505d6  tests/unit/test_decisions_selector_boundary.py
+755caad3dfffe48e1930823e74e2478cafe897b24fae75441d20a5cd843436eb  docs/contracts/2026-10-07-LMD-C15A-capability-read.md
+17a6779a89f2c911e3d0c9f997b94d96c4cdfe8534978157ce18ec1b83269c05  docs/reviews/2026-10-07-LMD-C15A-build-evidence.md
