@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Iterable
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, nullcontext
 from hashlib import sha256
+from itertools import islice
 from typing import Any
 from uuid import uuid4
+
+from psycopg.types.json import Jsonb
 
 from app.vault_runtime.memory.contracts import (
     MEMORY_AUTHORITIES,
@@ -17,10 +20,13 @@ from app.vault_runtime.memory.contracts import (
 from app.vault_runtime.memory.models import (
     MemoryEmbedding,
     MemoryRecord,
+    MemoryRetrievalSnapshot,
+    MemoryRetrievalState,
     PendingMemoryAction,
     TranscriptEntry,
 )
 from app.vault_runtime.memory.schema import ensure_memory_schema
+from app.vault_runtime.memory.suppression import canonical_lock, require_not_suppressed, record_suppression
 
 
 class MemoryRepositoryError(RuntimeError):
@@ -29,6 +35,10 @@ class MemoryRepositoryError(RuntimeError):
 
 class MemoryAuthorizationError(MemoryRepositoryError):
     code = "memory_authorization_denied"
+
+
+class MemoryTranscriptConflictError(MemoryRepositoryError):
+    code = "memory_transcript_conflict"
 
 
 class MemoryNotFoundError(MemoryRepositoryError):
@@ -87,7 +97,9 @@ class MemoryRepository:
                 ensure_memory_schema(cursor)
 
     @staticmethod
-    def _require_membership(cursor: Any, *, user_id: str, workspace_id: str) -> None:
+    def _require_membership(
+        cursor: Any, *, user_id: str, workspace_id: str, lock: bool = False
+    ) -> None:
         cursor.execute(
             """
             SELECT 1
@@ -96,7 +108,7 @@ class MemoryRepository:
             JOIN vault_private.local_workspaces w ON w.workspace_id = m.workspace_id
             WHERE m.user_id = %s AND m.workspace_id = %s AND m.status = 'active'
               AND u.status = 'active' AND w.status = 'active'
-            """,
+            """ + (" FOR SHARE OF m,u,w" if lock else ""),
             (user_id, workspace_id),
         )
         if cursor.fetchone() is None:
@@ -105,6 +117,73 @@ class MemoryRepository:
     @staticmethod
     def _scope_sql(alias: str = "m") -> str:
         return f"{alias}.workspace_id = %s AND ({alias}.visibility = 'workspace' OR {alias}.user_id = %s)"
+
+    @staticmethod
+    def _retrieval_ids(memory_ids: Iterable[str]) -> tuple[str, ...]:
+        if isinstance(memory_ids, (str, bytes)):
+            raise ValueError("Memory IDs must be a batch, not a string.")
+        ids = tuple(islice(memory_ids, 26))
+        if len(ids) > 25 or any(
+            not isinstance(value, str) or not value or value != value.strip()
+            for value in ids
+        ) or len(set(ids)) != len(ids):
+            raise ValueError("Expected at most 25 distinct nonempty memory IDs.")
+        return ids
+
+    def retrieval_snapshot(
+        self, *, user_id: str, workspace_id: str,
+        memory_ids: Iterable[str] = (),
+    ) -> MemoryRetrievalSnapshot:
+        ids = self._retrieval_ids(memory_ids)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._require_membership(
+                    cursor, user_id=user_id, workspace_id=workspace_id, lock=True
+                )
+                return self._retrieval_snapshot_cursor(
+                    cursor, user_id=user_id, workspace_id=workspace_id, memory_ids=ids
+                )
+
+    def _retrieval_snapshot_cursor(
+        self, cursor: Any, *, user_id: str, workspace_id: str,
+        memory_ids: Iterable[str] = (),
+    ) -> MemoryRetrievalSnapshot:
+        """Internal read; caller owns transaction and current scope authority."""
+        ids = self._retrieval_ids(memory_ids)
+        cursor.execute(
+                    """
+                    WITH epochs AS (
+                      SELECT COALESCE((SELECT retrieval_epoch
+                        FROM vault_private.vault_memory_scope_epochs
+                        WHERE workspace_id = %s AND user_id IS NULL), 0) AS shared,
+                        COALESCE((SELECT retrieval_epoch
+                        FROM vault_private.vault_memory_scope_epochs
+                        WHERE workspace_id = %s AND user_id = %s), 0) AS private
+                    ), memories AS (
+                      SELECT m.memory_id, m.workspace_id, m.user_id, m.visibility,
+                        m.subject_id, m.domain, m.memory_type, m.memory_key,
+                        m.content_text, m.source_authority, m.confidence,
+                        m.sensitivity, m.lifecycle_status, m.current_version,
+                        m.created_at, m.updated_at, m.retrieval_epoch
+                      FROM vault_private.vault_memory_records m
+                      WHERE """ + self._scope_sql() + """
+                        AND m.lifecycle_status = 'active'
+                        AND m.memory_id = ANY(%s::text[])
+                    )
+                    SELECT epochs.shared, epochs.private, memories.*
+                    FROM epochs LEFT JOIN memories ON TRUE ORDER BY memories.memory_id
+                    """,
+                    (workspace_id, workspace_id, user_id, workspace_id, user_id, list(ids)),
+                )
+        rows = cursor.fetchall()
+        return MemoryRetrievalSnapshot(
+            user_id=user_id, workspace_id=workspace_id,
+            workspace_epoch=rows[0][0], private_epoch=rows[0][1],
+            records=tuple(
+                MemoryRetrievalState(MemoryRecord(*row[2:18]), row[18])
+                for row in rows if row[2] is not None
+            ),
+        )
 
     def append_transcript(
         self,
@@ -119,32 +198,68 @@ class MemoryRepository:
         metadata: dict[str, object] | None = None,
         entry_id: str | None = None,
     ) -> TranscriptEntry:
+        self._validate_transcript(role, entry_index, text_content)
+        with self._connect() as connection:
+            return self.append_transcript_in_transaction(
+                connection, user_id=user_id, workspace_id=workspace_id,
+                voice_session_id=voice_session_id, entry_index=entry_index,
+                role=role, event_type=event_type, text_content=text_content,
+                metadata=metadata, entry_id=entry_id,
+            )
+
+    def append_transcript_in_transaction(
+        self,
+        connection: Any,
+        *,
+        user_id: str,
+        workspace_id: str,
+        voice_session_id: str,
+        entry_index: int,
+        role: str,
+        event_type: str,
+        text_content: str,
+        metadata: dict[str, object] | None = None,
+        entry_id: str | None = None,
+        reject_conflicting_duplicate: bool = False,
+    ) -> TranscriptEntry:
+        text = self._validate_transcript(role, entry_index, text_content)
+        identifier = entry_id or str(uuid4())
+        with connection.cursor() as cursor:
+            self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
+            cursor.execute(
+                """
+                INSERT INTO vault_private.vault_transcript_entries
+                  (entry_id, workspace_id, user_id, voice_session_id, entry_index,
+                   role, event_type, text_content, metadata_json)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
+                ON CONFLICT (workspace_id, user_id, voice_session_id, entry_index)
+                DO UPDATE SET entry_id = vault_private.vault_transcript_entries.entry_id
+                RETURNING entry_id, workspace_id, user_id, voice_session_id, entry_index,
+                          role, event_type, text_content, created_at, metadata_json
+                """,
+                (
+                    identifier, workspace_id, user_id, voice_session_id, entry_index,
+                    role, event_type.strip(), text, json.dumps(metadata or {}, separators=(",", ":")),
+                ),
+            )
+            row = cursor.fetchone()
+            if reject_conflicting_duplicate and (
+                row[5:8] != (role, event_type.strip(), text)
+                or row[9] != (metadata or {})
+            ):
+                raise MemoryTranscriptConflictError(
+                    "Transcript index was replayed with different content."
+                )
+            return TranscriptEntry(*row[:9])
+
+    @staticmethod
+    def _validate_transcript(role: str, entry_index: int, text_content: str) -> str:
         if role not in {"user", "assistant", "tool"}:
             raise MemoryContractError("invalid transcript role")
         text = text_content.strip()
         if entry_index < 0 or not text or len(text) > 16384:
             raise MemoryContractError("invalid transcript entry")
-        identifier = entry_id or str(uuid4())
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
-                cursor.execute(
-                    """
-                    INSERT INTO vault_private.vault_transcript_entries
-                      (entry_id, workspace_id, user_id, voice_session_id, entry_index,
-                       role, event_type, text_content, metadata_json)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
-                    ON CONFLICT (workspace_id, user_id, voice_session_id, entry_index)
-                    DO UPDATE SET entry_id = vault_private.vault_transcript_entries.entry_id
-                    RETURNING entry_id, workspace_id, user_id, voice_session_id, entry_index,
-                              role, event_type, text_content, created_at
-                    """,
-                    (
-                        identifier, workspace_id, user_id, voice_session_id, entry_index,
-                        role, event_type.strip(), text, json.dumps(metadata or {}, separators=(",", ":")),
-                    ),
-                )
-                return TranscriptEntry(*cursor.fetchone())
+        return text
 
     def append_transcript_next(
         self,
@@ -277,8 +392,9 @@ class MemoryRepository:
         candidate_count: int,
         stored_count: int,
         contract_version: int = REVIEWER_CONTRACT_VERSION,
+        _connection: Any = None,
     ) -> None:
-        with self._connect() as connection:
+        with (nullcontext(_connection) if _connection is not None else self._connect()) as connection:
             with connection.cursor() as cursor:
                 self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
                 cursor.execute(
@@ -306,11 +422,12 @@ class MemoryRepository:
         summary_text: str,
         fingerprint: str,
         contract_version: int = REVIEWER_CONTRACT_VERSION,
+        _connection: Any = None,
     ) -> str:
         summary = summary_text.strip()
         if not summary:
             raise MemoryContractError("summary text is required")
-        with self._connect() as connection:
+        with (nullcontext(_connection) if _connection is not None else self._connect()) as connection:
             with connection.cursor() as cursor:
                 self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
                 summary_id = str(uuid4())
@@ -375,6 +492,49 @@ class MemoryRepository:
                 row = cursor.fetchone()
                 return str(row[0]) if row else None
 
+    def prepare_suppression_reviews(self, *, user_id, workspace_id, candidates, reviewer, model,
+                                    evidence=(), source_refs=(), step=None):
+        from .suppression import (suppression_rows,retained_forgotten_facts,prepare_semantic_review,
+            suppression_fingerprint,candidate_fingerprint,explicit_remember_after,content_digest,identity_digest)
+        with self._connect() as connection,connection.cursor() as cursor:
+            self._require_membership(cursor,user_id=user_id,workspace_id=workspace_id)
+            rows=suppression_rows(cursor,user_id,workspace_id)
+            fingerprint=suppression_fingerprint(rows)
+            proofs=[dict(scope=(user_id,workspace_id),candidate=candidate_fingerprint(c),
+                suppression=fingerprint,blocked=[]) for c in candidates]
+            pending=[]
+            relevant=[]
+            for index,candidate in enumerate(candidates):
+                cited=evidence[index] if evidence else ()
+                refs=source_refs[index] if source_refs else ()
+                active=[r for r in rows if not explicit_remember_after(cursor,user_id,workspace_id,cited,refs,r[6])]
+                ids={e[0] for e in cited if e[0] is not None}
+                ids.update('source-ref:'+r['sourceId'] for r in refs if r is not None)
+                deterministic=[r[0] for r in active if r[4]==content_digest(candidate.content_text)
+                    or r[3]==identity_digest(candidate) and ids.intersection(r[5])]
+                proofs[index]['blocked']=deterministic
+                if active and not deterministic:
+                    pending.append((index,candidate,active))
+                    relevant.extend(active)
+            facts=retained_forgotten_facts(cursor,workspace_id,list({r[0]:r for r in relevant}.values())) if pending else {}
+        # Provider work occurs BEFORE canonical publication locks/transaction.
+        # Resolve only authorized original facts with exact tombstone digest matches.
+        groups={}
+        for index,candidate,active in pending:
+            key=tuple(r[0] for r in active)
+            groups.setdefault(key,[]).append((index,candidate,active))
+        calls=sum(((len(group)+7)//8)*((len(group[0][2])+7)//8) for group in groups.values())
+        if calls>128:
+            from .suppression import MemorySuppressionReviewRequired
+            raise MemorySuppressionReviewRequired("Forgotten-fact review requires bounded continuation.")
+        for ordinal,group in enumerate(groups.values()):
+            prepared=prepare_semantic_review(rows=group[0][2],facts=facts,candidates=[g[1] for g in group],
+                reviewer=reviewer,model=model,
+                step=(lambda key,text,produce:step(str(ordinal)+':'+key,text,produce)) if step else None)
+            for (index,_,_),proof in zip(group,prepared):
+                proofs[index]['blocked']=proof['blocked']
+        return proofs
+
     def reconcile_memory(
         self,
         *,
@@ -383,7 +543,10 @@ class MemoryRepository:
         voice_session_id: str,
         candidate: MemoryCandidate,
         evidence: tuple[tuple[str | None, str, str, str], ...],
+        evidence_source_refs: tuple[dict | None, ...] | None = None,
         contract_version: int = REVIEWER_CONTRACT_VERSION,
+        semantic_proof: dict | None = None,
+        _connection: Any = None,
     ) -> MemoryRecord:
         item = candidate.validated()
         if not evidence:
@@ -391,24 +554,24 @@ class MemoryRepository:
         for _, _, authority, excerpt in evidence:
             if authority not in MEMORY_AUTHORITIES or not excerpt.strip():
                 raise MemoryContractError("invalid memory evidence")
-        with self._connect() as connection:
+        if evidence_source_refs is not None:
+            from .analysis_spans import validate_reference
+            if len(evidence_source_refs) != len(evidence):
+                raise MemoryContractError("Evidence source references must align with citations.")
+            for reference, (_, _, _, excerpt) in zip(evidence_source_refs, evidence):
+                if reference is not None:
+                    validate_reference(reference, excerpt)
+        with (nullcontext(_connection) if _connection is not None else self._connect()) as connection:
             with connection.cursor() as cursor:
                 self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
-                canonical_lock = "\x1f".join(
-                    (
-                        workspace_id,
-                        item.visibility,
-                        user_id if item.visibility == "private" else "workspace",
-                        item.subject_id,
-                        item.domain,
-                        item.memory_type,
-                        item.memory_key,
-                    )
-                )
+                cursor.execute("SELECT pg_advisory_xact_lock_shared(hashtextextended(%s, 81008))", (workspace_id,))
                 cursor.execute(
                     "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-                    (canonical_lock,),
+                    (canonical_lock(workspace_id,user_id,item),),
                 )
+                require_not_suppressed(cursor,user_id=user_id,workspace_id=workspace_id,item=item,evidence=evidence,
+                    evidence_source_refs=evidence_source_refs,semantic_proof=semantic_proof,
+                    require_semantic=getattr(self,'require_semantic_suppression',False))
                 owner_predicate = "AND user_id=%s" if item.visibility == "private" else ""
                 owner_params: tuple[object, ...] = (user_id,) if item.visibility == "private" else ()
                 cursor.execute(
@@ -500,15 +663,17 @@ class MemoryRepository:
                         (memory_id, version),
                     )
                     version_id = str(cursor.fetchone()[0])
-                for entry_id, kind, authority, excerpt in evidence:
+                for evidence_index, (entry_id, kind, authority, excerpt) in enumerate(evidence):
+                    reference = evidence_source_refs[evidence_index] if evidence_source_refs is not None else None
                     cursor.execute(
                         """
                         INSERT INTO vault_private.vault_memory_evidence
                           (evidence_id,version_id,transcript_entry_id,evidence_kind,
-                           source_authority,evidence_text)
-                        VALUES (%s,%s,%s,%s,%s,%s)
+                           source_authority,evidence_text,source_ref_json)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s)
                         """,
-                        (str(uuid4()), version_id, entry_id, kind, authority, excerpt[:16384]),
+                        (str(uuid4()), version_id, entry_id, kind, authority, excerpt[:16384],
+                         Jsonb(reference) if reference is not None else None),
                     )
                 return self._memory_by_id_cursor(
                     cursor, user_id=user_id, workspace_id=workspace_id, memory_id=memory_id
@@ -535,7 +700,7 @@ class MemoryRepository:
                 cursor.execute(
                     """
                     SELECT e.evidence_kind,e.source_authority,e.evidence_text,
-                           e.transcript_entry_id
+                           e.transcript_entry_id,e.source_ref_json
                     FROM vault_private.vault_memory_record_versions v
                     JOIN vault_private.vault_memory_evidence e ON e.version_id=v.version_id
                     WHERE v.memory_id=%s AND v.version_number=%s
@@ -547,10 +712,12 @@ class MemoryRepository:
                     "evidenceKind": str(row[0]), "sourceAuthority": str(row[1]),
                     "evidenceText": str(row[2]),
                     "transcriptEntryId": str(row[3]) if row[3] is not None else None,
+                    **({"sourceRef": row[4]} if row[4] is not None else {}),
                 } for row in cursor.fetchall())
 
     def _memory_by_id_cursor(
-        self, cursor: Any, *, user_id: str, workspace_id: str, memory_id: str
+        self, cursor: Any, *, user_id: str, workspace_id: str, memory_id: str,
+        lock: bool = False,
     ) -> MemoryRecord:
         cursor.execute(
             f"""
@@ -562,7 +729,7 @@ class MemoryRepository:
               ON membership.workspace_id=m.workspace_id AND membership.user_id=%s
              AND membership.status='active'
             WHERE m.memory_id=%s AND {self._scope_sql('m')}
-            """,
+            """ + (" FOR UPDATE OF m" if lock else ""),
             (user_id, memory_id, workspace_id, user_id),
         )
         row = cursor.fetchone()
@@ -594,13 +761,27 @@ class MemoryRepository:
                 )
                 return tuple(MemoryRecord(*row) for row in cursor.fetchall())
 
+    @staticmethod
+    def _chat_action_source(cursor, *, user_id, workspace_id, conversation_id, turn_id):
+        cursor.execute("""SELECT ordinal,input_text FROM vault_private.vault_conversation_turns
+          WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND turn_id=%s
+          AND state IN ('running','completed') FOR SHARE""",
+          (user_id,workspace_id,conversation_id,turn_id))
+        row=cursor.fetchone()
+        if row is None:
+            raise MemoryConfirmationError("An original submitted Chat turn is required.")
+        return row
+
     def prepare_action(
         self,
         *,
         user_id: str,
         workspace_id: str,
-        voice_session_id: str,
-        prepared_entry_index: int,
+        voice_session_id: str | None = None,
+        prepared_entry_index: int | None = None,
+        conversation_id: str | None = None,
+        turn_id: str | None = None,
+        local_session_id: str | None = None,
         action_kind: str,
         memory_id: str,
         proposed_content: str | None = None,
@@ -614,27 +795,31 @@ class MemoryRepository:
             with connection.cursor() as cursor:
                 self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
                 self._memory_by_id_cursor(cursor, user_id=user_id, workspace_id=workspace_id, memory_id=memory_id)
-                cursor.execute(
-                    """
-                    SELECT 1 FROM vault_private.vault_transcript_entries
-                    WHERE workspace_id=%s AND user_id=%s AND voice_session_id=%s
-                      AND entry_index=%s AND role='user'
-                    """,
-                    (workspace_id, user_id, voice_session_id, prepared_entry_index),
-                )
-                if cursor.fetchone() is None:
-                    raise MemoryConfirmationError("Preparing user transcript entry is required.")
+                if conversation_id is not None and turn_id is not None and voice_session_id is None:
+                    from app.vault_runtime.local_identity.authority import has_current_session_scope
+                    if not local_session_id or not has_current_session_scope(cursor,user_id=user_id,
+                        workspace_id=workspace_id,local_session_id=local_session_id,lock=True):
+                        raise MemoryConfirmationError("Current local session is required.")
+                    prepared_entry_index,_ = self._chat_action_source(cursor,user_id=user_id,workspace_id=workspace_id,
+                        conversation_id=conversation_id,turn_id=turn_id)
+                else:
+                    cursor.execute("""SELECT 1 FROM vault_private.vault_transcript_entries
+                      WHERE workspace_id=%s AND user_id=%s AND voice_session_id=%s
+                        AND entry_index=%s AND role='user'""",
+                      (workspace_id,user_id,voice_session_id,prepared_entry_index))
+                    if cursor.fetchone() is None:
+                        raise MemoryConfirmationError("Preparing user transcript entry is required.")
                 action_id = str(uuid4())
                 cursor.execute(
                     """
                     INSERT INTO vault_private.vault_memory_pending_actions
                       (action_id,workspace_id,user_id,voice_session_id,memory_id,action_kind,
-                       proposed_content,prepared_entry_index)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                       proposed_content,prepared_entry_index,conversation_id,prepared_turn_id)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """,
                     (
                         action_id, workspace_id, user_id, voice_session_id, memory_id,
-                        action_kind, content, prepared_entry_index,
+                        action_kind, content, prepared_entry_index, conversation_id, turn_id,
                     ),
                 )
                 return action_id
@@ -644,36 +829,50 @@ class MemoryRepository:
         *,
         user_id: str,
         workspace_id: str,
-        voice_session_id: str,
+        voice_session_id: str | None = None,
         action_id: str,
-        confirmation_entry_index: int,
+        confirmation_entry_index: int | None = None,
+        conversation_id: str | None = None,
+        turn_id: str | None = None,
+        _connection: Any = None,
     ) -> PendingMemoryAction:
-        with self._connect() as connection:
+        with (nullcontext(_connection) if _connection is not None else self._connect()) as connection:
             with connection.cursor() as cursor:
                 self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
                 cursor.execute(
                     """
-                    SELECT action_kind,memory_id,proposed_content,prepared_entry_index
+                    SELECT action_kind,memory_id,proposed_content,prepared_entry_index,prepared_turn_id
                     FROM vault_private.vault_memory_pending_actions
                     WHERE action_id=%s AND workspace_id=%s AND user_id=%s
-                      AND voice_session_id=%s AND status='pending'
+                      AND voice_session_id IS NOT DISTINCT FROM %s
+                      AND conversation_id IS NOT DISTINCT FROM %s AND status='pending'
                     FOR UPDATE
                     """,
-                    (action_id, workspace_id, user_id, voice_session_id),
+                    (action_id, workspace_id, user_id, voice_session_id, conversation_id),
                 )
                 action = cursor.fetchone()
-                if action is None or confirmation_entry_index <= int(action[3]):
-                    raise MemoryConfirmationError("A later same-session user confirmation is required.")
-                cursor.execute(
-                    """
-                    SELECT entry_id,text_content FROM vault_private.vault_transcript_entries
-                    WHERE workspace_id=%s AND user_id=%s AND voice_session_id=%s
-                      AND entry_index=%s AND role='user'
-                    """,
-                    (workspace_id, user_id, voice_session_id, confirmation_entry_index),
-                )
-                confirmation = cursor.fetchone()
-                if confirmation is None:
+                source_ref=None
+                if conversation_id is not None and turn_id is not None and voice_session_id is None:
+                    if action is None or action[4] is None:
+                        raise MemoryConfirmationError("Original prepared Chat action is unavailable.")
+                    prepared_ordinal,_=self._chat_action_source(cursor,user_id=user_id,workspace_id=workspace_id,
+                        conversation_id=conversation_id,turn_id=action[4])
+                    if prepared_ordinal!=action[3]:
+                        raise MemoryConfirmationError("Original prepared Chat source changed.")
+                    confirmation_entry_index,text=self._chat_action_source(cursor,user_id=user_id,workspace_id=workspace_id,
+                        conversation_id=conversation_id,turn_id=turn_id)
+                    if len(text)>16384:
+                        raise MemoryConfirmationError("Use a confirmation message within 16384 characters so its original evidence is retained completely.")
+                    from .analysis_spans import source_reference
+                    source_ref=source_reference("chat-final:"+turn_id,"user",text)
+                    confirmation=(None,text)
+                else:
+                    cursor.execute("""SELECT entry_id,text_content FROM vault_private.vault_transcript_entries
+                      WHERE workspace_id=%s AND user_id=%s AND voice_session_id=%s
+                        AND entry_index=%s AND role='user'""",
+                      (workspace_id,user_id,voice_session_id,confirmation_entry_index))
+                    confirmation=cursor.fetchone()
+                if action is None or confirmation_entry_index is None or confirmation_entry_index <= int(action[3]) or confirmation is None:
                     raise MemoryConfirmationError("A later same-session user confirmation is required.")
                 cursor.execute(
                     """
@@ -691,15 +890,24 @@ class MemoryRepository:
                     action_kind=str(action[0]),
                     memory_id=str(action[1]),
                     proposed_content=str(action[2]) if action[2] is not None else None,
-                    confirmation_entry_id=str(confirmation[0]),
+                    confirmation_entry_id=str(confirmation[0]) if confirmation[0] is not None else None,
                     confirmation_text=str(confirmation[1]),
+                    confirmation_source_ref=source_ref,
                 )
 
-    def delete_memory(self, *, user_id: str, workspace_id: str, memory_id: str) -> bool:
-        with self._connect() as connection:
+    def delete_memory(self, *, user_id: str, workspace_id: str, memory_id: str, _connection: Any = None) -> bool:
+        with (nullcontext(_connection) if _connection is not None else self._connect()) as connection:
             with connection.cursor() as cursor:
                 self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
-                self._memory_by_id_cursor(cursor, user_id=user_id, workspace_id=workspace_id, memory_id=memory_id)
+                # Exclusive vs reconciliation's shared workspace fence also
+                # closes the replay race when a reviewer changes memory_key.
+                cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 81008))", (workspace_id,))
+                memory = self._memory_by_id_cursor(cursor, user_id=user_id, workspace_id=workspace_id, memory_id=memory_id)
+                cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    (canonical_lock(workspace_id,memory.user_id,memory),))
+                memory = self._memory_by_id_cursor(cursor,user_id=user_id,workspace_id=workspace_id,
+                    memory_id=memory_id,lock=True)
+                record_suppression(cursor,memory)
                 cursor.execute(
                     f"DELETE FROM vault_private.vault_memory_records m WHERE m.memory_id=%s AND {self._scope_sql('m')} RETURNING m.memory_id",
                     (memory_id, workspace_id, user_id),
@@ -747,7 +955,10 @@ class MemoryRepository:
         model: str,
         embedding: list[float],
         content_text: str,
+        expected_version: int | None = None,
     ) -> None:
+        if expected_version is not None and (type(expected_version) is not int or expected_version < 1):
+            raise MemoryContractError("embedding snapshot version must be a positive integer")
         if not provider.strip() or not model.strip() or not embedding:
             raise MemoryContractError("real embedding provider, model and vector are required")
         vector = tuple(float(value) for value in embedding)
@@ -755,10 +966,12 @@ class MemoryRepository:
             raise MemoryContractError("embedding contains a non-finite value")
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
+                self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id, lock=True)
                 memory = self._memory_by_id_cursor(
-                    cursor, user_id=user_id, workspace_id=workspace_id, memory_id=memory_id
+                    cursor, user_id=user_id, workspace_id=workspace_id, memory_id=memory_id, lock=True
                 )
+                if expected_version is not None and memory.current_version != expected_version:
+                    raise MemoryContractError("embedding snapshot version must match current memory version")
                 if memory.content_text != content_text:
                     raise MemoryContractError("embedding content must match current memory content")
                 cursor.execute(
@@ -811,8 +1024,11 @@ class MemoryRepository:
 
     def memories_missing_embeddings(
         self, *, user_id: str, workspace_id: str, model: str, limit: int = 256,
+        after_memory_id: str | None = None,
     ) -> tuple[MemoryRecord, ...]:
         bounded = max(1, min(int(limit), 1000))
+        if after_memory_id is not None and (type(after_memory_id) is not str or len(after_memory_id)>256):
+            raise ValueError("Invalid bounded embedding maintenance cursor.")
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 self._require_membership(cursor, user_id=user_id, workspace_id=workspace_id)
@@ -824,9 +1040,11 @@ class MemoryRepository:
                     FROM vault_private.vault_memory_records m
                     LEFT JOIN vault_private.vault_memory_embeddings e ON e.memory_id=m.memory_id
                     WHERE {self._scope_sql('m')} AND m.lifecycle_status='active'
-                      AND (e.memory_id IS NULL OR e.model<>%s)
-                    ORDER BY m.updated_at ASC LIMIT %s
+                      AND (e.memory_id IS NULL OR e.model<>%s
+                        OR e.content_fingerprint<>encode(sha256(convert_to(m.content_text,'UTF8')),'hex'))
+                      {"AND m.memory_id > %s" if after_memory_id is not None else ""}
+                    ORDER BY {"m.memory_id" if after_memory_id is not None else "m.updated_at ASC"} LIMIT %s
                     """,
-                    (workspace_id, user_id, model, bounded),
+                    (workspace_id, user_id, model, *((after_memory_id,) if after_memory_id is not None else ()), bounded),
                 )
                 return tuple(MemoryRecord(*row) for row in cursor.fetchall())

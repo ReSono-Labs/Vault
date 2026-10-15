@@ -210,6 +210,27 @@ def _handler_for(
             return self.rfile.read(length) if length > 0 else b""
 
         def _send(self, response: LocalApiResponse) -> None:
+            if response.stream is not None:
+                self.send_response(response.status_code)
+                self.send_header("Content-Type",response.content_type or "text/event-stream")
+                self.send_header("Cache-Control","no-store")
+                self.send_header("X-Accel-Buffering","no")
+                self.send_header("Connection","close")
+                self.end_headers()
+                self.close_connection = True
+                try:
+                    for chunk in response.stream:
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                except Exception:
+                    # Disconnect/revocation ends viewing only; never replay or
+                    # cancel a model/tool run as a side effect of socket loss.
+                    pass
+                finally:
+                    close = getattr(response.stream,"close",None)
+                    if close is not None:
+                        close()
+                return
             if response.body is not None:
                 payload = response.body
                 content_type = response.content_type or "application/octet-stream"

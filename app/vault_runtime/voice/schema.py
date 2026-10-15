@@ -75,6 +75,10 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     """ALTER TABLE vault_private.vault_voice_sessions DROP CONSTRAINT IF EXISTS vault_voice_sessions_auth_method_check""",
     """ALTER TABLE vault_private.vault_voice_sessions ADD CONSTRAINT vault_voice_sessions_auth_method_check
        CHECK (auth_method IN ('api_key','chatgpt_oauth','gemini_oauth','xai_oauth'))""",
+    """ALTER TABLE vault_private.vault_voice_sessions ADD COLUMN IF NOT EXISTS transcript_capture_state
+       text NOT NULL DEFAULT 'unknown' CHECK(transcript_capture_state IN ('unknown','acknowledged','incomplete'))""",
+    """ALTER TABLE vault_private.vault_voice_sessions ADD COLUMN IF NOT EXISTS transcript_capture_failures
+       integer NOT NULL DEFAULT 0 CHECK(transcript_capture_failures>=0)""",
     """
     CREATE TABLE IF NOT EXISTS vault_private.vault_ai_provider_selection (
       workspace_id text PRIMARY KEY REFERENCES vault_private.local_workspaces(workspace_id) ON DELETE CASCADE,
@@ -110,11 +114,14 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
       event_type text NOT NULL,
       event_role text CHECK (event_role IS NULL OR event_role IN ('user','assistant','tool')),
       payload_sha256 text NOT NULL CHECK (length(payload_sha256)=64),
+      evidence_json jsonb NOT NULL DEFAULT '{}'::jsonb,
       transcript_entry_index integer CHECK (transcript_entry_index IS NULL OR transcript_entry_index >= 0),
       created_at timestamptz NOT NULL DEFAULT now(),
       PRIMARY KEY (voice_session_id, provider_event_id)
     )
     """,
+    """ALTER TABLE vault_private.vault_voice_provider_events
+       ADD COLUMN IF NOT EXISTS evidence_json jsonb NOT NULL DEFAULT '{}'::jsonb""",
     """
     CREATE TABLE IF NOT EXISTS vault_private.vault_voice_tool_grants (
       grant_id text PRIMARY KEY,
@@ -156,6 +163,13 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
     """ALTER TABLE vault_private.vault_voice_tool_invocations
        ADD COLUMN IF NOT EXISTS arguments_redacted jsonb NOT NULL DEFAULT '{}'::jsonb""",
+    """ALTER TABLE vault_private.vault_voice_tool_invocations
+       ADD COLUMN IF NOT EXISTS source_utterance_index integer
+         CHECK(source_utterance_index IS NULL OR source_utterance_index>=0)""",
+    """ALTER TABLE vault_private.vault_voice_tool_invocations
+       ADD COLUMN IF NOT EXISTS source_utterance_fingerprint text
+         CHECK((source_utterance_fingerprint IS NULL OR source_utterance_fingerprint ~ '^[0-9a-f]{64}$')
+           AND (source_utterance_index IS NULL)=(source_utterance_fingerprint IS NULL))""",
     """
     CREATE TABLE IF NOT EXISTS vault_private.vault_voice_tool_results (
       invocation_id text PRIMARY KEY REFERENCES vault_private.vault_voice_tool_invocations(invocation_id) ON DELETE CASCADE,

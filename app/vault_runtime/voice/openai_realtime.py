@@ -209,6 +209,13 @@ def _multipart_form(*fields: tuple[str, str]) -> tuple[bytes, str]:
 
 
 def build_openai_realtime_session_object(request: RealtimeSessionRequest) -> dict[str, Any]:
+    if request.session_type=="transcription":
+        transcription={"model":request.input_audio_transcription_model}
+        if request.input_audio_transcription_delay:
+            transcription["delay"]=request.input_audio_transcription_delay
+        return {"type":"transcription","audio":{"input":{"transcription":transcription,"turn_detection":None}}}
+    if request.session_type!="realtime":
+        raise OpenAIRealtimeError("Unsupported Realtime session type.")
     modalities = tuple(dict.fromkeys(request.output_modalities))
     if not modalities or any(value not in {"audio", "text"} for value in modalities):
         raise OpenAIRealtimeError("Realtime output modalities are invalid.")

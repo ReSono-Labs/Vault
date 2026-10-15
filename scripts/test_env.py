@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import json
+import fcntl
 from pathlib import Path
 import subprocess
 
@@ -55,6 +57,22 @@ def _sync() -> None:
 
 def _up() -> None:
     _sync()
+    # Reuse an independently started test container only after verifying the
+    # exact database, user and loopback port; never remove another container.
+    existing = subprocess.run(
+        ["docker", "inspect", "resono-vault-test-postgres"],
+        text=True, capture_output=True,
+    )
+    if existing.returncode == 0:
+        container = json.loads(existing.stdout)[0]
+        settings = _settings()
+        env = dict(value.split("=", 1) for value in container["Config"].get("Env", []) if "=" in value)
+        ports = container["NetworkSettings"].get("Ports", {}).get("5432/tcp") or []
+        if (container["State"]["Running"]
+            and env.get("POSTGRES_DB") == settings["VAULT_TEST_POSTGRES_DB"] == "resono_vault_test"
+            and env.get("POSTGRES_USER") == settings["VAULT_TEST_POSTGRES_USER"]
+            and any(p["HostIp"] == "127.0.0.1" and p["HostPort"] == settings["VAULT_TEST_POSTGRES_PORT"] for p in ports)):
+            return
     _compose("up", "-d", "--wait", "postgres")
 
 
@@ -71,10 +89,16 @@ def _test(*pytest_arguments: str, frontend: bool) -> None:
     _up()
     environment = os.environ.copy()
     environment["VAULT_TEST_DATABASE_URL"] = _database_url()
-    subprocess.run(
-        ["uv", "run", "--frozen", "pytest", *(pytest_arguments or ("-q",))],
-        cwd=ROOT, env=environment, check=True,
-    )
+    # Integration fixtures own the isolated schema. Serialize separate invocations
+    # so a second process cannot drop tables beneath a running test.
+    lock_path = ROOT / ".runtime" / "test-database.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        subprocess.run(
+            ["uv", "run", "--frozen", "pytest", *(pytest_arguments or ("-q",))],
+            cwd=ROOT, env=environment, check=True,
+        )
     if frontend:
         subprocess.run(["npm", "test", "--", "--run"], cwd=ROOT / "frontend", check=True)
         subprocess.run(["npm", "run", "build"], cwd=ROOT / "frontend", check=True)

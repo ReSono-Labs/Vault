@@ -15,6 +15,10 @@ from app.vault_runtime.tools.definitions import ToolDefinition, ToolInvocationCo
 from app.vault_runtime.voice.repository import VoiceAuthorizationError, VoiceSessionRepository
 
 
+
+class VoiceToolCallPending(RuntimeError):
+    """A replayed tool call whose original invocation has not finished yet."""
+
 class ToolGrantError(RuntimeError):
     code = "tool_grant_denied"
 
@@ -173,6 +177,29 @@ class LocalToolAuthority:
                     (workspace_id, user_id, tool_name),
                 )
 
+    def authorized_definitions(self, definitions, context: ToolInvocationContext):
+        """Read the same current interactive grants once for a catalog snapshot."""
+        with self._connect() as connection, connection.cursor() as cursor:
+            return self.authorized_definitions_in_transaction(definitions, context, cursor)
+
+    def authorized_definitions_in_transaction(self, definitions, context, cursor):
+        """Same grant projection inside a caller's qualification transaction."""
+        audience = "voice_enabled" if context.agent is AgentKind.VOICE else "background_enabled"
+        cursor.execute(f"""SELECT g.tool_name,g.effect_class
+                FROM vault_private.vault_voice_tool_grants g
+                JOIN vault_private.local_workspace_memberships m
+                  ON m.workspace_id=g.workspace_id AND m.user_id=%s AND m.status='active'
+                JOIN vault_private.local_sessions s
+                  ON s.session_id=%s AND s.user_id=%s AND s.active_workspace_id=g.workspace_id
+                  AND s.status='active' AND s.expires_at>now()
+                WHERE g.workspace_id=%s AND g.status='active' AND g.{audience}=true
+                  AND (g.user_id IS NULL OR g.user_id=%s)""",
+                (context.user_id,context.local_session_id,context.user_id,context.workspace_id,context.user_id))
+        grants = set(cursor.fetchall())
+        return tuple(d for d in definitions if ((d.name,d.effect_class) in grants
+            if d.tool_id.startswith("builtin.") else
+            d.scope_user_id==context.user_id and d.scope_workspace_id==context.workspace_id))
+
     def authorize(self, definition: ToolDefinition, context: ToolInvocationContext) -> bool:
         # Imported capability definitions are projected only into one user/workspace
         # and their handlers recheck the durable extension grant at invocation.
@@ -215,6 +242,14 @@ class LocalToolAuthority:
     ) -> InvocationClaim:
         if context.agent is not AgentKind.VOICE or not context.voice_session_id:
             raise ToolInvocationConflictError("Voice invocation requires the fixed Voice Agent session.")
+        return self._prepare_interactive_invocation(context=context,definition=definition,arguments=arguments)
+
+    def prepare_conversation_invocation(self, *, context, definition, arguments) -> InvocationClaim:
+        if context.agent is not AgentKind.VOICE or not context.conversation_id or not context.turn_id or context.voice_session_id:
+            raise ToolInvocationConflictError("Conversation invocation requires the fixed interactive identity and final turn.")
+        return self._prepare_interactive_invocation(context=context,definition=definition,arguments=arguments)
+
+    def _prepare_interactive_invocation(self, *, context, definition, arguments) -> InvocationClaim:
         arguments_hash = canonical_arguments_sha256(arguments)
         with self._connect() as connection:
             with connection.cursor() as cursor:
@@ -222,25 +257,42 @@ class LocalToolAuthority:
                     cursor, user_id=context.user_id, workspace_id=context.workspace_id,
                     local_session_id=context.local_session_id,
                 )
-                VoiceSessionRepository._session_cursor(
-                    cursor, user_id=context.user_id, workspace_id=context.workspace_id,
-                    local_session_id=context.local_session_id,
-                    voice_session_id=context.voice_session_id, require_open=True,
-                )
+                if context.voice_session_id:
+                    VoiceSessionRepository._session_cursor(
+                        cursor, user_id=context.user_id, workspace_id=context.workspace_id,
+                        local_session_id=context.local_session_id,
+                        voice_session_id=context.voice_session_id, require_open=True,
+                    )
+                    source_index, source_fingerprint = self._source_claim(cursor,context)
+                    parent_columns,parent_values = "voice_session_id",(context.voice_session_id,)
+                else:
+                    cursor.execute("""SELECT 1 FROM vault_private.vault_conversation_turns t
+                      JOIN vault_private.vault_conversations c ON c.conversation_id=t.conversation_id
+                        AND c.user_id=t.user_id AND c.workspace_id=t.workspace_id
+                      WHERE t.user_id=%s AND t.workspace_id=%s AND t.conversation_id=%s AND t.turn_id=%s
+                        AND t.state='running' AND NOT t.cancel_requested AND c.state='open' FOR SHARE OF t,c""",
+                      (context.user_id,context.workspace_id,context.conversation_id,context.turn_id))
+                    if cursor.fetchone() is None:
+                        raise ToolInvocationConflictError("Current running submitted conversation turn required.")
+                    source_index,source_fingerprint = None,None
+                    parent_columns,parent_values = "conversation_id,turn_id",(context.conversation_id,context.turn_id)
+                parent_placeholders = ",".join("%s" for _ in parent_values)
                 cursor.execute(
-                    """
+                    f"""
                     INSERT INTO vault_private.vault_voice_tool_invocations
-                      (invocation_id,voice_session_id,user_id,workspace_id,tool_call_id,
-                       tool_name,effect_class,arguments_sha256,arguments_redacted,state)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'prepared')
-                    ON CONFLICT (voice_session_id,tool_call_id) DO NOTHING
+                      (invocation_id,{parent_columns},user_id,workspace_id,tool_call_id,
+                       tool_name,effect_class,arguments_sha256,arguments_redacted,state,
+                       source_utterance_index,source_utterance_fingerprint)
+                    VALUES (%s,{parent_placeholders},%s,%s,%s,%s,%s,%s,%s,'prepared',%s,%s)
+                    ON CONFLICT ({parent_columns},tool_call_id) DO NOTHING
                     RETURNING invocation_id
                     """,
                     (
-                        str(uuid4()), context.voice_session_id, context.user_id,
+                        str(uuid4()), *parent_values, context.user_id,
                         context.workspace_id, context.tool_call_id, definition.name,
                         definition.effect_class, arguments_hash,
                         Jsonb(redact_tool_arguments(arguments)),
+                        source_index, source_fingerprint,
                     ),
                 )
                 inserted = cursor.fetchone()
@@ -256,12 +308,12 @@ class LocalToolAuthority:
                     )
                     return InvocationClaim(invocation_id, "acquired")
                 cursor.execute(
-                    """
+                    f"""
                     SELECT invocation_id,tool_name,effect_class,arguments_sha256,state
                     FROM vault_private.vault_voice_tool_invocations
-                    WHERE voice_session_id=%s AND tool_call_id=%s FOR UPDATE
+                    WHERE {" AND ".join(column+"=%s" for column in parent_columns.split(","))} AND tool_call_id=%s FOR UPDATE
                     """,
-                    (context.voice_session_id, context.tool_call_id),
+                    (*parent_values, context.tool_call_id),
                 )
                 prior = cursor.fetchone()
                 if prior[1:4] != (definition.name, definition.effect_class, arguments_hash):
@@ -287,6 +339,29 @@ class LocalToolAuthority:
                         ),
                     )
                 return InvocationClaim(str(prior[0]), str(prior[4]))
+
+    @staticmethod
+    def _source_claim(cursor, context):
+        """A matched client claim, not proven model causality or finality.
+
+        Replay preserves the initial invocation's claim. Qualification must
+        re-read source existence/role/hash before using this derived reference.
+        """
+        index, text = context.user_utterance_id, context.user_utterance
+        if type(index) is not int or index < 0 or type(text) is not str or not text.strip():
+            return None,None
+        cursor.execute("SELECT to_regclass('vault_private.vault_transcript_entries')")
+        if cursor.fetchone()[0] is None:
+            return None,None
+        try:
+            fingerprint = sha256(text.strip().encode()).hexdigest()
+        except UnicodeEncodeError:
+            return None,None
+        cursor.execute("""SELECT 1 FROM vault_private.vault_transcript_entries
+          WHERE user_id=%s AND workspace_id=%s AND voice_session_id=%s AND entry_index=%s
+          AND role='user' AND encode(sha256(convert_to(text_content,'UTF8')),'hex')=%s""",
+          (context.user_id,context.workspace_id,context.voice_session_id,index,fingerprint))
+        return (index,fingerprint) if cursor.fetchone() else (None,None)
 
     def complete(
         self,
@@ -360,6 +435,10 @@ class VoiceToolRuntime:
         )
         if claim.disposition == "succeeded" and claim.recovered_result is not None:
             return claim.recovered_result
+        if claim.disposition == "invoking":
+            # The same call is still running (its first request was dropped by the network). The
+            # client polls with the same toolCallId until the stored result is available.
+            raise VoiceToolCallPending()
         if claim.disposition != "acquired":
             return ToolInvocationResult("Tool call is already active or requires review.", is_error=True)
         try:

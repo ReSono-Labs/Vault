@@ -42,10 +42,12 @@ from app.vault_runtime.local_api.stores import PostgresVaultHealthStore
 from app.vault_runtime.local_identity.repository import LocalIdentityRepository
 from app.vault_runtime.local_identity.service import LocalIdentityService
 from app.vault_runtime.memory.repository import MemoryRepository
-from app.vault_runtime.memory.openai_embeddings import ScopedOpenAIEmbeddingFactory
+from app.vault_runtime.live_memory.preferences import LiveMemoryPreferenceRepository
 from app.vault_runtime.memory.service import MemoryService
 from app.vault_runtime.memory.tools import register_memory_tools
 from app.vault_runtime.memory.voice_learning import VoiceMemoryLearning
+from app.vault_runtime.decision_learning.voice_review import VoiceDecisionReview
+from app.vault_runtime.conversation.runtime import ConversationRuntime
 from app.vault_runtime.memory.openai_reviewer import OpenAIMemoryReviewer
 from app.vault_runtime.memory.pipeline import MemoryPipeline
 from app.vault_runtime.external_memory.repository import ExternalMemoryRepository
@@ -96,6 +98,8 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     workspace_storage.ensure_root()
     identity_repository = LocalIdentityRepository(database_url=database_url)
     identity_repository.ensure_schema()
+    live_memory_preferences = LiveMemoryPreferenceRepository(database_url=database_url)
+    live_memory_preferences.ensure_schema()
     storage_identities = identity_repository.active_storage_identities()
     for owner_user_id, workspace_id in storage_identities:
         workspace_storage.reconcile_identity(
@@ -108,6 +112,7 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         workspace_storage=workspace_storage,
     )
     memories = MemoryRepository(database_url=database_url)
+    memories.require_semantic_suppression = True
     memories.ensure_schema()
     voices = VoiceSessionRepository(database_url=database_url)
     voices.ensure_schema()
@@ -136,17 +141,27 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         google_client_id=config.google_oauth_client_id,
         google_client_secret=config.google_oauth_client_secret,
     )
-    embedding_factory = ScopedOpenAIEmbeddingFactory(provider_credentials)
+    from app.vault_runtime.memory.local_embeddings import LocalEmbeddingFactory
+    embedding_factory = LocalEmbeddingFactory()
     memory_service = MemoryService(
         repository=memories, embedder_factory=embedding_factory,
+        reviewer_factory=lambda user_id,workspace_id:OpenAIMemoryReviewer(credentials=provider_credentials,
+            user_id=user_id,workspace_id=workspace_id),
     )
     register_memory_tools(catalog=catalog, repository=memories, service=memory_service)
     register_contacts_tools(catalog=catalog, store=personal_data)
     register_web_search_tool(catalog=catalog, credentials=provider_credentials)
     register_builtin_plugin_tools(catalog=catalog, repository=builtin_plugins, credentials=provider_credentials)
+    decision_review = None
+    if config.decision_review_enabled:
+        from app.vault_runtime.decision_learning.rules import DecisionRuleRepository
+        decision_review = VoiceDecisionReview(database_url=database_url,catalog=catalog,credentials=provider_credentials,
+            repository_type=DecisionRuleRepository)
+        decision_review.ensure_schema()
     voice_learning = VoiceMemoryLearning(
         memories=memories, sessions=voices, credentials=provider_credentials,
         embedder_factory=embedding_factory,
+        decision_finalize=decision_review.finalize if decision_review is not None else None,
     )
     external_integrations = ExternalMemoryRepository(database_url=database_url)
     external_integrations.ensure_schema()
@@ -193,22 +208,10 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     register_collab_tools(catalog, a2a_service, builtin_plugins=builtin_plugins)
     a2a_service.start()
 
-    def backfill_memory_vectors() -> None:
-        for user_id, workspace_id in storage_identities:
-            stored, failed = memory_service.ensure_vectors(
-                user_id=user_id, workspace_id=workspace_id, limit=1000,
-            )
-            if stored or failed:
-                logging.getLogger(__name__).info(
-                    "Vault memory vector backfill completed stored=%s failed=%s",
-                    stored, failed,
-                )
-
-    Thread(
-        target=backfill_memory_vectors,
-        name="vault-memory-vector-backfill",
-        daemon=True,
-    ).start()
+    from app.vault_runtime.memory_search.maintenance import IndexedMemoryMaintenance
+    memory_maintenance = IndexedMemoryMaintenance(database_url=database_url, service=memory_service,
+        identities=identity_repository, enabled=config.indexed_memory_enabled)
+    memory_maintenance.start()
     background_runs = BackgroundRunRepository(database_url=database_url)
     background_runs.ensure_schema()
     background_service = BackgroundAgentService(
@@ -340,9 +343,79 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     ).start()
     notifications = NotificationRepository(database_url=database_url)
     notifications.ensure_schema()
+    conversation_runtime = ConversationRuntime(database_url=database_url,credentials=provider_credentials,
+        memories=memory_service,catalog=catalog,authority=tool_authority)
+    conversation_runtime.ensure_schema()
+    from app.vault_runtime.conversation.attachments import ConversationAttachments
+    conversation_runtime.attachments=ConversationAttachments(database_url=database_url,storage=workspace_storage)
+    conversation_runtime.attachments.ensure_schema()
+    from app.vault_runtime.memory.chat_learning import ChatMemoryLearning
+    conversation_runtime.memory_learning = ChatMemoryLearning(database_url=database_url,
+        memories=memories,voice_learning=voice_learning,runtime_store=conversation_runtime.store,
+        attachments=conversation_runtime.attachments)
+    conversation_runtime.memory_learning.ensure_schema()
+    if config.decision_review_enabled:
+        from app.vault_runtime.decision_learning.chat_source import ChatReviewSource
+        from app.vault_runtime.decision_learning.rules import DecisionRuleRepository
+        from app.vault_runtime.decision_learning.chat_learning import ChatLearningPublisher
+        conversation_runtime.decision_review = VoiceDecisionReview(database_url=database_url,
+            catalog=catalog,credentials=provider_credentials,
+            source=ChatReviewSource(database_url=database_url,catalog=catalog,memories=memories,attachments=conversation_runtime.attachments),
+            repository_type=DecisionRuleRepository)
+        conversation_runtime.decision_review.ensure_schema()
+        from app.vault_runtime.decision_learning.chat_activation import ChatActivationGates
+        from app.vault_runtime.decision_learning.activation import CatalogActivator
+        gates = ChatActivationGates(source=conversation_runtime.decision_review.source,
+            catalog=catalog,authority=tool_authority)
+        activator = CatalogActivator(repository=conversation_runtime.decision_review.repository,
+            qualify_rule=gates.qualify,current_capabilities=gates.capabilities)
+        activator.ensure_schema()
+        conversation_runtime.decision_review.on_completed = ChatLearningPublisher(database_url=database_url,
+            repository=conversation_runtime.decision_review.repository,
+            embedder_factory=memory_service._embedder_factory or (lambda user_id,workspace_id:None),
+            activator=activator)
+    from app.vault_runtime.live_memory.chat_runtime import ChatPreparationRuntime
+    conversation_runtime.preparation = ChatPreparationRuntime(database_url=database_url,
+        store=conversation_runtime.store,memories=memory_service,preferences=live_memory_preferences,
+        credentials=provider_credentials,catalog=catalog,authority=tool_authority,
+        user_ids=tuple({user_id for user_id,_ in storage_identities}))
+    conversation_runtime.preparation.maintenance = memory_maintenance
+    from app.vault_runtime.live_memory.voice_host import PreparationSources
+    conversation_runtime.preparation.store=PreparationSources(conversation_runtime.store,voices)
+    conversation_runtime.preparation.loader.context_identity=conversation_runtime.preparation.store.context_identity
+    coordinator.live_preparation=lambda principal:live_memory_preferences.get(principal).enabled
+    coordinator.transcription_available=lambda principal:provider_credentials.has_api_key(principal,"openai")
+    if config.decision_review_enabled:
+        from app.vault_runtime.decision_routing.example_index import ActiveDecisionQueries
+        from app.vault_runtime.memory_search.postgres import QueryOptions
+        conversation_runtime.preparation.learned_queries = ActiveDecisionQueries(activator=activator,
+            options=QueryOptions(timeout_ms=1500,ef_search=100,max_scan_tuples=20000))
+        from app.vault_runtime.decision_learning.reconciliation import DecisionReconciler
+        conversation_runtime.decision_review.reconciler = DecisionReconciler(
+            repository=conversation_runtime.decision_review.repository,
+            queries=conversation_runtime.preparation.learned_queries,
+            embedder_factory=lambda user_id,workspace_id: memory_service._embedder_factory(user_id,workspace_id)
+                if memory_service._embedder_factory else None)
+        conversation_runtime.decision_review.on_completed.require_reconciliation = True
+        # Both channels use the same publisher, reconciliation and activation.
+        # Voice supplies its existing canonical session logs, never another capture path.
+        conversation_runtime.decision_review.source.voice_source = decision_review.source
+        decision_review.source.existing_source = conversation_runtime.decision_review.source
+        decision_review.on_completed = conversation_runtime.decision_review.on_completed
+        decision_review.reconciler = DecisionReconciler(
+            repository=decision_review.repository,
+            queries=conversation_runtime.preparation.learned_queries,
+            embedder_factory=lambda user_id,workspace_id: memory_service._embedder_factory(user_id,workspace_id)
+                if memory_service._embedder_factory else None)
+
+    conversation_runtime.voice_learning=voice_learning
+    conversation_runtime.voice_decision_review=decision_review
+    conversation_runtime.start_review_recovery(identity_repository.resolve_review_principal)
     return VaultLocalApiApp(
         store=PostgresVaultHealthStore.from_config(config), token=config.token,
         max_body_bytes=config.max_body_bytes, identity_service=identities,
+        live_memory_preferences=live_memory_preferences,
+        live_memory_invalidator=conversation_runtime.preparation.registry.preference_changed,
         voice_coordinator=coordinator, voice_sessions=voices,
         provider_credential_resolver=provider_credentials.resolve,
         extension_imports=extension_imports, extensions=extensions,
@@ -354,6 +427,8 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         calendar_runtime=calendar_runtime,
         background_service=background_service, background_runs=background_runs,
         voice_learning=voice_learning,
+        decision_review=decision_review,
+        conversation_runtime=conversation_runtime,
         voice_tools=voice_tools,
         external_memory_integrations=external_integrations,
         external_memory=external_memory,

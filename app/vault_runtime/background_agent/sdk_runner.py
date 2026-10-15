@@ -17,7 +17,7 @@ async def run_agent_turn(
     api_key: str,
     model: str,
     instructions: str,
-    input_text: str,
+    input_text: Any,
     base_url: str | None,
     reasoning_effort: str,
     max_turns: int,
@@ -26,6 +26,10 @@ async def run_agent_turn(
     function_tools: list[Any] | None = None,
     observation_sink: Callable[[AgentTurnObservation], None] | None = None,
     output_type: type[Any] | None = None,
+    model_response_sink: Callable[[Any], None] | None = None,
+    text_delta_sink: Callable[[str], None] | None = None,
+    cancel_requested: Callable[[], bool] | None = None,
+    model_api: str = "responses",
 ) -> Any:
     """Run one OpenAI Agents SDK turn and return the final output text.
 
@@ -46,12 +50,15 @@ async def run_agent_turn(
         base_url=base_url,
         http_client=DefaultAsyncHttpxClient(),
     )
-    provider = OpenAIProvider(openai_client=client, use_responses=True)
+    if model_api not in {"responses", "chat_completions"}:
+        await client.close()
+        raise ValueError("Unsupported model API.")
+    provider = OpenAIProvider(openai_client=client, use_responses=model_api == "responses")
     try:
         model_settings = ModelSettings(
             reasoning=Reasoning(effort=reasoning_effort, summary="auto")
             if reasoning_effort != "none" else None,
-            store=False if base_url else None,
+            store=False if base_url and model_api == "responses" else None,
         )
         agent = Agent(
             name=agent_name,
@@ -64,16 +71,53 @@ async def run_agent_turn(
         )
         run_config = RunConfig(model_provider=provider)
         class ObservationHooks(RunHooks):
+            async def on_llm_start(self, _context, _agent, _system_prompt, _input_items) -> None:
+                if cancel_requested is not None and cancel_requested():
+                    raise asyncio.CancelledError()
+
             async def on_llm_end(self, _context, _agent, response) -> None:
+                if model_response_sink is not None:
+                    # A required source sink must succeed before the SDK can
+                    # dispatch this response's tools. Never swallow capture loss.
+                    model_response_sink(response)
                 _observe((response,), observation_sink)
 
-        if base_url:
+        if base_url or text_delta_sink is not None or cancel_requested is not None:
             streamed = Runner.run_streamed(
                 agent, input=input_text, run_config=run_config, max_turns=max_turns,
                 hooks=ObservationHooks(),
             )
-            async for _event in streamed.stream_events():
-                pass
+            async def watch_cancel():
+                while not streamed.is_complete:
+                    if cancel_requested is not None and cancel_requested():
+                        streamed.cancel(mode="immediate")
+                        return
+                    await asyncio.sleep(0.1)
+
+            watcher = asyncio.create_task(watch_cancel()) if cancel_requested is not None else None
+            events = streamed.stream_events()
+            try:
+                async for event in events:
+                    if text_delta_sink is not None and getattr(event,"type",None)=="raw_response_event":
+                        data = event.data
+                        if getattr(data,"type",None)=="response.output_text.delta":
+                            text_delta_sink(data.delta)
+                if cancel_requested is not None and cancel_requested():
+                    raise asyncio.CancelledError()
+            except BaseException:
+                # A failed durable delta/source consumer is not permission for
+                # the SDK's background run loop to continue dispatching tools.
+                streamed.cancel(mode="immediate")
+                try:
+                    async for _ in events:
+                        pass  # Drain cancellation without delivering lost source.
+                except BaseException:
+                    pass  # Preserve the original capture/cancellation failure.
+                raise
+            finally:
+                if watcher is not None:
+                    watcher.cancel()
+                    await asyncio.gather(watcher,return_exceptions=True)
             if streamed.run_loop_exception is not None:
                 raise streamed.run_loop_exception
             return streamed.final_output if output_type is not None else str(streamed.final_output)

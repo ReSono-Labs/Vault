@@ -89,7 +89,12 @@ class RuntimePortForwarder:
         listener: socket.socket, target_port: int, stop_event: threading.Event,
     ) -> None:
         while not stop_event.is_set():
-            readable, _, _ = select.select([listener], [], [], 0.5)
+            try:
+                readable, _, _ = select.select([listener], [], [], 0.5)
+            except (OSError,ValueError):
+                if stop_event.is_set():
+                    break  # Unpublish may close the descriptor during select.
+                raise
             if not readable:
                 continue
             try:

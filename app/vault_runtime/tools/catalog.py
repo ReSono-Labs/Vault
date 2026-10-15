@@ -78,6 +78,16 @@ class ToolCatalog:
                 and definition.visible_in(user_id=user_id, workspace_id=workspace_id)
             )
 
+    def metadata_for(self, agent: AgentKind, *, user_id: str, workspace_id: str) -> tuple[ToolDefinition, ...]:
+        """Scoped metadata for invalidation only, NOT available/executable tools.
+
+        Availability must still be checked before proposing or invoking a tool.
+        Avoid invoking every availability provider merely to detect catalog edits.
+        """
+        with self._lock:
+            return tuple(d for d in self._by_name.values() if agent in d.audiences and
+                (d.scope_user_id is None or (d.scope_user_id==user_id and d.scope_workspace_id==workspace_id)))
+
     def realtime_definitions(
         self, *, user_id: str | None = None, workspace_id: str | None = None,
     ) -> tuple[dict[str, object], ...]:

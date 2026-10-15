@@ -19,11 +19,18 @@ class ToolInvocationContext:
     user_utterance: str | None = None
     user_utterance_id: int | None = None
     execution_id: str | None = None
+    conversation_id: str | None = None
+    turn_id: str | None = None
 
     def __post_init__(self) -> None:
         for value in (self.user_id, self.workspace_id, self.tool_call_id, self.local_session_id):
             if not value or value.strip() != value:
                 raise ValueError("tool context identifiers must be non-empty and trimmed")
+        if (self.conversation_id is None)!=(self.turn_id is None):
+            raise ValueError("Conversation tool context requires conversation and turn together.")
+        if self.conversation_id is not None and (not self.conversation_id or self.conversation_id.strip()!=self.conversation_id
+                or not self.turn_id or self.turn_id.strip()!=self.turn_id or self.voice_session_id is not None):
+            raise ValueError("Conversation tool context cannot impersonate a Voice session.")
 
 
 @dataclass(frozen=True, slots=True)

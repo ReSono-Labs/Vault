@@ -17,3 +17,6 @@ build/
 frontend/dist/
 *.pem
 *.key
+
+packaging/local-embeddings/
+

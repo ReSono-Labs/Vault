@@ -46,8 +46,8 @@ def register_memory_tools(
     def prepare_correction(
         context: ToolInvocationContext, arguments: dict[str, object]
     ) -> ToolInvocationResult:
-        if not context.voice_session_id or context.user_utterance_id is None:
-            return ToolInvocationResult("A current Voice user utterance is required.", is_error=True)
+        if not ((context.voice_session_id and context.user_utterance_id is not None) or (context.conversation_id and context.turn_id)):
+            return ToolInvocationResult("A current user message is required.", is_error=True)
         memory_id = str(arguments.get("memoryId", "")).strip()
         new_content = str(arguments.get("newContent", "")).strip()
         memory = repository.memory(
@@ -57,6 +57,7 @@ def register_memory_tools(
             user_id=context.user_id, workspace_id=context.workspace_id,
             voice_session_id=context.voice_session_id,
             prepared_entry_index=context.user_utterance_id,
+            conversation_id=context.conversation_id,turn_id=context.turn_id,local_session_id=context.local_session_id,
             action_kind="correct", memory_id=memory_id, proposed_content=new_content,
         )
         payload = {
@@ -83,8 +84,22 @@ def register_memory_tools(
     def remember_intent(
         context: ToolInvocationContext, _arguments: dict[str, object]
     ) -> ToolInvocationResult:
+        if context.conversation_id and context.turn_id and context.user_utterance:
+            # Original immutable input remains the evidence; no fake Voice transcript.
+            with repository._connect() as connection,connection.cursor() as cursor:
+                from app.vault_runtime.local_identity.authority import has_current_session_scope
+                if not has_current_session_scope(cursor,user_id=context.user_id,workspace_id=context.workspace_id,
+                    local_session_id=context.local_session_id,lock=True):
+                    return ToolInvocationResult("Current local session is required.",is_error=True)
+                repository._chat_action_source(cursor,user_id=context.user_id,workspace_id=context.workspace_id,
+                    conversation_id=context.conversation_id,turn_id=context.turn_id)
+                cursor.execute("""UPDATE vault_private.vault_conversation_turns SET explicit_remember=true
+                  WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND turn_id=%s""",
+                  (context.user_id,context.workspace_id,context.conversation_id,context.turn_id))
+            payload={"recorded":True,"conversationId":context.conversation_id,"turnId":context.turn_id}
+            return ToolInvocationResult(json.dumps(payload,separators=(",",":")),payload)
         if not context.voice_session_id or not context.user_utterance:
-            return ToolInvocationResult("A current Voice user utterance is required.", is_error=True)
+            return ToolInvocationResult("A current user message is required.", is_error=True)
         entry = repository.append_transcript_next(
             user_id=context.user_id, workspace_id=context.workspace_id,
             voice_session_id=context.voice_session_id, role="user",
@@ -98,8 +113,8 @@ def register_memory_tools(
     def prepare_forget(
         context: ToolInvocationContext, arguments: dict[str, object]
     ) -> ToolInvocationResult:
-        if not context.voice_session_id or context.user_utterance_id is None:
-            return ToolInvocationResult("A current Voice user utterance is required.", is_error=True)
+        if not ((context.voice_session_id and context.user_utterance_id is not None) or (context.conversation_id and context.turn_id)):
+            return ToolInvocationResult("A current user message is required.", is_error=True)
         memory_id = str(arguments.get("memoryId", "")).strip()
         memory = repository.memory(
             user_id=context.user_id, workspace_id=context.workspace_id, memory_id=memory_id
@@ -108,6 +123,7 @@ def register_memory_tools(
             user_id=context.user_id, workspace_id=context.workspace_id,
             voice_session_id=context.voice_session_id,
             prepared_entry_index=context.user_utterance_id,
+            conversation_id=context.conversation_id,turn_id=context.turn_id,local_session_id=context.local_session_id,
             action_kind="forget", memory_id=memory_id,
         )
         payload = {
@@ -117,13 +133,14 @@ def register_memory_tools(
         return ToolInvocationResult(json.dumps(payload, separators=(",", ":")), payload)
 
     def confirm(context: ToolInvocationContext, arguments: dict[str, object]) -> ToolInvocationResult:
-        if not context.voice_session_id or context.user_utterance_id is None:
+        if not ((context.voice_session_id and context.user_utterance_id is not None) or (context.conversation_id and context.turn_id)):
             return ToolInvocationResult("A later Voice user confirmation is required.", is_error=True)
         result = service.confirm_action(
             user_id=context.user_id, workspace_id=context.workspace_id,
             voice_session_id=context.voice_session_id,
             action_id=str(arguments.get("actionId", "")).strip(),
             confirmation_entry_index=context.user_utterance_id,
+            conversation_id=context.conversation_id,turn_id=context.turn_id,local_session_id=context.local_session_id,
         )
         payload = {
             "applied": True, "action": result.action, "memoryId": result.memory_id,

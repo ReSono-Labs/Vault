@@ -7,7 +7,7 @@ import httpx
 import logging
 from http.cookies import SimpleCookie
 from hmac import compare_digest
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Iterable, Mapping, Protocol
 from urllib.parse import parse_qs, quote, urlsplit
 from uuid import uuid4
 
@@ -68,6 +68,9 @@ from app.vault_runtime.workspace_files.multipart import parse_multipart_form
 from app.vault_runtime.workspace_files.service import WorkspaceFileService
 from app.vault_runtime.tasks.repository import TaskRepository, task_view
 from app.vault_runtime.notifications.repository import NotificationRepository
+from app.vault_runtime.live_memory.preferences import (
+    LiveMemoryPreference, LiveMemoryPreferenceRepository, PreferenceConflictError,
+)
 
 
 class VaultLocalApiHealthStore(Protocol):
@@ -85,6 +88,7 @@ class LocalApiResponse:
     headers: tuple[tuple[str, str], ...] = ()
     body: bytes | None = None
     content_type: str | None = None
+    stream: Iterable[bytes] | None = None
 
 
 class VaultLocalApiApp:
@@ -121,6 +125,10 @@ class VaultLocalApiApp:
         workspace_files: WorkspaceFileService | None = None,
         tasks: TaskRepository | None = None,
         notifications: NotificationRepository | None = None,
+        live_memory_preferences: LiveMemoryPreferenceRepository | None = None,
+        live_memory_invalidator: Callable[[LiveMemoryPreference], None] | None = None,
+        decision_review=None,
+        conversation_runtime=None,
     ) -> None:
         self._store = store
         self._token = token
@@ -154,9 +162,15 @@ class VaultLocalApiApp:
         self._workspace_files = workspace_files
         self._tasks = tasks
         self._notifications = notifications
+        self._live_memory_preferences = live_memory_preferences
+        self._live_memory_invalidator = live_memory_invalidator
+        self._decision_review = decision_review
+        self._conversation_runtime = conversation_runtime
 
     def close(self) -> None:
         """Release owned runtime workers without changing durable local state."""
+        if self._conversation_runtime is not None:
+            self._conversation_runtime.close()
         if self._background_service is not None:
             self._background_service.stop()
         if self._a2a_service is not None:
@@ -169,6 +183,42 @@ class VaultLocalApiApp:
         path = target_parts.path
         if method.upper() == "GET" and path == "/health":
             return self._health()
+        if path=="/conversations" or path.startswith("/conversations/"):
+            from app.vault_runtime.conversation.api import handle_conversation_api
+            from app.vault_runtime.conversation.contracts import AuthorizationError,ConflictError,InputError,NotFoundError
+            no_store = (("Cache-Control","no-store"),)
+            try:
+                if self._identity_service is None or self._conversation_runtime is None:
+                    return LocalApiResponse(503,{"error":{"code":"conversation_unavailable"}},no_store)
+                principal = self._identity_service.authenticate(session_token=_session_token(headers))
+                if method.upper()!="GET":
+                    self._identity_service.require_csrf(principal=principal,csrf_token=_csrf_token(headers))
+                return handle_conversation_api(self._conversation_runtime,principal,method=method.upper(),path=path,
+                    query=target_parts.query,headers=headers,payload=_json_object(body,
+                        max_bytes=min(self._max_body_bytes,7_100_000) if method.upper()=="POST" and path.endswith("/attachments")
+                        else STRICT_JSON_MAX_BYTES) if body else {})
+            except (LocalIdentityError,AuthorizationError) as exc:
+                return LocalApiResponse(403,{"error":{"code":"conversation_authority_required","message":str(exc)}},no_store)
+            except (InputError,ValueError,TypeError):
+                return LocalApiResponse(400,{"error":{"code":"invalid_conversation_request"}},no_store)
+            except NotFoundError:
+                return LocalApiResponse(404,{"error":{"code":"conversation_not_found"}},no_store)
+            except ConflictError as exc:
+                return LocalApiResponse(409,{"error":{"code":"conversation_conflict","message":str(exc)}},no_store)
+            except Exception:
+                return LocalApiResponse(503,{"error":{"code":"conversation_unavailable"}},no_store)
+        if path == "/live-memory":
+            try:
+                return self._handle_live_memory(
+                    method=method.upper(), headers=headers, body=body,
+                )
+            except (LocalIdentityError, PreferenceConflictError, ValueError) as exc:
+                code = getattr(exc, "code", "invalid_request")
+                status = (409 if isinstance(exc, PreferenceConflictError) else
+                          400 if isinstance(exc, ValueError) else
+                          401 if code in {"invalid_credentials", "local_session_invalid"} else 403)
+                return LocalApiResponse(status, {"error": {"code": code, "message": str(exc)}},
+                                        (("Cache-Control", "no-store"),))
         if path.startswith("/plugin-services/v1/"):
             try:
                 return self._handle_plugin_services(
@@ -397,6 +447,32 @@ class VaultLocalApiApp:
             status_code=404,
             payload={"error": {"code": "not_found", "message": "Not found."}},
         )
+
+    def _handle_live_memory(self, *, method: str, headers: Mapping[str, str],
+                            body: bytes) -> LocalApiResponse:
+        no_store = (("Cache-Control", "no-store"),)
+        identity, preferences = self._identity_service, self._live_memory_preferences
+        if identity is None or preferences is None:
+            return LocalApiResponse(503, {"error": {"code": "live_memory_unavailable"}}, no_store)
+        principal = identity.authenticate(session_token=_session_token(headers))
+        if method == "GET":
+            preference = preferences.get(principal)
+        elif method == "POST":
+            identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
+            payload = _json_object(body)
+            if set(payload) != {"enabled", "expectedEpoch"}:
+                raise ValueError("Expected only enabled and expectedEpoch.")
+            preference = preferences.set(principal, enabled=payload["enabled"],
+                                         expected_epoch=payload["expectedEpoch"])
+            if self._live_memory_invalidator is not None:
+                try:
+                    self._live_memory_invalidator(preference)
+                except Exception:
+                    return LocalApiResponse(503, {"error": {"code": "live_memory_invalidation_failed"},
+                        "enabled": preference.enabled, "epoch": preference.epoch}, no_store)
+        else:
+            return LocalApiResponse(404, {"error": {"code": "not_found"}}, no_store)
+        return LocalApiResponse(200, {"enabled": preference.enabled, "epoch": preference.epoch}, no_store)
 
     def _handle_help(
         self, *, method: str, path: str, headers: Mapping[str, str], body: bytes,
@@ -1639,10 +1715,40 @@ class VaultLocalApiApp:
                 "inputSampleRate": started.provider.input_sample_rate,
                 "outputSampleRate": started.provider.output_sample_rate,
                 "connectGreetingEvent": connect_greeting_event(started.context.display_name),
+                "liveTranscription": started.live_transcription,
             })
         payload = _json_object(body) if method == "POST" else {}
         if method in {"POST", "DELETE"}:
             identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
+        if path.startswith("/voice/sessions/") and "/preparation" in path:
+            from app.vault_runtime.live_memory.voice_host import PREFIX
+            session_id,suffix=path.removeprefix("/voice/sessions/").split("/preparation",1)
+            runtime=self._conversation_runtime
+            preparation=runtime.preparation if runtime is not None else None
+            if preparation is None or self._voice_sessions is None:
+                return LocalApiResponse(503,{"error":{"code":"voice_preparation_unavailable"}})
+            self._voice_sessions.session(user_id=principal.user_id,workspace_id=principal.workspace_id,
+                local_session_id=principal.session_id,voice_session_id=session_id,require_open=True)
+            source_id=PREFIX+session_id
+            if method=="GET" and suffix=="":
+                params=parse_qs(query)
+                return LocalApiResponse(200,preparation.status(principal,source_id,
+                    _required_text({"utteranceId":params.get("utteranceId",[""])[0]},"utteranceId"),
+                    int(params.get("revision",["0"])[0])),(("Cache-Control","no-store"),))
+            if method=="POST" and suffix=="/transcription":
+                credential=self._provider_credential_resolver(principal,"openai",capability="live_transcription")
+                result=self._voice_coordinator.start_transcription(principal=principal,
+                    voice_session_id=session_id,credential=credential)
+                return LocalApiResponse(201,{"clientSecret":result.client_secret},(("Cache-Control","no-store"),))
+            if method=="POST" and suffix=="/delivered":
+                return LocalApiResponse(200,preparation.delivered(principal,source_id,
+                    _required_text(payload,"utteranceId"),_required_nonnegative_int(payload,"memoryCount"),
+                    _required_nonnegative_int(payload,"toolCount") if "toolCount" in payload else 0))
+            if method=="POST" and suffix=="":
+                return LocalApiResponse(202,preparation.update(principal,source_id,payload),(("Cache-Control","no-store"),))
+            if method=="DELETE" and suffix=="":
+                return LocalApiResponse(200,preparation.discard(principal,source_id))
+            return LocalApiResponse(404,{"error":{"code":"not_found"}})
         if method == "GET" and path == "/voice/plan":
             if self._provider_credential_resolver is None:
                 raise RuntimeError("Local Voice provider is unavailable.")
@@ -1659,29 +1765,54 @@ class VaultLocalApiApp:
                 "negotiatedDataChannel": subscription_live,
                 "dataChannelId": 0 if subscription_live else None,
             })
+        if method == "GET" and path.startswith("/voice/sessions/") and path.endswith("/decision-review"):
+            if self._decision_review is None:
+                return LocalApiResponse(503,{"error":{"code":"decision_review_disabled","message":"Procedural review is disabled."}})
+            voice_session_id = path.removeprefix("/voice/sessions/").removesuffix("/decision-review").strip("/")
+            return LocalApiResponse(200,self._decision_review.status(principal=principal,voice_session_id=voice_session_id),
+                                    (("Cache-Control","no-store"),))
         if method == "POST" and path.startswith("/voice/sessions/") and path.endswith("/close"):
             if self._voice_sessions is None:
                 raise RuntimeError("Local Voice sessions are unavailable.")
             voice_session_id = path.removeprefix("/voice/sessions/").removesuffix("/close").strip("/")
+            if self._conversation_runtime is not None and self._conversation_runtime.preparation is not None:
+                from app.vault_runtime.live_memory.voice_host import PREFIX
+                current=self._voice_sessions.session(user_id=principal.user_id,workspace_id=principal.workspace_id,
+                    local_session_id=principal.session_id,voice_session_id=voice_session_id)
+                if current.status in {"starting","transport_open"}:
+                    self._conversation_runtime.preparation.discard(principal,PREFIX+voice_session_id)
             session = self._voice_sessions.close_session(
                 user_id=principal.user_id, workspace_id=principal.workspace_id,
                 local_session_id=principal.session_id, voice_session_id=voice_session_id,
+                transcript_capture_failures=payload.get("transcriptCaptureFailures"),
             )
             if self._voice_coordinator is not None:
                 self._voice_coordinator.close_modes(voice_session_id)
             response: dict[str, Any] = {
                 "voiceRealtimeSessionId": session.voice_session_id, "status": session.status,
             }
+            capture_state = self._voice_sessions.capture_state(user_id=principal.user_id,workspace_id=principal.workspace_id,
+                local_session_id=principal.session_id,voice_session_id=voice_session_id)
+            response["captureState"] = capture_state
+            if capture_state=="incomplete":
+                response.update(learning="deferred_incomplete_capture",decisionReview={"state":"blocked_incomplete_capture"})
+                return LocalApiResponse(200,response)
+            if self._voice_learning is not None and self._conversation_runtime is not None:
+                self._conversation_runtime.queue_voice_review(principal=principal,voice_session_id=voice_session_id)
+                response.update(learning="queued")
+                return LocalApiResponse(200,response)
             if self._voice_learning is not None:
-                finalized = self._voice_learning.finalize(
-                    principal=principal, voice_session_id=voice_session_id,
-                )
+                finalized = (self._conversation_runtime.finalize_voice(principal=principal,voice_session_id=voice_session_id)
+                    if self._conversation_runtime is not None else self._voice_learning.finalize(
+                        principal=principal,voice_session_id=voice_session_id))
                 response.update({
                     "learning": "completed" if finalized is not None else "skipped_empty",
                     "memoryCount": finalized.memory_count if finalized is not None else 0,
                     "embeddedCount": finalized.embedded_count if finalized is not None else 0,
                     "embeddingsAvailable": finalized.embeddings_available if finalized is not None else False,
                 })
+                if finalized is not None and finalized.decision_review is not None:
+                    response["decisionReview"] = finalized.decision_review
             return LocalApiResponse(200, response)
         if method == "POST" and path.startswith("/voice/sessions/") and path.endswith("/events"):
             if self._voice_learning is None:
@@ -1692,8 +1823,8 @@ class VaultLocalApiApp:
                 provider_event_id=_required_text(payload, "providerEventId"),
                 event_type=_required_text(payload, "eventType"),
                 role=_required_text(payload, "role"),
-                transcript_text=_required_text(payload, "transcriptText"),
-                transcript_entry_index=_required_nonnegative_int(payload, "transcriptEntryIndex"),
+                transcript_text=_required_text(payload, "transcriptText") if "transcriptText" in payload else None,
+                transcript_entry_index=_required_nonnegative_int(payload, "transcriptEntryIndex") if "transcriptEntryIndex" in payload else None,
                 payload=payload.get("providerPayload", {}),
             )
             return LocalApiResponse(201 if event.accepted else 200, {
@@ -1714,18 +1845,21 @@ class VaultLocalApiApp:
             utterance_id = payload.get("userUtteranceId")
             if utterance_id is not None and (not isinstance(utterance_id, int) or utterance_id < 0):
                 raise ValueError("userUtteranceId must be a non-negative integer")
-            result = self._voice_tools.invoke(
-                name=_required_text(payload, "name"), arguments=arguments,
-                context=ToolInvocationContext(
-                    agent=AgentKind.VOICE, user_id=principal.user_id,
-                    workspace_id=principal.workspace_id,
-                    local_session_id=principal.session_id,
-                    voice_session_id=voice_session_id,
-                    tool_call_id=_required_text(payload, "toolCallId"),
-                    user_utterance=_optional_text(payload, "userUtterance"),
-                    user_utterance_id=utterance_id,
-                ),
+            from app.vault_runtime.voice.tools import VoiceToolCallPending
+            context = ToolInvocationContext(
+                agent=AgentKind.VOICE, user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                local_session_id=principal.session_id,
+                voice_session_id=voice_session_id,
+                tool_call_id=_required_text(payload, "toolCallId"),
+                user_utterance=_optional_text(payload, "userUtterance"),
+                user_utterance_id=utterance_id,
             )
+            try:
+                result = self._voice_tools.invoke(name=_required_text(payload, "name"),
+                                                  arguments=arguments, context=context)
+            except VoiceToolCallPending:
+                return LocalApiResponse(202, {"pending": True}, (("Cache-Control", "no-store"),))
             return LocalApiResponse(200, result.mcp_result())
         if method == "POST" and path.startswith("/voice/sessions/") and path.endswith("/finalize"):
             if self._voice_learning is None or self._voice_sessions is None:
@@ -1736,21 +1870,28 @@ class VaultLocalApiApp:
                 local_session_id=principal.session_id, voice_session_id=voice_session_id,
                 require_open=False,
             )
-            finalized = self._voice_learning.finalize(
-                principal=principal, voice_session_id=voice_session_id,
-            )
+            if self._voice_sessions.capture_state(user_id=principal.user_id,workspace_id=principal.workspace_id,
+                    local_session_id=principal.session_id,voice_session_id=voice_session_id)=="incomplete":
+                return LocalApiResponse(409,{"error":{"code":"capture_incomplete",
+                    "message":"Transcript capture was incomplete; review is blocked."}})
+            finalized = (self._conversation_runtime.finalize_voice(principal=principal,voice_session_id=voice_session_id)
+                if self._conversation_runtime is not None else self._voice_learning.finalize(
+                    principal=principal,voice_session_id=voice_session_id))
             if finalized is None:
                 return LocalApiResponse(409, {
                     "error": {"code": "nothing_to_review", "message": "Session has no transcript to review."},
                 })
-            return LocalApiResponse(200, {
+            response = {
                 "voiceRealtimeSessionId": voice_session_id,
                 "learning": "already_completed" if finalized.already_completed else "completed",
                 "memoryCount": finalized.memory_count,
                 "embeddedCount": finalized.embedded_count,
                 "embeddingsAvailable": finalized.embeddings_available,
                 "summary": finalized.summary,
-            })
+            }
+            if finalized.decision_review is not None:
+                response["decisionReview"] = finalized.decision_review
+            return LocalApiResponse(200,response)
         if method == "GET" and path == "/background/runs":
             if self._background_runs is None:
                 raise RuntimeError("Background Agent runs are unavailable.")

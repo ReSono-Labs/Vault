@@ -46,6 +46,7 @@ class RealtimeSessionRequest:
     tool_definitions: tuple[dict[str, object], ...] = ()
     voice: str | None = None
     input_audio_transcription_model: str | None = None
+    input_audio_transcription_delay: str | None = None
     turn_detection_type: str | None = None
     turn_detection_create_response: bool | None = None
     turn_detection_interrupt_response: bool | None = None
@@ -59,6 +60,7 @@ class RealtimeSessionRequest:
     offer_sdp: str | None = None
     voice_session_id: str | None = None
     display_name: str | None = None
+    session_type: str = "realtime"
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +116,9 @@ class StartedVoiceSession:
     session: VoiceSession
     context: VoiceContext
     provider: RealtimeSessionResult
+    # True when the browser should open the dedicated live-transcription session
+    # that feeds live memory search while the user is still speaking.
+    live_transcription: bool = False
 
 
 class VoiceSessionCoordinator:
@@ -135,6 +140,20 @@ class VoiceSessionCoordinator:
         self._providers = providers
         self._tool_authority = tool_authority
         self._voice_modes = voice_modes
+        self.live_preparation = None
+        # principal -> whether a dedicated live-transcription credential (API key) exists.
+        self.transcription_available = None
+
+    def start_transcription(self,*,principal,voice_session_id,credential):
+        session=self._sessions.session(user_id=principal.user_id,workspace_id=principal.workspace_id,
+            local_session_id=principal.session_id,voice_session_id=voice_session_id,require_open=True)
+        if session.provider_key!="openai" or credential.auth_method!="api_key":
+            raise ValueError("Dedicated live transcription is unavailable for this provider/access method.")
+        return self._providers.require("openai").create_realtime_session(
+            RealtimeSessionRequest(model_key="gpt-live-transcribe",connection_mode="webrtc",
+                session_type="transcription",input_audio_transcription_model="gpt-live-transcribe",
+                input_audio_transcription_delay="low"),
+            credential=credential)
 
     def provider_descriptors(self) -> tuple[ProviderDescriptor, ...]:
         return self._providers.descriptors()
@@ -173,6 +192,10 @@ class VoiceSessionCoordinator:
                 primary_tools=lambda items=primary: tuple(item.realtime_definition() for item in items),
                 goal_intake_tools=lambda items=goal: tuple(item.realtime_definition() for item in items),
             )
+        # The conversation may run on OAuth; the transcription session has its own API-key credential.
+        live_transcription=bool(provider_key=="openai"
+            and self.live_preparation is not None and self.live_preparation(principal)
+            and self.transcription_available is not None and self.transcription_available(principal))
         request = RealtimeSessionRequest(
             model_key=model_key,
             connection_mode=connection_mode,
@@ -181,7 +204,7 @@ class VoiceSessionCoordinator:
             voice=voice,
             input_audio_transcription_model="gpt-4o-mini-transcribe",
             turn_detection_type="server_vad",
-            turn_detection_create_response=True,
+            turn_detection_create_response=True,  # The Voice agent always owns its response.
             turn_detection_interrupt_response=False,
             audio_format="audio/pcm", audio_rate=24_000,
             input_noise_reduction_type="near_field",
@@ -215,7 +238,7 @@ class VoiceSessionCoordinator:
                 voice_session_id=local.voice_session_id, terminal_status="failed",
             )
             raise
-        return StartedVoiceSession(opened, context, result)
+        return StartedVoiceSession(opened, context, result, live_transcription)
 
     def close_modes(self, voice_session_id: str) -> None:
         if self._voice_modes is not None:

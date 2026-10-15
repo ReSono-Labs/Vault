@@ -176,7 +176,12 @@ def serve() -> None:
     from app.vault_runtime.local_api.server import serve as serve_api
 
     config = VaultLocalApiConfig.from_env()
-    serve_api(config, build_local_app(config))
+    from contextlib import ExitStack
+    from app.vault_runtime.memory.local_embeddings import packaged_runtime
+    with ExitStack() as runtimes:
+        if os.environ.get("RESONO_VAULT_LOCAL_EMBEDDINGS") == "1":
+            runtimes.enter_context(packaged_runtime())
+        serve_api(config, build_local_app(config))
 
 
 def healthcheck() -> None:

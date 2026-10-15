@@ -77,7 +77,9 @@ def register_web_search_tool(
 
 def run_web_search(*, credentials: VoiceProviderCredentialStore, context: ToolInvocationContext, query: str) -> dict[str, object]:
     provider_key = credentials.selected_provider(user_id=context.user_id, workspace_id=context.workspace_id)
-    credential, model_key = credentials.background_access(user_id=context.user_id, workspace_id=context.workspace_id, provider_key=provider_key)
+    # OpenAI web search is an API-key capability even while ChatGPT OAuth is the selected method.
+    credential, model_key = credentials.background_access(user_id=context.user_id, workspace_id=context.workspace_id,
+        provider_key=provider_key, capability="web_search")
     if provider_key == "openai":
         payload = _responses_web_search(api_key=credential.value, model_key=model_key, query=query)
         answer = _clean_text(_output_text(payload))

@@ -289,11 +289,13 @@ class LocalIdentityRepository:
                 cursor, table=table, column="account_id", value=user_id,
             )
         for table, column in (
+            ("vault_conversations", "user_id"),
             ("vault_calendar_accounts", "account_id"),
             ("vault_personal_records", "account_id"),
             ("vault_memory_pending_actions", "user_id"),
             ("vault_memory_ingestions", "user_id"),
             ("vault_memory_records", "user_id"),
+            ("vault_memory_scope_epochs", "user_id"),
             ("vault_session_summaries", "user_id"),
             ("vault_transcript_entries", "user_id"),
             ("vault_background_runs", "user_id"),
@@ -442,6 +444,20 @@ class LocalIdentityRepository:
                     (session_id, user_id, token_hash, csrf_token_hash, workspace_id, issued_at, expires_at),
                 )
         return session_id
+
+    def resolve_review_principal(self,user_id,workspace_id,session_id):
+        """Internal recovery only; reuse canonical session validation, never elevate authority."""
+        with self._connect() as connection,connection.cursor() as cursor:
+            cursor.execute("""SELECT token_hash FROM vault_private.local_sessions
+              WHERE user_id=%s AND active_workspace_id=%s AND session_id=%s""",
+              (user_id,workspace_id,session_id))
+            row=cursor.fetchone()
+        if row is None:
+            raise LocalSessionError("Review authority is unavailable.")
+        principal=self.resolve_session(token_hash=row[0])
+        if (principal.user_id,principal.workspace_id,principal.session_id)!=(user_id,workspace_id,session_id):
+            raise LocalSessionError("Review authority changed.")
+        return principal
 
     def resolve_session(self, *, token_hash: str, now: datetime | None = None) -> LocalPrincipal:
         effective_now = now or datetime.now(UTC)

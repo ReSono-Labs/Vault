@@ -37,6 +37,8 @@ class VaultLocalApiConfig:
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: str | None = None
     plugin_service_url: str = "https://127.0.0.1:8765/plugin-services/v1"
+    decision_review_enabled: bool = True
+    indexed_memory_enabled: bool = True
 
     @classmethod
     def from_env(cls) -> "VaultLocalApiConfig":
@@ -108,6 +110,8 @@ class VaultLocalApiConfig:
             google_oauth_client_secret=_optional_env("RESONO_VAULT_GOOGLE_OAUTH_CLIENT_SECRET"),
             plugin_service_url=_optional_env("RESONO_VAULT_PLUGIN_SERVICE_URL")
             or "https://127.0.0.1:8765/plugin-services/v1",
+            decision_review_enabled=_bool_env("RESONO_VAULT_DECISION_REVIEW_ENABLED",True),
+            indexed_memory_enabled=_bool_env("RESONO_VAULT_INDEXED_MEMORY_ENABLED",True),
         )
 
     def database_url_value(self) -> str:

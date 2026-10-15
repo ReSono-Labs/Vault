@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from hashlib import sha256
+import json
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +27,38 @@ class MemoryRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class MemoryRetrievalState:
+    memory: MemoryRecord
+    retrieval_epoch: int
+
+    def __post_init__(self) -> None:
+        if type(self.retrieval_epoch) is not int or self.retrieval_epoch < 1:
+            raise ValueError("Record retrieval epoch must be a positive integer.")
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryRetrievalSnapshot:
+    user_id: str
+    workspace_id: str
+    workspace_epoch: int
+    private_epoch: int
+    records: tuple[MemoryRetrievalState, ...]
+
+    def __post_init__(self) -> None:
+        for epoch in (self.workspace_epoch, self.private_epoch):
+            if type(epoch) is not int or epoch < 0:
+                raise ValueError("Scope retrieval epochs must be nonnegative integers.")
+
+    @property
+    def fingerprint(self) -> str:
+        # The corpus counters cover additions/empty results too. No content or
+        # another user's private activity is included in this cache identity.
+        payload = [1, self.user_id, self.workspace_id,
+                   self.workspace_epoch, self.private_epoch]
+        return sha256(json.dumps(payload, separators=(",", ":")).encode()).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
 class TranscriptEntry:
     entry_id: str
     workspace_id: str
@@ -43,8 +77,9 @@ class PendingMemoryAction:
     action_kind: str
     memory_id: str
     proposed_content: str | None
-    confirmation_entry_id: str
+    confirmation_entry_id: str | None
     confirmation_text: str
+    confirmation_source_ref: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)

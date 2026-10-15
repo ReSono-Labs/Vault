@@ -17,6 +17,12 @@ from app.vault_runtime.local_identity.models import LocalPrincipal
 from app.vault_runtime.voice.provider import ProviderCredential
 
 
+# OpenAI capabilities that are not available through the ChatGPT subscription (OAuth)
+# route. They always use the retained API key, even while OAuth is the selected method.
+# Everything else follows the selected method.
+API_KEY_CAPABILITIES = frozenset({"live_transcription", "web_search", "decisions"})
+
+
 class VoiceProviderCredentialError(RuntimeError):
     code = "voice_provider_credential_error"
 
@@ -239,7 +245,7 @@ class VoiceProviderCredentialStore:
                          model_key=EXCLUDED.model_key,background_model_key=EXCLUDED.background_model_key,
                          voice=EXCLUDED.voice,nonce=EXCLUDED.nonce,
                          ciphertext=EXCLUDED.ciphertext,changed_by_user_id=EXCLUDED.changed_by_user_id,
-                         auth_method='api_key',api_key_configured=true,updated_at=now()""",
+                         api_key_configured=true,updated_at=now()""",
                     (provider_workspace_id,provider,model,background_model,selected_voice,nonce,ciphertext,principal.user_id),
                 )
                 cursor.execute(
@@ -296,7 +302,16 @@ class VoiceProviderCredentialStore:
                     (principal.workspace_id, provider, principal.user_id),
                 )
 
-    def resolve(self, principal: LocalPrincipal, provider_key: str) -> ProviderCredential:
+    def resolve(
+        self, principal: LocalPrincipal, provider_key: str, capability: str | None = None,
+    ) -> ProviderCredential:
+        if provider_key == "openai" and capability in API_KEY_CAPABILITIES:
+            try:
+                return self.resolve_api_key(principal, provider_key)
+            except VoiceProviderCredentialError as exc:
+                label = str(capability).replace("_", " ").capitalize()
+                raise VoiceProviderCredentialError(
+                    f"{label} needs an OpenAI API key. Add one in Connections.") from exc
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, principal, owner=False)
@@ -331,6 +346,20 @@ class VoiceProviderCredentialStore:
             if not value:
                 raise VoiceProviderCredentialError("OAuth connection must be reconnected.")
         return ProviderCredential(value, auth_method=auth_method)
+
+    def has_api_key(self, principal: LocalPrincipal, provider_key: str) -> bool:
+        """Whether an API key is stored for the principal's provider scope (no decryption)."""
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._require_scope(cursor, principal, owner=False)
+                provider_workspace_id, _mode = self._provider_workspace(cursor, principal, provider_key)
+                cursor.execute(
+                    """SELECT api_key_configured FROM vault_private.vault_voice_provider_credentials
+                       WHERE workspace_id=%s AND provider_key=%s""",
+                    (provider_workspace_id, provider_key),
+                )
+                row = cursor.fetchone()
+        return bool(row and row[0])
 
     def resolve_api_key(self, principal: LocalPrincipal, provider_key: str) -> ProviderCredential:
         """Resolve the retained API key even while OAuth is selected."""
@@ -514,10 +543,13 @@ class VoiceProviderCredentialStore:
             refreshed["_resono_token_endpoint"] = token_endpoint
         return refreshed
 
-    def background_access(self, *, user_id: str, workspace_id: str, provider_key: str | None = None) -> tuple[ProviderCredential, str]:
+    def background_access(
+        self, *, user_id: str, workspace_id: str, provider_key: str | None = None,
+        capability: str | None = None,
+    ) -> tuple[ProviderCredential, str]:
         provider_key = provider_key or self.selected_provider(user_id=user_id, workspace_id=workspace_id)
         principal = type("ScopedPrincipal", (), {"user_id": user_id, "workspace_id": workspace_id})()
-        credential = self.resolve(principal, provider_key)  # type: ignore[arg-type]
+        credential = self.resolve(principal, provider_key, capability)  # type: ignore[arg-type]
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, principal, owner=False)  # type: ignore[arg-type]

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from app.vault_runtime.memory.repository import MemoryRepository
+from app.vault_runtime.memory.repository import MemoryRepository, MemoryTranscriptConflictError
 from app.vault_runtime.voice.models import ProviderEvent
-from app.vault_runtime.voice.repository import VoiceSessionRepository
+from app.vault_runtime.voice.repository import VoiceSessionConflictError, VoiceSessionRepository
 
 
 class VoiceProviderEventCapture:
@@ -32,18 +32,23 @@ class VoiceProviderEventCapture:
             raise ValueError("transcript text and entry index must be supplied together")
         if transcript_text is not None and event_role not in {"user", "assistant", "tool"}:
             raise ValueError("transcript capture requires a supported role")
-        event = self._sessions.record_provider_event(
-            user_id=user_id, workspace_id=workspace_id,
-            local_session_id=local_session_id, voice_session_id=voice_session_id,
-            provider_event_id=provider_event_id, event_type=event_type,
-            event_role=event_role, payload=payload,
-            transcript_entry_index=transcript_entry_index,
-        )
-        if event.accepted and transcript_text is not None and transcript_entry_index is not None:
-            self._memories.append_transcript(
-                user_id=user_id, workspace_id=workspace_id,
-                voice_session_id=voice_session_id, entry_index=transcript_entry_index,
-                role=event_role, event_type=event_type, text_content=transcript_text,
-                metadata={"providerEventId": provider_event_id},
-            )
+        try:
+            with self._sessions.transaction() as connection:
+                event = self._sessions.record_provider_event_in_transaction(
+                    connection, user_id=user_id, workspace_id=workspace_id,
+                    local_session_id=local_session_id, voice_session_id=voice_session_id,
+                    provider_event_id=provider_event_id, event_type=event_type,
+                    event_role=event_role, payload=payload,
+                    transcript_entry_index=transcript_entry_index,
+                )
+                if transcript_text is not None and transcript_entry_index is not None:
+                    self._memories.append_transcript_in_transaction(
+                        connection, user_id=user_id, workspace_id=workspace_id,
+                        voice_session_id=voice_session_id, entry_index=transcript_entry_index,
+                        role=event_role, event_type=event_type, text_content=transcript_text,
+                        metadata={"providerEventId": provider_event_id},
+                        reject_conflicting_duplicate=True,
+                    )
+        except MemoryTranscriptConflictError as exc:
+            raise VoiceSessionConflictError(str(exc)) from exc
         return event

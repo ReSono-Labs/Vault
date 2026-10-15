@@ -36,11 +36,25 @@ class WorkspaceStoredEntry:
 class WorkspaceFilesystemStore:
     """Authoritative workspace file storage on disk under each workspace files root."""
 
-    def __init__(self, storage: WorkspaceStorage) -> None:
+    def __init__(self, storage: WorkspaceStorage, *, private_user_id: str | None = None) -> None:
         self._storage = storage
+        self._private_user_id = private_user_id
 
     def files_root(self, *, workspace_id: str) -> Path:
-        root = self._storage.workspace_root(workspace_id) / WORKSPACE_FILES_DIRECTORY
+        if self._private_user_id is None:
+            root = self._storage.workspace_root(workspace_id) / WORKSPACE_FILES_DIRECTORY
+        else:
+            # Same managed-file operations, separate private namespace. Inputs
+            # never appear in the workspace browser or another member's files.
+            self._storage.workspace_root(workspace_id)  # Validate the scope identifier.
+            user_root = self._storage.user_root(self._private_user_id)
+            if not user_root.is_dir() or user_root.is_symlink():
+                raise BadRequestError("Private input storage is unavailable.")
+            parent = user_root / "conversation-inputs"
+            parent.mkdir(mode=0o700, exist_ok=True)
+            if parent.is_symlink():
+                raise BadRequestError("Private input storage is unavailable.")
+            root = parent / workspace_id
         root.mkdir(mode=0o700, exist_ok=True)
         if root.is_symlink():
             raise BadRequestError("Workspace files root is unavailable.")
@@ -105,12 +119,21 @@ class WorkspaceFilesystemStore:
         *,
         workspace_id: str,
         file_key: str,
+        max_bytes: int | None = None,
     ) -> tuple[str, str, bytes]:
         files_root = self.files_root(workspace_id=workspace_id)
         path, resolved_key = self._resolve_existing_file_path(files_root=files_root, file_key=file_key)
         if not path.is_file():
             raise NotFoundError("That workspace file was not found.")
-        content = path.read_bytes()
+        if max_bytes is not None:
+            if type(max_bytes) is not int or max_bytes<1:
+                raise BadRequestError("A positive file read limit is required.")
+            with path.open('rb') as stream:
+                content=stream.read(max_bytes+1)
+            if len(content)>max_bytes:
+                raise ConflictError("Stored file exceeds its input size limit.")
+        else:
+            content = path.read_bytes()
         return PurePosixPath(resolved_key).name, self._mime_type(resolved_key), content
 
     def read_text(

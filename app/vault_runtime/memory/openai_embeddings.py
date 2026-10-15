@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from copy import copy
 import hashlib
 import json
+from math import isfinite
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -35,6 +37,7 @@ class OpenAIEmbeddings:
         model: str = DEFAULT_EMBEDDING_MODEL,
         dimensions: int = DEFAULT_EMBEDDING_DIMENSIONS,
         executor: EmbedExecutor | None = None,
+        timeout_seconds: float = 30,
     ) -> None:
         if not api_key.strip():
             raise EmbeddingUnavailable("Embedding provider access is unavailable.")
@@ -45,6 +48,18 @@ class OpenAIEmbeddings:
         self._model = model
         self._dimensions = int(dimensions)
         self._executor = executor
+        self._timeout_seconds = self._timeout(timeout_seconds)
+
+    @staticmethod
+    def _timeout(value):
+        if type(value) not in {int,float} or not isfinite(value) or not 0 < value <= 30:
+            raise ValueError("Embedding timeout must be finite and within 30 seconds.")
+        return value
+
+    def with_timeout(self, timeout_seconds: float):
+        bounded = copy(self)
+        bounded._timeout_seconds = self._timeout(timeout_seconds)
+        return bounded
 
     @property
     def model_key(self) -> str:
@@ -87,7 +102,7 @@ class OpenAIEmbeddings:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=30) as response:
+            with urlopen(request, timeout=self._timeout_seconds) as response:
                 payload = json.loads(response.read(8_388_608).decode("utf-8"))
         except HTTPError as error:
             code = "credential_rejected" if int(error.code) in (401, 403) else "provider_rejected"

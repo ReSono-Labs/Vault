@@ -52,9 +52,7 @@ class MemoryRetriever:
         methods: dict[str, set[str]] = {}
         records: dict[str, MemoryRecord] = {}
         for position, memory in enumerate(
-            self._memories.lexical_memories(
-                user_id=user_id, workspace_id=workspace_id, query=query, limit=25
-            )
+            self._lexical_candidates(query, user_id=user_id, workspace_id=workspace_id)
         ):
             records[memory.memory_id] = memory
             scores[memory.memory_id] = max(scores.get(memory.memory_id, 0.0), 0.55 - position * 0.01)
@@ -62,9 +60,30 @@ class MemoryRetriever:
             if query.strip().lower() in (memory.memory_key.lower(), memory.content_text.lower()):
                 scores[memory.memory_id] = max(scores[memory.memory_id], 1.0)
                 methods[memory.memory_id].add("exact")
+        for memory, score in self._semantic_candidates(
+            query, user_id=user_id, workspace_id=workspace_id
+        ):
+            records[memory.memory_id] = memory
+            scores[memory.memory_id] = max(scores.get(memory.memory_id, 0.0), score)
+            methods.setdefault(memory.memory_id, set()).add("semantic")
+        ranked = sorted(scores, key=lambda item: scores[item], reverse=True)[:normalized_limit]
+        return [
+            RetrievalMatch(
+                memory=records[memory_id], score=round(scores[memory_id], 8),
+                match_methods=tuple(sorted(methods[memory_id])),
+            )
+            for memory_id in ranked
+        ]
+
+    def _lexical_candidates(self, query: str, *, user_id: str, workspace_id: str):
+        return self._memories.lexical_memories(
+            user_id=user_id, workspace_id=workspace_id, query=query, limit=25
+        )
+
+    def _semantic_candidates(self, query: str, *, user_id: str, workspace_id: str):
         if self._embedder is not None:
             try:
-                query_embedding = self._embedder.embed(query)
+                query_embedding = getattr(self._embedder,"embed_query",self._embedder.embed)(query)
                 candidates = self._memories.embeddings_for(
                     user_id=user_id, workspace_id=workspace_id, model=self._embedder.model_key
                 )
@@ -82,17 +101,7 @@ class MemoryRetriever:
                     )
                 except Exception:
                     continue
-                records[memory.memory_id] = memory
-                scores[memory.memory_id] = max(scores.get(memory.memory_id, 0.0), score)
-                methods.setdefault(memory.memory_id, set()).add("semantic")
-        ranked = sorted(scores, key=lambda item: scores[item], reverse=True)[:normalized_limit]
-        return [
-            RetrievalMatch(
-                memory=records[memory_id], score=round(scores[memory_id], 8),
-                match_methods=tuple(sorted(methods[memory_id])),
-            )
-            for memory_id in ranked
-        ]
+                yield memory, score
 
 
 def cosine_similarity(left: list[float] | tuple[float, ...], right: list[float] | tuple[float, ...]) -> float:

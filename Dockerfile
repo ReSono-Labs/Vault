@@ -29,11 +29,13 @@ FROM python:3.12-slim-bookworm AS runtime
 ARG VAULT_UID=10001
 ARG VAULT_GID=10001
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y bubblewrap ca-certificates libpq5 \
+    && apt-get install --no-install-recommends -y bubblewrap ca-certificates libpq5 libgomp1 libssl3 libzstd1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid "${VAULT_GID}" vault \
     && useradd --uid "${VAULT_UID}" --gid vault --home-dir /var/lib/resono-vault --create-home vault
 WORKDIR /opt/resono-vault
+COPY packaging/local-embeddings/ /opt/resono-vault/local-embeddings/
+RUN cd /opt/resono-vault/local-embeddings && sha256sum -c SHA256SUMS >/dev/null
 COPY --from=python-build /build/.venv /opt/resono-vault/.venv
 COPY --from=python-build /build/app /opt/resono-vault/app
 COPY --from=web-build /build/frontend/dist /opt/resono-vault/web
@@ -65,7 +67,8 @@ ENV PATH="/opt/resono-vault/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     RESONO_VAULT_DATA_ROOT=/var/lib/resono-vault \
-    RESONO_VAULT_WEB_ROOT=/opt/resono-vault/web
+    RESONO_VAULT_WEB_ROOT=/opt/resono-vault/web \
+    RESONO_VAULT_LOCAL_EMBEDDINGS=1
 USER vault:vault
 EXPOSE 8765
 ENTRYPOINT ["python", "-m", "app.vault_runtime.package_runtime"]

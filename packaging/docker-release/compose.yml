@@ -37,6 +37,10 @@ services:
     image: resono-labs-vault:${VAULT_VERSION:-0.1.0}
     command: ["serve"]
     restart: unless-stopped
+    cpus: "3.0"
+    mem_limit: 6g
+    mem_reservation: 4g
+    memswap_limit: 6g
     environment:
       RESONO_VAULT_LOCAL_API_HOST: 0.0.0.0
       RESONO_VAULT_LOCAL_API_PORT: "8765"
