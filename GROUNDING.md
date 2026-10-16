@@ -93,6 +93,11 @@ workspace settings remain optional management choices.
 
 ### Locked visual system
 
+> 2026-10-15 owner decision D-14: this lock is lifted for the redesign on
+> `design/genui-overhaul`. New surfaces follow `design/mockups/` and
+> `docs/planning/2026-10-15-genui-presentation-feedback-plan.md`. The text below
+> remains the history of the original port.
+
 The entire user-facing web application must use the existing Browser Voice
 visual system exactly. This is a direct visual port, not inspiration for a new
 design. Preserve its layout, visual hierarchy, components, typography, spacing,
