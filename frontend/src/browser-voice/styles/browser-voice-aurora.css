@@ -184,3 +184,8 @@
 :root[data-theme="aurora"]:not(#_) .browser-voice-management-heading h2 { font-size: clamp(32px, 4vw, 46px); }
 :root[data-theme="aurora"] { background-color: #eef1f0; }
 :root[data-theme="aurora"]:not(#_) .vault-chat-composer textarea { border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; }
+
+/* ── list rows: inner padding so marks/switches sit off the card edge ── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-agent-row {
+  padding: 14px 20px; border-radius: 20px; margin-bottom: 10px;
+}
