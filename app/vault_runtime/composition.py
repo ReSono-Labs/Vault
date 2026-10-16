@@ -347,6 +347,11 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         memories=memory_service,catalog=catalog,authority=tool_authority)
     conversation_runtime.ensure_schema()
     conversation_runtime.genui_enabled = config.genui_enabled
+    if config.genui_enabled:
+        from app.vault_runtime.genui.feedback import GenuiFeedbackStore
+        conversation_runtime.genui_feedback = GenuiFeedbackStore(database_url=database_url,
+            embedder_factory=memory_service._embedder_factory)
+        conversation_runtime.genui_feedback.ensure_schema()
     if config.genui_enabled and config.genui_presentation_hints:
         from app.vault_runtime.decision_routing.openai_transport import OpenAIDecisionTransport
         conversation_runtime.presentation_transport_factory = lambda principal: OpenAIDecisionTransport(

@@ -37,6 +37,10 @@ def handle_conversation_api(runtime,principal,*,method,path,query,headers,payloa
         except ReviewConflictError as exc:
             raise ConflictError(str(exc)) from exc
         return response(200,result)
+    if parts[:2]==["conversations","genui"]:
+        from app.vault_runtime.genui.api import handle_global
+        return handle_global(runtime,principal,parts,method=method,query=query,payload=payload,
+            response=response,envelope=envelope)
     if parts==["conversations"]:
         if method=="GET":
             return response(200,{"items":runtime.store.recent(principal)})
@@ -121,6 +125,12 @@ def handle_conversation_api(runtime,principal,*,method,path,query,headers,payloa
             turn_id = identifier(parts[3])
             if len(parts)==4 and method=="GET":
                 return response(200,runtime.store.status(principal,conversation_id,turn_id))
+            if len(parts)==5 and parts[4] in ("feedback","alternatives","choice"):
+                from app.vault_runtime.genui.api import handle_turn
+                handled = handle_turn(runtime,principal,conversation_id,turn_id,parts[4],method=method,
+                    payload=payload,response=response,envelope=envelope)
+                if handled is not None:
+                    return handled
             if len(parts)==5 and parts[4]=="stop" and method=="POST":
                 envelope(())
                 return response(200,runtime.stop(principal,conversation_id,turn_id))

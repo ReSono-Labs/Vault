@@ -43,6 +43,7 @@ class ConversationRuntime:
         self.genui_enabled = False
         self.presentation_transport_factory = None
         self.presentation_timeout_seconds = 1.5
+        self.genui_feedback = None
 
     def start_review_recovery(self,resolve_principal):
         from app.vault_runtime.local_identity.repository import LocalSessionError
@@ -152,18 +153,53 @@ class ConversationRuntime:
                         self._slots.release()
                 raise
 
+    def model_access(self,principal):
+        """The user's configured conversation model, for display-only GenUI helper calls."""
+        provider = self.credentials.selected_provider(user_id=principal.user_id,workspace_id=principal.workspace_id)
+        credential,model = self.credentials.background_access(user_id=principal.user_id,
+            workspace_id=principal.workspace_id,provider_key=provider)
+        if provider not in {"openai","xai","gemini"}:
+            raise InputError("Selected text provider requires its conversation adapter.")
+        return dict(api_key=credential.value,model=model,
+            base_url=("https://generativelanguage.googleapis.com/v1beta/openai/" if provider=="gemini" else
+                "https://api.x.ai/v1" if provider=="xai" else
+                "https://chatgpt.com/backend-api/codex" if credential.auth_method=="chatgpt_oauth" else None),
+            extra={"model_api":"chat_completions"} if provider=="gemini" else {})
+
     def _start_presentation_hint(self,principal,turn):
-        """Run the optional Decisions layout hint beside history/memory preparation."""
-        if not self.genui_enabled or self.presentation_transport_factory is None:
+        """Layout hint beside history/memory preparation: learned preferences first, then Decisions."""
+        store = self.genui_feedback
+        if not self.genui_enabled or (self.presentation_transport_factory is None and store is None):
             return None
+        from app.vault_runtime.genui import preferences
         from app.vault_runtime.genui.presentation import predict
         holder = {}
         def run():
+            started = monotonic()
+            neighbors,config = [],{}
             try:
-                transport = self.presentation_transport_factory(principal)
-                holder['hint'] = predict(transport,turn.input_text,timeout_seconds=self.presentation_timeout_seconds)
+                if store is not None:
+                    config = store.config(principal)['config']
+                    neighbors = store.neighbors(principal,store._embed(principal,turn.input_text))
             except Exception:
-                holder['hint'] = None  # No API key or provider failure: full catalog, no hint.
+                neighbors,config = [],{}  # Learned state unavailable: behave as unlearned.
+            hint = None
+            if preferences.strong_preference(neighbors) is None and self.presentation_transport_factory is not None:
+                try:
+                    transport = self.presentation_transport_factory(principal)
+                    remaining = max(0.3,self.presentation_timeout_seconds-(monotonic()-started))
+                    hint = predict(transport,turn.input_text,timeout_seconds=remaining,
+                        past_choices=preferences.evidence(neighbors))
+                except Exception:
+                    hint = None  # No API key or provider failure: full catalog, no hint.
+            hint = preferences.apply(hint,config,neighbors)
+            guidance = config.get('guidance') or {}
+            if hint is None and guidance:
+                hint = dict(layouts=[],textLikely=False,visualProbability=None,source="preferences")
+            if hint is not None:
+                hint['guidance'] = guidance
+                hint['neighbors'] = len(neighbors)
+            holder['hint'] = hint
         thread = Thread(target=run,name="vault-presentation-hint",daemon=True)
         thread.start()
         return thread,holder,monotonic()
@@ -173,16 +209,18 @@ class ConversationRuntime:
             return None
         thread,holder,started = pending
         # Never hold the turn beyond the hint's own deadline.
-        thread.join(max(0.0,self.presentation_timeout_seconds+0.25-(monotonic()-started)))
+        thread.join(max(0.0,self.presentation_timeout_seconds+0.5-(monotonic()-started)))
         return holder.get('hint')
 
     def _genui_instructions(self,presentation):
         from app.vault_runtime.genui.catalog import prompt_section
         if presentation is None:
             return prompt_section()
+        guidance = presentation.get('guidance') or None
         if presentation['textLikely']:
             return prompt_section(text_likely=True)
-        return prompt_section(tuple(presentation['layouts']) or None)
+        return prompt_section(tuple(presentation['layouts']) or None,guidance=guidance,
+            preferred=presentation.get('preferred') if presentation.get('preferred')!='text' else None)
 
     def _work(self,principal,turn,owner,execution_lock,stop):
         started = monotonic()
