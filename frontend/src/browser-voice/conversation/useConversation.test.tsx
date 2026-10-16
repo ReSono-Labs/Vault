@@ -99,6 +99,29 @@ describe("scoped Chat controller", () => {
     await waitFor(() => expect(result.current.turns[0].answer).toBe("Done"));
   });
 
+  it("remembers the open chat across page flips and remounts; a vanished chat starts fresh", async () => {
+    const first = renderHook(() => useConversation(true));
+    act(() => first.result.current.select("c"));
+    first.unmount();
+    const again = renderHook(() => useConversation(true));
+    expect(again.result.current.selected).toBe("c");
+    again.unmount();
+    api.load.mockRejectedValueOnce(new Error("Conversation unavailable."));
+    const gone = renderHook(() => useConversation(true));
+    await waitFor(() => expect(gone.result.current.selected).toBeNull());
+    expect(gone.result.current.error).toBeNull();
+    expect(sessionStorage.getItem("resono_vault_chat_selected")).toBeNull();
+  });
+
+  it("a transient network drop while loading is retried instead of shown as 'Load failed'", async () => {
+    api.load.mockRejectedValueOnce(new TypeError("Load failed"))
+      .mockResolvedValueOnce({ ...header, turns: [{ turnId: "t", input: "Hi", answer: "Hello", state: "completed" }] });
+    const { result } = renderHook(() => useConversation(true));
+    act(() => result.current.select("c"));
+    await waitFor(() => expect(result.current.turns).toHaveLength(1), { timeout: 3000 });
+    expect(result.current.error).toBeNull();
+  });
+
   it("retries a lost acknowledgment using the exact original key and input", async () => {
     const { result } = renderHook(() => useConversation(true));
     act(() => result.current.setDraft("Hello"));

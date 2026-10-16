@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AssistantRuntimeProvider, MessagePrimitive, ThreadPrimitive, useExternalStoreRuntime,
   type ThreadMessageLike } from "@assistant-ui/react";
 import { BrowserVoiceMicrophoneIcon } from "@/browser-voice/presentation/BrowserVoiceIcons";
@@ -52,6 +53,15 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
   const viewportRef = useChatViewport(active);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDialogElement>(null);
+  // Chat history lives in the app's top bar beside notifications, only while Chat is open.
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { setHeaderSlot(document.getElementById("vault-header-slot")); }, []);
+  const historyButton = active ? <button type="button" className="vault-chat-icon-button vault-chat-history-button"
+    aria-label="Open chat options" aria-haspopup="dialog" aria-expanded={drawerOpen} aria-controls="vault-chat-options"
+    onClick={() => setDrawerOpen(true)}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h10" /></svg>
+  </button> : null;
   useEffect(() => { if (!active) setDrawerOpen(false); }, [active]);
   useEffect(() => {
     const drawer = drawerRef.current;
@@ -122,14 +132,9 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
       </div>
     </dialog>
     <div className="vault-chat-main">
-      <header className="vault-chat-header"><h1>Chat</h1>
-        <button type="button" className="vault-chat-icon-button" aria-label="Open chat options"
-          aria-haspopup="dialog" aria-expanded={drawerOpen} aria-controls="vault-chat-options"
-          onClick={() => setDrawerOpen(true)}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="3" /><path d="M15 4v16M18 9h.01M18 12h.01M18 15h.01" />
-          </svg>
-        </button></header>
+      <h1 className="vault-visually-hidden">Chat</h1>
+      {historyButton && !headerSlot ? <div className="vault-chat-header">{historyButton}</div> : null}
+      {historyButton && headerSlot ? createPortal(historyButton, headerSlot) : null}
       <CardActionsContext.Provider value={cardActions}>
       <PresentationRefresh.Provider value={refreshPresentation}>
       <AssistantRuntimeProvider runtime={runtime}>

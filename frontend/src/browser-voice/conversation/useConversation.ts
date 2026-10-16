@@ -5,6 +5,22 @@ import { useLivePreparation } from "./useLivePreparation";
 
 const activeTurn = (state: string) => state === "submitted" || state === "running";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Chat request failed.";
+/** Browsers report dropped/aborted connections as a bare TypeError ("Load failed" in Safari). */
+const isNetworkError = (error: unknown) => error instanceof TypeError;
+export const SELECTED_CHAT_KEY = "resono_vault_chat_selected";
+const storedChat = () => { try { return sessionStorage.getItem(SELECTED_CHAT_KEY); } catch { return null; } };
+const storeChat = (id: string | null) => { try { if (id) sessionStorage.setItem(SELECTED_CHAT_KEY, id); else sessionStorage.removeItem(SELECTED_CHAT_KEY); } catch { /* private mode */ } };
+/** Retry idempotent reads across a transient network drop (page flips, mobile radio changes). */
+async function retrying<T>(read: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await read(); }
+    catch (error) {
+      if (signal.aborted || attempt >= 2 || !isNetworkError(error)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 600 * (attempt + 1)));
+      if (signal.aborted) throw error;
+    }
+  }
+}
 const LAYOUTS: readonly string[] = CARD_LAYOUTS;
 /** Shape check only; the server already validated content. Unknown layouts are dropped, never rendered. */
 const isCardPart = (value: any): value is ChatCardPart => Boolean(value) && typeof value.cardId === "string"
@@ -13,7 +29,8 @@ const isCardPart = (value: any): value is ChatCardPart => Boolean(value) && type
 
 export function useConversation(active: boolean) {
   const [items, setItems] = useState<ChatHeader[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  // Stay in the chat you were working in across page flips and reloads; logout clears it.
+  const [selected, setSelected] = useState<string | null>(storedChat);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [attachments, setAttachments] = useState<(ChatAttachment & { conversation: string; preview?: string })[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -66,8 +83,8 @@ export function useConversation(active: boolean) {
     if (!active) return;
     let current = true;
     const abort = new AbortController();
-    void api.recent(abort.signal).then(value => { if (current) setItems(value.items); })
-      .catch(error => { if (current) setError(errorText(error)); });
+    void retrying(() => api.recent(abort.signal), abort.signal).then(value => { if (current) setItems(value.items); })
+      .catch(error => { if (current && !abort.signal.aborted) setError(errorText(error)); });
     return () => { current = false; abort.abort(); };
   }, [active, reload]);
 
@@ -76,12 +93,18 @@ export function useConversation(active: boolean) {
     let current = true;
     const abort = new AbortController();
     setLoading(true);
-    void api.load(selected, abort.signal).then(value => {
+    void retrying(() => api.load(selected, abort.signal), abort.signal).then(value => {
       if (!current) return;
       setTurns(value.turns); setNextBefore(value.nextBefore ?? null); setVersion(value.historyVersion);
       setRunning(value.turns.find(turn => activeTurn(turn.state))?.turnId ?? null);
       setLoading(false);
-    }).catch(error => { if (current) { setError(errorText(error)); setLoading(false); } });
+    }).catch(error => {
+      if (!current || abort.signal.aborted) return;
+      setLoading(false);
+      if (isNetworkError(error)) { setError("Couldn't reach Vault. Check your connection and try again."); return; }
+      // The remembered chat no longer exists here (deleted, other workspace): start fresh, quietly.
+      storeChat(null); setSelected(null); setTurns([]);
+    });
     return () => { current = false; abort.abort(); };
   }, [active, selected, reload]);
 
@@ -152,7 +175,7 @@ export function useConversation(active: boolean) {
     preparation.clear(); draftConversation.current = null;
     selectionEpoch.current += 1;
     drafts.current.set(selected ?? "new", draft);
-    setSelected(id); setDraft(id === null ? "" : drafts.current.get(id) ?? "");
+    setSelected(id); storeChat(id); setDraft(id === null ? "" : drafts.current.get(id) ?? "");
     setTurns([]); setNextBefore(null); setVersion(0); setRunning(null); setLiveText(""); setLiveCards([]); setLiveHint([]); setStatus(""); setError(null);
     pending.current = null; setRetryable(false);
     if (id === null) createKey.current = crypto.randomUUID();
@@ -179,7 +202,7 @@ export function useConversation(active: boolean) {
       if (!mounted.current) return;
       const value = await api.send(work.conversation, work.request);
       if (!mounted.current) return;
-      setSelected(work.conversation); setVersion(value.historyVersion);
+      setSelected(work.conversation); storeChat(work.conversation); setVersion(value.historyVersion);
       if (text === undefined) setDraft(previous => previous === work.request.input ? "" : previous);
       for (const item of attachments) { if (item.preview) URL.revokeObjectURL(item.preview); }
       setAttachments([]);

@@ -258,6 +258,7 @@ export function BrowserVoiceApp() {
   }
 
   async function logout() {
+    try { sessionStorage.removeItem("resono_vault_chat_selected"); } catch { /* private mode */ }
     await closeVoice(true);
     try {
       await localApi.logout();
@@ -789,6 +790,7 @@ export function BrowserVoiceApp() {
               </div>
               <div className="browser-voice-header-actions">
                 <div className="browser-voice-header-action-row">
+                  <span id="vault-header-slot" className="vault-header-slot" />
                   <NotificationsMenu />
                   <details className="browser-voice-account-menu">
                   <summary aria-label="Account">
