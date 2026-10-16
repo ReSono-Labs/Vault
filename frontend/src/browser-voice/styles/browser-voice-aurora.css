@@ -1,0 +1,186 @@
+/* Aurora (light) theme — hand-tuned surfaces from design/mockups. Loaded after the generated
+   colour map (browser-voice-aurora.generated.css), so these win where they overlap. */
+@font-face { font-family: "Inter"; src: url("/fonts/inter-latin-wght-normal.woff2") format("woff2-variations"); font-weight: 100 900; font-display: swap; }
+
+:root[data-theme="aurora"] {
+  color-scheme: light;
+  --a-ink: #121216; --a-ink-2: #4a4a55; --a-ink-3: #6b6b78; --a-ink-4: #9a9aa6;
+  --a-glass: rgba(255,255,255,.56); --a-glass-strong: rgba(255,255,255,.82); --a-glass-edge: rgba(255,255,255,.9);
+  --a-line: rgba(18,18,22,.08); --a-pink: #ec3f7a; --a-pink-ink: #c22a63; --a-violet: #9a6cf0;
+  --a-shadow: 0 1px 1px rgba(40,30,70,.03), 0 12px 32px -14px rgba(70,50,120,.2);
+  --a-shadow-pop: 0 2px 4px rgba(40,30,70,.06), 0 30px 60px -24px rgba(150,50,110,.35);
+  --a-aurora:
+    radial-gradient(60% 50% at 88% 12%, rgba(245,170,205,.75), transparent 70%),
+    radial-gradient(55% 45% at 12% 22%, rgba(214,205,244,.9), transparent 72%),
+    radial-gradient(60% 50% at 8% 88%, rgba(180,232,236,.85), transparent 70%),
+    radial-gradient(60% 45% at 92% 92%, rgba(215,242,226,.9), transparent 70%),
+    linear-gradient(180deg, #f4f0ea 0%, #f1e9ef 45%, #e9f2f1 100%);
+  --browser-voice-text: var(--a-ink); --browser-voice-muted: var(--a-ink-3); --browser-voice-line: var(--a-line);
+  --browser-voice-panel: rgba(255,255,255,.6); --browser-voice-card: var(--a-glass); --browser-voice-user: #16161b;
+  --browser-voice-assistant: var(--a-glass-strong); --browser-voice-accent: var(--a-pink); --browser-voice-accent-strong: var(--a-pink-ink);
+  --browser-voice-shadow: var(--a-shadow); --browser-voice-bg: var(--a-aurora); --browser-voice-warn: #d0342c;
+}
+
+/* ── canvas + type ───────────────────────────────── */
+:root[data-theme="aurora"]:not(#_), :root[data-theme="aurora"]:not(#_) body { background: var(--a-aurora) fixed; min-height: 100%; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell,
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell.is-b0r { background: transparent; color: var(--a-ink); min-height: 100dvh; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell,
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell.is-b0r,
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell button, :root[data-theme="aurora"]:not(#_) .browser-voice-shell input,
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell textarea, :root[data-theme="aurora"]:not(#_) .browser-voice-shell select {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-feature-settings: "cv11", "ss01", "ss03"; -webkit-font-smoothing: antialiased; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell.is-b0r {
+  --b0r-bg: transparent; --b0r-surface: var(--a-glass); --b0r-surface-soft: rgba(255,255,255,.4); --b0r-line: var(--a-line);
+  --b0r-text: var(--a-ink); --b0r-muted: var(--a-ink-3); --b0r-cyan: var(--a-pink); --b0r-mint: var(--a-pink); --b0r-red: #d0342c; --b0r-amber: #b98500; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-card,
+:root[data-theme="aurora"]:not(#_) .browser-voice-app-frame,
+:root[data-theme="aurora"]:not(#_) .browser-voice-content-surface { background: transparent; color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(h1, h2) { font-weight: 360; letter-spacing: -0.035em; color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell h3 { font-weight: 580; letter-spacing: -0.02em; color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(p, small, dd, .browser-voice-management-empty) { color: var(--a-ink-2); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(.browser-voice-eyebrow, .browser-voice-eyebrow-label) { color: var(--a-pink-ink); letter-spacing: .12em; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell img[src$="resono-logo.svg"] { filter: invert(1) hue-rotate(180deg) saturate(1.4); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell a { color: var(--a-pink-ink); }
+:root[data-theme="aurora"]:not(#_) ::selection { background: rgba(236,63,122,.22); }
+
+/* ── rail + nav ──────────────────────────────────── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-desktop-rail {
+  background: rgba(255,255,255,.42); border-color: rgba(255,255,255,.75);
+  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%); box-shadow: 1px 0 0 rgba(18,18,22,.04); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-future-nav button { color: var(--a-ink-2); background: transparent; border-color: transparent; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-future-nav button:hover:not(:disabled) { background: rgba(255,255,255,.6); color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-future-nav button.is-active,
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-future-nav button[aria-current="page"] { background: #16161b; color: #fff; box-shadow: 0 10px 24px -12px rgba(18,18,22,.55); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-future-nav button.is-active svg,
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-future-nav button[aria-current="page"] svg { color: #fff; stroke: currentColor; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-future-nav-icon { color: inherit; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-mobile-menu-trigger { background: #16161b; color: #fff; border-color: transparent; box-shadow: var(--a-shadow-pop); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-mobile-menu-drawer { background: rgba(255,255,255,.92); color: var(--a-ink); border-color: var(--a-glass-edge);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+
+/* ── header chips (notifications, avatar, chat history) ── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-header-actions :is(button, summary),
+:root[data-theme="aurora"]:not(#_) .browser-voice-account-menu summary,
+:root[data-theme="aurora"]:not(#_) .vault-chat-history-button {
+  background: rgba(255,255,255,.72); color: var(--a-ink); border: 1px solid var(--a-glass-edge); box-shadow: var(--a-shadow); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-account-menu > div,
+:root[data-theme="aurora"]:not(#_) .browser-voice-notifications-panel { background: rgba(255,255,255,.94); color: var(--a-ink); border-color: var(--a-glass-edge); box-shadow: var(--a-shadow-pop); }
+
+/* ── glass surfaces: rows, cards, panels, modals ─── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(.browser-voice-agent-row, .browser-voice-foundry-row, .browser-voice-management-section,
+  .browser-voice-agent-detail, .browser-voice-health-status, .browser-voice-file-row, .browser-voice-a2a-card, .browser-voice-connection-card,
+  .browser-voice-provider-card, .browser-voice-memory-item, .browser-voice-run-card, .browser-voice-document-card, .browser-voice-tool-grant-row,
+  article[class*="browser-voice-"], section[class*="-card"], div[class*="-card"]:not(.browser-voice-card):not(.vault-card)) {
+  background: var(--a-glass); border-color: var(--a-glass-edge); color: var(--a-ink); box-shadow: var(--a-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-agent-mark { background: rgba(255,255,255,.9); color: var(--a-pink-ink); box-shadow: inset 0 0 0 1px var(--a-line); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-agent-row:nth-child(4n + 2) .browser-voice-agent-mark { color: var(--a-violet); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-agent-row:nth-child(4n + 3) .browser-voice-agent-mark { color: #2a9aa8; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-agent-row:nth-child(4n + 4) .browser-voice-agent-mark { color: #b98500; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-modal, :root[data-theme="aurora"]:not(#_) dialog:not(.vault-chat-drawer):not(.browser-voice-mobile-menu-drawer) {
+  background: rgba(255,255,255,.95); color: var(--a-ink); border: 1px solid var(--a-glass-edge); box-shadow: var(--a-shadow-pop); border-radius: 24px; }
+:root[data-theme="aurora"]:not(#_) dialog::backdrop { background: rgba(60,40,80,.22); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+
+/* ── controls ────────────────────────────────────── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+  background: rgba(255,255,255,.8); color: var(--a-ink); border: 1px solid var(--a-line); border-radius: 14px; box-shadow: inset 0 1px 2px rgba(18,18,22,.03); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(input, textarea)::placeholder { color: var(--a-ink-4); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(input, textarea, select):focus { outline: 2px solid rgba(236,63,122,.45); outline-offset: 1px; border-color: transparent; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(.browser-voice-submit, .browser-voice-agent-primary, button[type="submit"]) {
+  background: #16161b; color: #fff; border-color: transparent; border-radius: 999px; box-shadow: 0 10px 22px -12px rgba(18,18,22,.6); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(.browser-voice-submit, .browser-voice-agent-primary, button[type="submit"]):hover:not(:disabled) { background: #000; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell :is(.browser-voice-pill, .browser-voice-text-action, .browser-voice-agent-filters button) {
+  background: rgba(255,255,255,.72); color: var(--a-ink); border: 1px solid var(--a-glass-edge); border-radius: 999px; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-agent-filters button.is-active { background: #16161b; color: #fff; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell .browser-voice-account-danger { background: rgba(208,52,44,.1); color: #b42318; border-color: rgba(208,52,44,.25); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-agent-switch, :root[data-theme="aurora"]:not(#_) .vault-chat-switch-track { background: #d9d9e0; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-agent-switch[aria-pressed="true"],
+:root[data-theme="aurora"]:not(#_) .vault-chat-memory-toggle[aria-checked="true"] .vault-chat-switch-track { background: linear-gradient(135deg, var(--a-pink), var(--a-violet)); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-agent-switch span, :root[data-theme="aurora"]:not(#_) .vault-chat-switch-track > span { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-feedback-error { background: rgba(208,52,44,.1); color: #9b1c14; border-color: rgba(208,52,44,.22); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-shell code { background: rgba(18,18,22,.06); color: var(--a-ink); }
+
+/* ── home / voice ─────────────────────────────────── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-microphone {
+  background: radial-gradient(circle at 35% 30%, #fff 0%, rgba(255,255,255,.6) 24%, transparent 55%),
+    conic-gradient(from 210deg, #f36aa0, #b48cf2, #6fd3e0, #f9c2d8, #f36aa0);
+  border: 0; color: #fff; box-shadow: 0 30px 60px -20px rgba(200,60,130,.55), inset 0 -10px 30px rgba(255,255,255,.45); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-microphone svg, :root[data-theme="aurora"]:not(#_) .browser-voice-microphone-icon { color: #fff; filter: drop-shadow(0 2px 6px rgba(120,40,90,.4)); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-voice-copy strong { font-weight: 340; letter-spacing: -0.035em; color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-voice-copy span { color: var(--a-pink-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-live-activity, :root[data-theme="aurora"]:not(#_) .browser-voice-live-preparation {
+  background: rgba(255,255,255,.82); color: var(--a-ink); border: 1px solid var(--a-glass-edge); box-shadow: var(--a-shadow-pop);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+
+/* ── chat ─────────────────────────────────────────── */
+:root[data-theme="aurora"]:not(#_) .vault-chat-message.is-user { background: #16161b; color: #fff; border-radius: 18px 18px 6px 18px; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-message.is-user .vault-chat-message-author { color: rgba(255,255,255,.6); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-bubble { background: rgba(255,255,255,.72); color: var(--a-ink); border: 1px solid var(--a-glass-edge);
+  border-radius: 18px 18px 18px 6px; box-shadow: var(--a-shadow); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-message-author { color: var(--a-ink-3); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-composer { background: rgba(255,255,255,.75); border: 1px solid var(--a-glass-edge); border-radius: 26px;
+  box-shadow: var(--a-shadow-pop); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-composer textarea { background: transparent; border: 0; box-shadow: none; color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-composer textarea:focus { outline: none; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-composer button, :root[data-theme="aurora"]:not(#_) .vault-chat-attach { background: rgba(18,18,22,.05); color: var(--a-ink); border-color: transparent; border-radius: 999px; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-composer button[type="submit"] { background: #16161b; color: #fff; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-drawer { background: rgba(255,255,255,.94); color: var(--a-ink); border-color: var(--a-glass-edge);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-drawer::backdrop { background: rgba(60,40,80,.18); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-sessions button { background: rgba(255,255,255,.7); border-color: var(--a-glass-edge); color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-sessions button[aria-current] { background: #16161b; color: #fff; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-preparation, :root[data-theme="aurora"]:not(#_) .vault-chat-error, :root[data-theme="aurora"]:not(#_) .vault-chat-presentation {
+  background: rgba(255,255,255,.7); border-color: var(--a-glass-edge); color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-jump { background: #16161b; color: #fff; }
+:root[data-theme="aurora"]:not(#_) .vault-feedback-bar button { background: rgba(255,255,255,.7); border-color: var(--a-glass-edge); color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .vault-feedback-bar button[aria-pressed="true"] { background: rgba(236,63,122,.14); border-color: var(--a-pink); }
+:root[data-theme="aurora"]:not(#_) .vault-export-preview { background: rgba(18,18,22,.05); color: var(--a-ink); }
+
+/* ── login / onboarding ──────────────────────────── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-login-panel, :root[data-theme="aurora"]:not(#_) .browser-voice-card.is-login-page .browser-voice-form {
+  color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-card.is-login-page .browser-voice-login-panel {
+  background: rgba(255,255,255,.6); border: 1px solid var(--a-glass-edge); box-shadow: var(--a-shadow-pop); border-radius: 28px;
+  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-experience-grid button { background: rgba(255,255,255,.75); border-color: var(--a-glass-edge); color: var(--a-ink); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-experience-grid button.is-selected { background: #16161b; color: #fff; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-onboarding-orbit { background: conic-gradient(from 0deg, #f7a8c8, #c9b6f6, #9fe0e6, #f7a8c8); }
+
+/* ── appearance setting ──────────────────────────── */
+.browser-voice-theme-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 520px; }
+.browser-voice-theme-option { display: grid; gap: 10px; padding: 12px; border-radius: 18px; text-align: left; cursor: pointer; font: inherit;
+  color: inherit; background: var(--browser-voice-panel); border: 1px solid var(--browser-voice-line); }
+.browser-voice-theme-option[aria-checked="true"] { outline: 2px solid var(--browser-voice-accent); outline-offset: 2px; }
+.browser-voice-theme-option strong { font-size: 15px; }
+.browser-voice-theme-option small { opacity: .75; }
+.browser-voice-theme-swatch { height: 76px; border-radius: 12px; position: relative; overflow: hidden; border: 1px solid rgba(127,127,127,.2); }
+.browser-voice-theme-swatch.is-midnight { background: radial-gradient(60% 80% at 80% 20%, rgba(82,207,255,.35), transparent 70%), #031426; }
+.browser-voice-theme-swatch.is-aurora { background: radial-gradient(60% 60% at 85% 20%, rgba(245,170,205,.9), transparent 70%),
+  radial-gradient(60% 60% at 10% 90%, rgba(180,232,236,.95), transparent 70%), #f4f0ea; }
+.browser-voice-theme-swatch i { position: absolute; left: 12px; right: 40%; height: 10px; border-radius: 6px; }
+.browser-voice-theme-swatch.is-midnight i { background: rgba(255,255,255,.14); } .browser-voice-theme-swatch.is-aurora i { background: rgba(255,255,255,.85); }
+.browser-voice-theme-swatch i:nth-child(1) { top: 14px; } .browser-voice-theme-swatch i:nth-child(2) { top: 32px; right: 20%; } .browser-voice-theme-swatch i:nth-child(3) { top: 50px; right: 55%; }
+.browser-voice-theme-swatch.is-midnight i:nth-child(3) { background: #69eadb; } .browser-voice-theme-swatch.is-aurora i:nth-child(3) { background: #ec3f7a; }
+
+/* ── chat bubbles: compact, mockup-shaped ─────────── */
+:root[data-theme="aurora"]:not(#_) .vault-chat-message.is-user { width: fit-content; max-width: 78%; margin-left: auto; padding: 10px 15px; box-shadow: 0 12px 24px -14px rgba(18,18,22,.5); }
+:root[data-theme="aurora"]:not(#_) .vault-chat-message.is-user,
+:root[data-theme="aurora"]:not(#_) .vault-chat-message.is-user :is(p, span, small, div) { color: #fff; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-message.is-user .vault-chat-message-author { color: rgba(255,255,255,.55); font-size: 11px; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-bubble { width: fit-content; max-width: 82%; }
+
+/* ── sections: rounded frosted cards, as in the mockups ── */
+:root[data-theme="aurora"]:not(#_) .browser-voice-management-section { border-radius: 24px; padding: 22px 24px; margin-top: 8px; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-management-section > .browser-voice-management-heading { padding-top: 4px; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-section-head { border-color: var(--a-line); }
+:root[data-theme="aurora"]:not(#_) :is(.browser-voice-connection-row, .browser-voice-connection-credential) {
+  background: rgba(255,255,255,.72); border: 1px solid var(--a-glass-edge); border-radius: 18px; color: var(--a-ink); box-shadow: var(--a-shadow); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-connection-mark { background: rgba(255,255,255,.9); color: var(--a-pink-ink); box-shadow: inset 0 0 0 1px var(--a-line); }
+:root[data-theme="aurora"]:not(#_) .browser-voice-files-shell { background: rgba(255,255,255,.5); border: 1px solid var(--a-glass-edge); border-radius: 24px;
+  box-shadow: var(--a-shadow); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); overflow: hidden; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-files-shell :is(button):not(.browser-voice-submit) { border-radius: 999px; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-files-shell [class*="primary"], :root[data-theme="aurora"]:not(#_) .browser-voice-files-shell button[class*="upload"] { background: #16161b; color: #fff; border-color: transparent; }
+:root[data-theme="aurora"]:not(#_) .browser-voice-management-heading h2 { font-size: clamp(32px, 4vw, 46px); }
+:root[data-theme="aurora"] { background-color: #eef1f0; }
+:root[data-theme="aurora"]:not(#_) .vault-chat-composer textarea { border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; }

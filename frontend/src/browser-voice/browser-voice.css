@@ -11,6 +11,8 @@
 @import "./styles/browser-voice-devices-account.css";
 @import "./styles/browser-voice-login-overhaul.css";
 @import "./styles/browser-voice-r1-console.css";
+@import "./styles/browser-voice-aurora.generated.css";
+@import "./styles/browser-voice-aurora.css";
 
 .browser-voice-live-activity {
   position: fixed;

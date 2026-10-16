@@ -8,7 +8,8 @@
     "build": "tsc --project tsconfig.json && vite build",
     "build:browser-voice": "tsc --project tsconfig.json && vite build --config vite.config.ts",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "theme:aurora": "node scripts/build-aurora-theme.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "0.15.25",

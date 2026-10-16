@@ -156,9 +156,11 @@ function Chart({ card }: { card: VaultCard }) {
         : <>
           <polyline className="g-chart-area" points={`0,${height} ${items.map((item, index) => `${index * step},${y(item.amount ?? 0)}`).join(" ")} ${width},${height}`} />
           <polyline className="g-chart-line" pathLength={1} points={items.map((item, index) => `${index * step},${y(item.amount ?? 0)}`).join(" ")} />
-          {last ? <circle className="g-chart-dot" cx={(items.length - 1) * step} cy={y(last.amount ?? 0)} r={4} /> : null}
         </>}
     </svg>
+    {last && card.chartKind !== "bar" ? <span className="g-chart-dot" aria-hidden="true"
+      style={{ left: `calc(14px + (100% - 28px) * ${((items.length - 1) * step) / width})`,
+        top: `calc(54px + 120px * ${y(last.amount ?? 0) / height})` }} /> : null}
     <figcaption>{first ? <><span>{first.label}</span><span>{last?.label}</span></> : null}</figcaption>
   </figure>;
 }

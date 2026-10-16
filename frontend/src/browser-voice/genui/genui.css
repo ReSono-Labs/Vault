@@ -18,7 +18,7 @@
   --g-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 26px 60px -30px rgba(0,0,0,.7), 0 0 0 1px rgba(105,234,219,.04);
   --g-display: 340; --g-title: 600;
 }
-[data-genui-theme="aurora"] {
+[data-genui-theme="aurora"], :root[data-theme="aurora"] {
   --g-ink: #121216; --g-ink-2: #4a4a55; --g-ink-3: #6b6b78;
   --g-surface: linear-gradient(160deg, rgba(255,255,255,.94), rgba(250,240,247,.9) 55%, rgba(236,248,247,.9));
   --g-surface-edge: rgba(255,255,255,.9);
@@ -139,7 +139,7 @@ button.g-mini:disabled { cursor: default; }
 .g-chart-grid line { stroke: currentColor; stroke-opacity: .18; stroke-dasharray: 3 4; }
 .g-chart-line { fill: none; stroke: var(--g-hero-line); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
 .g-chart-area { fill: var(--g-hero-line); fill-opacity: .12; stroke: none; }
-.g-chart-dot { fill: var(--g-hero-line); stroke: rgba(255,255,255,.4); stroke-width: 6; }
+.g-chart-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--g-hero-line); box-shadow: 0 0 0 5px rgba(255,255,255,.25), 0 0 14px var(--g-hero-line); z-index: 1; }
 .g-chart rect { fill: var(--g-hero-line); fill-opacity: .85; }
 .g-chart figcaption { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
 
@@ -290,7 +290,7 @@ button.g-mini:disabled { cursor: default; }
 .g-chart-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: g-draw 1.3s .25s cubic-bezier(.6,0,.2,1) forwards; }
 @keyframes g-draw { to { stroke-dashoffset: 0; } }
 .g-chart-area { opacity: 0; animation: g-fade .8s 1.1s ease forwards; }
-.g-chart-dot { opacity: 0; transform-box: fill-box; transform-origin: center; animation: g-fade .3s 1.45s forwards, g-pulse 2.4s 1.8s ease-in-out infinite; }
+.g-chart-dot { opacity: 0; animation: g-fade .3s 1.45s forwards, g-pulse 2.4s 1.8s ease-in-out infinite; }
 .g-chart rect { transform-box: fill-box; transform-origin: bottom; animation: g-grow .7s cubic-bezier(.2,.9,.25,1.1) both; }
 .g-chart rect:nth-child(2n) { animation-delay: .08s; } .g-chart rect:nth-child(3n) { animation-delay: .16s; }
 @keyframes g-fade { to { opacity: 1; } }

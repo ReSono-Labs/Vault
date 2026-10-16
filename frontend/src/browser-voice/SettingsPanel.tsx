@@ -1,3 +1,4 @@
+import { setTheme, storedTheme, type VaultTheme } from "@/browser-voice/theme";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   computerFoldersSupported,
@@ -187,6 +188,14 @@ export function SettingsPanel({ user }: { user: LocalUser }) {
           <p>Manage optional features for this Vault and this browser.</p>
         </div>
       </header>
+
+      <div className="browser-voice-section-head">
+        <div>
+          <h3>Appearance</h3>
+          <p>Choose how Vault looks in this browser.</p>
+        </div>
+      </div>
+      <AppearancePicker />
 
       <div className="browser-voice-section-head">
         <div>
@@ -413,4 +422,19 @@ export function SettingsPanel({ user }: { user: LocalUser }) {
       </dialog>
     </section>
   );
+}
+
+function AppearancePicker() {
+  const [theme, setCurrent] = useState<VaultTheme>(storedTheme);
+  const options: { key: VaultTheme; name: string; detail: string }[] = [
+    { key: "midnight", name: "Midnight", detail: "Dark navy with cyan light." },
+    { key: "aurora", name: "Aurora", detail: "Light glass with pink and lilac." },
+  ];
+  return <div className="browser-voice-theme-picker" role="radiogroup" aria-label="Appearance">
+    {options.map(option => <button key={option.key} type="button" role="radio" aria-checked={theme === option.key}
+      className="browser-voice-theme-option" onClick={() => { setTheme(option.key); setCurrent(option.key); }}>
+      <span className={`browser-voice-theme-swatch is-${option.key}`} aria-hidden="true"><i /><i /><i /></span>
+      <strong>{option.name}</strong><small>{option.detail}</small>
+    </button>)}
+  </div>;
 }
