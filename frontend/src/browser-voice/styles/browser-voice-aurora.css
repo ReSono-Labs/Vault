@@ -148,7 +148,7 @@
 :root[data-theme="aurora"]:not(#_) .browser-voice-onboarding-orbit { background: conic-gradient(from 0deg, #f7a8c8, #c9b6f6, #9fe0e6, #f7a8c8); }
 
 /* ── appearance setting ──────────────────────────── */
-.browser-voice-theme-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 520px; }
+.browser-voice-theme-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 520px; margin: 4px 0 40px; }
 .browser-voice-theme-option { display: grid; gap: 10px; padding: 12px; border-radius: 18px; text-align: left; cursor: pointer; font: inherit;
   color: inherit; background: var(--browser-voice-panel); border: 1px solid var(--browser-voice-line); }
 .browser-voice-theme-option[aria-checked="true"] { outline: 2px solid var(--browser-voice-accent); outline-offset: 2px; }
