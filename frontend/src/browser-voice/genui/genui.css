@@ -72,3 +72,30 @@
 @media (prefers-reduced-motion: reduce) {
   .vault-card, .vault-card.is-skeleton i, .vault-card-options button { animation: none; transition: none; }
 }
+
+.vault-card-headlines, .vault-card-places, .vault-card-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.vault-card-headlines li { padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.88); }
+.vault-card-headline-meta { display: block; font-size: 11px; font-weight: 600; color: var(--card-pink); text-transform: uppercase; letter-spacing: .04em; }
+.vault-card-headlines b { display: block; font-weight: 600; margin: 2px 0; }
+.vault-card-headlines a { color: inherit; text-decoration: none; background-image: linear-gradient(currentColor, currentColor); background-size: 0 1px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size .2s; }
+.vault-card-headlines a:hover, .vault-card-headlines a:focus-visible { background-size: 100% 1px; }
+.vault-card-places li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #fff; }
+.vault-card-place-pin { width: 24px; height: 24px; border-radius: 50% 50% 50% 4px; flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #ec3f7a, #9a6cf0); }
+.vault-card-place-body { flex: 1; min-width: 0; }
+.vault-card-place-body b { display: block; font-weight: 600; }
+.vault-card-places button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: #16161b; color: #fff; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.vault-card-places button:disabled { opacity: .5; cursor: default; }
+.vault-card-weather { border-radius: 16px; padding: 14px; background: linear-gradient(160deg, #ffffff, #fff6da 60%, #ffe9f2); }
+.vault-card-weather-now { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; }
+.vault-card-weather-icon { font-size: 34px; filter: drop-shadow(0 0 10px rgba(246,207,58,.7)); }
+.vault-card-weather-now strong { font-size: 34px; font-weight: 340; letter-spacing: -0.04em; }
+.vault-card-weather-now > span:last-child { color: var(--card-ink-2); }
+.vault-card-weather-forecast { list-style: none; margin: 12px 0 0; padding: 0; display: flex; gap: 6px; overflow-x: auto; }
+.vault-card-weather-forecast li { flex: 1 0 58px; display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border-radius: 12px; background: rgba(255,255,255,.8); }
+.vault-card-steps li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.85); }
+.vault-card-steps li > span:first-child { width: 24px; height: 24px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: #16161b; color: #fff; }
+.vault-card-steps b { font-weight: 600; }
+.vault-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.vault-card-grid article { padding: 12px; border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.vault-card-grid b { display: block; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+.vault-card-grid-label { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--card-pink); margin-bottom: 4px; }

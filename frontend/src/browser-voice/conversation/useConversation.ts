@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { CARD_LAYOUTS } from "@/browser-voice/genui/layouts";
 import { conversationApi as api, type CardLayout, type ChatAttachment, type ChatCardPart, type ChatHeader, type ChatTurn, type SendRequest, type TurnState } from "./api";
 import { useLivePreparation } from "./useLivePreparation";
 
 const activeTurn = (state: string) => state === "submitted" || state === "running";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Chat request failed.";
-const LAYOUTS: readonly string[] = ["timeline", "options", "checklist", "comparison", "table", "metrics", "chart", "summary"];
+const LAYOUTS: readonly string[] = CARD_LAYOUTS;
 /** Shape check only; the server already validated content. Unknown layouts are dropped, never rendered. */
 const isCardPart = (value: any): value is ChatCardPart => Boolean(value) && typeof value.cardId === "string"
   && Boolean(value.card) && LAYOUTS.includes(value.card.layout) && typeof value.card.fallbackText === "string"

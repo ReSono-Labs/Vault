@@ -2,9 +2,12 @@ import { request } from "@/browser-voice/localApi";
 
 export type TurnState = "submitted" | "running" | "completed" | "failed" | "interrupted";
 export type ChatAttachment = { id: string; name: string; mime: string; hash: string; size: number; coverage: string };
-export type CardLayout = "timeline" | "options" | "checklist" | "comparison" | "table" | "metrics" | "chart" | "summary";
+import type { CardLayout } from "@/browser-voice/genui/layouts";
+export type { CardLayout };
 export type CardItem = { title?: string; detail?: string; time?: string; state?: "done" | "needs_you" | "optional" | "pending";
-  text?: string; done?: boolean; label?: string; value?: string; trend?: "up" | "down" | "flat"; amount?: number };
+  text?: string; done?: boolean; label?: string; value?: string; trend?: "up" | "down" | "flat"; amount?: number;
+  source?: string; url?: string; rating?: string; distance?: string; status?: string;
+  condition?: "sun" | "partly" | "cloud" | "rain" | "snow" | "storm" | "fog" | "wind" | "night" };
 /** Server-validated display card (genui/catalog.py). Rendered only by registered Vault components. */
 export type VaultCard = { version: number; layout: CardLayout; title?: string; fallbackText: string; body?: string;
   items?: CardItem[]; columns?: string[]; rows?: string[][]; chartKind?: "line" | "bar" };

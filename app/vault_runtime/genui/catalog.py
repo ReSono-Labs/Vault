@@ -41,12 +41,25 @@ LAYOUTS: tuple[Layout, ...] = (
            "chartKind line|bar; items[{label, amount}] 2-24"),
     Layout("summary", "a short structured brief: key points with an optional lead sentence.",
            "body?; items[{text}] 1-8"),
+    Layout("headlines", "news, articles or search results: several stories with a source and optional link.",
+           "items[{title, source?, time?, detail?, url? https}] 1-10"),
+    Layout("places", "restaurants, shops, venues or locations with ratings, distance or opening state.",
+           "items[{title, detail?, rating?, distance?, status?}] 1-8"),
+    Layout("weather", "current conditions and a short forecast for one location.",
+           "title = location; items[{label (Now/day/hour), value (temperature), detail?, condition? "
+           "sun|partly|cloud|rain|snow|storm|fog|wind|night}] 1-8; the first item is current conditions"),
+    Layout("steps", "how-to instructions or a procedure the user follows in order.",
+           "items[{title, detail?}] 1-12, numbered in order"),
+    Layout("cards", "a small mixed set of distinct things worth a glance: picks, ideas, highlights.",
+           "items[{title, label?, detail?}] 2-8"),
 )
 LAYOUT_KEYS = tuple(layout.key for layout in LAYOUTS)
 _LAYOUTS = {layout.key: layout for layout in LAYOUTS}
 
 _STATES = ("done", "needs_you", "optional", "pending")
 _TRENDS = ("up", "down", "flat")
+_CONDITIONS = ("sun", "partly", "cloud", "rain", "snow", "storm", "fog", "wind", "night")
+_URL = re.compile(r"^https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$")
 
 _ITEM_PROPERTIES = {
     "title": {"type": "string", "maxLength": 80},
@@ -59,6 +72,12 @@ _ITEM_PROPERTIES = {
     "value": {"type": "string", "maxLength": 32},
     "trend": {"type": "string", "enum": list(_TRENDS)},
     "amount": {"type": "number"},
+    "source": {"type": "string", "maxLength": 48},
+    "url": {"type": "string", "maxLength": 400},
+    "rating": {"type": "string", "maxLength": 16},
+    "distance": {"type": "string", "maxLength": 24},
+    "status": {"type": "string", "maxLength": 32},
+    "condition": {"type": "string", "enum": list(_CONDITIONS)},
 }
 
 INPUT_SCHEMA: dict[str, object] = {
@@ -92,7 +111,8 @@ class SpecError(ValueError):
 
 
 def prompt_section(layouts: tuple[str, ...] | None = None, *, simple: bool = False,
-                   text_likely: bool = False) -> str:
+                   text_likely: bool = False, guidance: dict[str, str] | None = None,
+                   preferred: str | None = None) -> str:
     """Instructions for the conversation model.
 
     ``layouts`` narrows the detailed guidance to predicted layouts (other keys stay listed and
@@ -106,14 +126,20 @@ def prompt_section(layouts: tuple[str, ...] | None = None, *, simple: bool = Fal
         return ("Visual cards: this request most likely needs a plain-text answer. Only if a card is clearly "
                 "better, call present_ui with one of: " + ", ".join(LAYOUT_KEYS) + ". Never invent data.")
     chosen = [_LAYOUTS[key] for key in (layouts or LAYOUT_KEYS) if key in _LAYOUTS]
-    lines = "\n".join(f"- {layout.key}: use for {layout.use_when} Fields: {layout.fields}." for layout in chosen)
+    guidance = guidance or {}
+    lines = "\n".join(f"- {layout.key}: use for {layout.use_when} Fields: {layout.fields}."
+                      + (f" User preference: {guidance[layout.key]}" if guidance.get(layout.key) else "")
+                      for layout in chosen)
     others = [key for key in LAYOUT_KEYS if layouts and key not in layouts]
     if others:
         lines += "\n- also available: " + ", ".join(others) + "."
     lead = ("Visual cards: you may call present_ui to show a card next to your reply. Choose by what the "
             "user needs to understand or decide. Plain text is right for short answers, explanations, opinions "
             "and anything conversational; do not add a card that only repeats one sentence. ")
-    if layouts:
+    if preferred:
+        lead += (f"For requests like this one the user has explicitly chosen the {preferred} layout before; "
+                 "use it unless the data clearly does not fit. ")
+    elif layouts:
         lead += ("The likely layout for this request was predicted below; prefer it when it fits, otherwise use "
                  "text or any other present_ui layout. ")
     return (lead + "Keep your text short when a card carries the detail; never repeat the card in prose. "
@@ -162,8 +188,13 @@ def _items(spec, low: int, high: int, allowed: dict[str, tuple[bool, int | None]
                 if type(value) not in (int, float) or value != value or abs(value) > 1e15:
                     raise SpecError(f"{label} must be a finite number.")
                 clean[name] = value
-            elif name in ("state", "trend"):
-                choices = _STATES if name == "state" else _TRENDS
+            elif name == "url":
+                if value is not None:
+                    if type(value) is not str or len(value) > 400 or not _URL.match(value) or "@" in value.split("/")[2]:
+                        raise SpecError(f"{label} must be an https link.")
+                    clean[name] = value
+            elif name in ("state", "trend", "condition"):
+                choices = {"state": _STATES, "trend": _TRENDS, "condition": _CONDITIONS}[name]
                 if value is not None and value not in choices:
                     raise SpecError(f"{label} is not a supported value.")
                 if value is not None:
@@ -229,6 +260,19 @@ def validate(spec: object) -> dict:
         if body:
             card["body"] = body
         card["items"] = _items(spec, 1, 8, {"text": (True, 160)})
+    elif layout == "headlines":
+        card["items"] = _items(spec, 1, 10, {"title": (True, 80), "source": (False, 48), "time": (False, 16),
+                                             "detail": (False, 160), "url": (False, None)})
+    elif layout == "places":
+        card["items"] = _items(spec, 1, 8, {"title": (True, 80), "detail": (False, 160), "rating": (False, 16),
+                                            "distance": (False, 24), "status": (False, 32)})
+    elif layout == "weather":
+        card["items"] = _items(spec, 1, 8, {"label": (True, 48), "value": (True, 32), "detail": (False, 160),
+                                            "condition": (False, None)})
+    elif layout == "steps":
+        card["items"] = _items(spec, 1, 12, {"title": (True, 80), "detail": (False, 160)})
+    elif layout == "cards":
+        card["items"] = _items(spec, 2, 8, {"title": (True, 80), "label": (False, 48), "detail": (False, 160)})
     elif layout == "table":
         card["columns"], card["rows"] = _grid(spec, low=1, high=6, extra=0, max_rows=20)
     elif layout == "comparison":

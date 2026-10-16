@@ -91,3 +91,27 @@ def test_presentation_decodes_layouts_and_text_likely():
 def test_presentation_failures_are_no_hint(response):
     assert presentation.predict(Transport(response), "x") is None
     assert presentation.predict(Transport(error=TimeoutError()), "x") is None
+
+
+def test_new_layouts_validate_and_links_are_https_only():
+    news = catalog.validate({"layout": "headlines", "fallbackText": "News", "items": [
+        {"title": "A", "source": "BBC", "time": "2h", "url": "https://bbc.com/a"}, {"title": "B"}]})
+    assert news["items"][0]["url"] == "https://bbc.com/a" and "url" not in news["items"][1]
+    for url in ("javascript:alert(1)", "http://x.com", "https://u@x.com/", "data:text/html,x"):
+        with pytest.raises(catalog.SpecError):
+            catalog.validate({"layout": "headlines", "fallbackText": "x", "items": [{"title": "A", "url": url}]})
+    weather = catalog.validate({"layout": "weather", "title": "Toronto", "fallbackText": "15C cloudy",
+        "items": [{"label": "Now", "value": "15°", "detail": "Cloudy", "condition": "cloud"}, {"label": "Fri", "value": "18°"}]})
+    assert weather["items"][0]["condition"] == "cloud"
+    with pytest.raises(catalog.SpecError):
+        catalog.validate({"layout": "weather", "fallbackText": "x", "items": [{"label": "Now", "value": "1", "condition": "lava"}]})
+    assert catalog.validate({"layout": "places", "fallbackText": "x",
+        "items": [{"title": "Lucia's", "rating": "4.7", "distance": "0.8 mi", "status": "Open"}]})["items"][0]["status"] == "Open"
+    assert len(catalog.validate({"layout": "steps", "fallbackText": "x", "items": [{"title": "a"}, {"title": "b"}]})["items"]) == 2
+    with pytest.raises(catalog.SpecError):
+        catalog.validate({"layout": "cards", "fallbackText": "x", "items": [{"title": "only one"}]})
+
+
+def test_prompt_guidance_and_preferred_layout():
+    text = catalog.prompt_section(("headlines",), guidance={"headlines": "Keep to five stories."}, preferred="headlines")
+    assert "explicitly chosen the headlines layout" in text and "User preference: Keep to five stories." in text

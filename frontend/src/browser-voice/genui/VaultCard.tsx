@@ -92,7 +92,69 @@ function Summary({ card }: { card: VaultCard }) {
     <ul className="vault-card-points">{card.items?.map((item, index) => <li key={index}>{item.text}</li>)}</ul></>;
 }
 
+/** Only https links reach the DOM; they open in a new tab without referrer or opener. */
+function safeUrl(url?: string) {
+  if (!url) return undefined;
+  try { const parsed = new URL(url); return parsed.protocol === "https:" && !parsed.username ? parsed.href : undefined; }
+  catch { return undefined; }
+}
+
+function Headlines({ card }: { card: VaultCard }) {
+  return <ol className="vault-card-headlines">{card.items?.map((item, index) => {
+    const href = safeUrl(item.url);
+    const title = href ? <a href={href} target="_blank" rel="noopener noreferrer nofollow">{item.title}</a> : item.title;
+    return <li key={index}>
+      <span className="vault-card-headline-meta">{[item.source, item.time].filter(Boolean).join(" · ")}</span>
+      <b>{title}</b>{item.detail ? <small>{item.detail}</small> : null}
+    </li>;
+  })}</ol>;
+}
+
+function Places({ card }: { card: VaultCard }) {
+  const { choose, busy } = useContext(CardActionsContext);
+  return <ul className="vault-card-places">{card.items?.map((item, index) =>
+    <li key={index}>
+      <span className="vault-card-place-pin" aria-hidden="true">{index + 1}</span>
+      <span className="vault-card-place-body"><b>{item.title}</b>
+        <small>{[item.rating ? `★ ${item.rating}` : "", item.distance, item.status].filter(Boolean).join(" · ")}</small>
+        {item.detail ? <small>{item.detail}</small> : null}</span>
+      {choose ? <button type="button" disabled={busy} onClick={() => choose(item.title ?? "")}
+        aria-label={`Choose ${item.title}`}>Choose</button> : null}
+    </li>)}</ul>;
+}
+
+const WEATHER_ICON: Record<NonNullable<CardItem["condition"]>, string> = {
+  sun: "☀️", partly: "⛅", cloud: "☁️", rain: "🌧️", snow: "🌨️", storm: "⛈️", fog: "🌫️", wind: "💨", night: "🌙",
+};
+function Weather({ card }: { card: VaultCard }) {
+  const [now, ...rest] = card.items ?? [];
+  if (!now) return null;
+  return <div className="vault-card-weather">
+    <div className="vault-card-weather-now">
+      <span className="vault-card-weather-icon" aria-hidden="true">{now.condition ? WEATHER_ICON[now.condition] : ""}</span>
+      <strong>{now.value}</strong>
+      <span>{now.detail ?? now.label}</span>
+    </div>
+    {rest.length ? <ol className="vault-card-weather-forecast">{rest.map((item, index) =>
+      <li key={index}><small>{item.label}</small>
+        <span aria-hidden="true">{item.condition ? WEATHER_ICON[item.condition] : ""}</span>
+        <b>{item.value}</b>{item.condition ? <span className="vault-visually-hidden">{item.condition}</span> : null}</li>)}</ol> : null}
+  </div>;
+}
+
+function Steps({ card }: { card: VaultCard }) {
+  return <ol className="vault-card-steps">{card.items?.map((item, index) =>
+    <li key={index}><span aria-hidden="true">{index + 1}</span><span><b>{item.title}</b>{item.detail ? <small>{item.detail}</small> : null}</span></li>)}</ol>;
+}
+
+function Cards({ card }: { card: VaultCard }) {
+  return <div className="vault-card-grid">{card.items?.map((item, index) =>
+    <article key={index}>{item.label ? <span className="vault-card-grid-label">{item.label}</span> : null}
+      <b>{item.title}</b>{item.detail ? <small>{item.detail}</small> : null}</article>)}</div>;
+}
+
 const REGISTRY: Record<CardLayout, (props: { card: VaultCard }) => ReactNode> = {
+  headlines: Headlines, places: Places, weather: Weather, steps: Steps, cards: Cards,
   timeline: Timeline, options: Options, checklist: Checklist, metrics: Metrics, chart: Chart, summary: Summary,
   table: ({ card }) => <Grid card={card} comparison={false} />,
   comparison: ({ card }) => <Grid card={card} comparison />,
