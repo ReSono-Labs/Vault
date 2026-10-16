@@ -5,7 +5,7 @@ import { ChatPanel } from "@/browser-voice/conversation/ChatPanel";
 
 const api = vi.hoisted(() => ({ attach: vi.fn(), removeAttachment: vi.fn(), older: vi.fn(), activity: vi.fn(), recent: vi.fn(),
   create: vi.fn(), load: vi.fn(), send: vi.fn(), stop: vi.fn(), stream: vi.fn(), endSession: vi.fn() }));
-vi.mock("@/browser-voice/conversation/api", () => ({ conversationApi: api }));
+vi.mock("@/browser-voice/conversation/api", () => ({ conversationApi: api, genuiApi: { presentation: () => Promise.resolve({ version: 0, config: {}, notice: null, noticePending: false }) } }));
 class Stream extends EventTarget {
   closed = false;
   onerror: (() => void) | null = null;
@@ -67,6 +67,7 @@ it("renders history cards as text-only components and sends a tapped option as t
   expect(document.querySelector(".vault-card b b")).toBeNull();
   expect(screen.getByText("Needs you")).toBeInTheDocument();
   expect(screen.getByText("Calendar")).toBeInTheDocument();
+  expect(screen.getByRole("group", { name: "Rate this answer" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Lucia's/ }));
   await waitFor(() => expect(api.send).toHaveBeenCalledTimes(1));
   expect(api.send.mock.calls[0][1].input).toBe("Lucia's");

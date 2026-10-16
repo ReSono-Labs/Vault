@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChatPanel } from "./ChatPanel";
 
 const api = vi.hoisted(() => ({ recent: vi.fn(), create: vi.fn(), load: vi.fn(), send: vi.fn(), stop: vi.fn(), stream: vi.fn() }));
-vi.mock("./api", () => ({ conversationApi: api }));
+vi.mock("./api", () => ({ conversationApi: api, genuiApi: { presentation: () => Promise.resolve({ version: 0, config: {}, notice: null, noticePending: false }) } }));
 beforeEach(() => {
   api.recent.mockResolvedValue({ items: [] });
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };

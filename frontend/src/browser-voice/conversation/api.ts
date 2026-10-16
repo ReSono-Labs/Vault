@@ -21,6 +21,25 @@ const path = (id: string) => `/conversations/${encodeURIComponent(id)}`;
 export type Preparation = { revision: number; state: string; toolState?: string;
   memories: { id: string; text: string; methods: string[] }[];
   tools: { id: string; name?: string; description: string; kind: string }[] };
+export type FeedbackState = { verdict: "up" | "down" | null; chosenLayout: string | null; hasPreviews: boolean; shown: string[] };
+export type PresentationPreview = { layout: CardLayout | "text"; card: VaultCard | null };
+export type Alternatives = { current: { layout: string; card: VaultCard | null; text: string }; previews: PresentationPreview[] };
+export type PresentationNotice = { summary: string; layout: string; replaced: string; events: number; share: number;
+  example: VaultCard | null; version: number };
+export type PresentationState = { version: number; config: Record<string, unknown>; notice: PresentationNotice | null; noticePending: boolean };
+const turnPath = (id: string, turn: string) => `${path(id)}/turns/${encodeURIComponent(turn)}`;
+export const genuiApi = {
+  feedback: (id: string, turn: string, verdict: "up" | "down" | null) => request<FeedbackState>(`${turnPath(id, turn)}/feedback`,
+    { method: "POST", body: JSON.stringify({ verdict }) }),
+  alternatives: (id: string, turn: string) => request<Alternatives>(`${turnPath(id, turn)}/alternatives`, { method: "POST", body: "{}" }),
+  choose: (id: string, turn: string, layout: string) => request<FeedbackState>(`${turnPath(id, turn)}/choice`,
+    { method: "POST", body: JSON.stringify({ layout }) }),
+  presentation: () => request<PresentationState>("/conversations/genui/presentation"),
+  keep: (version: number) => request<PresentationState>("/conversations/genui/presentation/keep", { method: "POST", body: JSON.stringify({ version }) }),
+  undo: (version: number) => request<PresentationState>("/conversations/genui/presentation/undo", { method: "POST", body: JSON.stringify({ version }) }),
+  reset: () => request<PresentationState & { removedFeedback: number }>("/conversations/genui/presentation/reset", { method: "POST", body: "{}" }),
+  exportFeedback: (includeText: boolean) => request<Record<string, unknown>>(`/conversations/genui/feedback/export?includeText=${includeText ? 1 : 0}`),
+};
 export const conversationApi = {
   livePreference: (signal?: AbortSignal) => request<{ enabled: boolean; epoch: number }>("/live-memory", { signal }),
   setLivePreference: (enabled: boolean, expectedEpoch: number) => request<{ enabled: boolean; epoch: number }>("/live-memory",

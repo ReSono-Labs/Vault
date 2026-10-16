@@ -1,16 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AssistantRuntimeProvider, MessagePrimitive, ThreadPrimitive, useExternalStoreRuntime,
   type ThreadMessageLike } from "@assistant-ui/react";
 import { BrowserVoiceMicrophoneIcon } from "@/browser-voice/presentation/BrowserVoiceIcons";
 import { useConversation } from "./useConversation";
 import { useChatViewport } from "./useChatViewport";
 import { LivePreparationPanel } from "./LivePreparationPanel";
-import type { ChatCardPart } from "./api";
+import { genuiApi, type ChatCardPart, type PresentationState } from "./api";
 import { CardActionsContext, VaultCardPart, VaultCardSkeletonPart } from "@/browser-voice/genui/VaultCard";
+import { AnswerFeedback, FeedbackExport, PresentationNoticeCard } from "@/browser-voice/genui/Feedback";
+
+const PresentationRefresh = createContext<() => void>(() => {});
+function FeedbackPart({ data }: { data: unknown }) {
+  const value = data as { conversationId: string; turnId: string };
+  const refresh = useContext(PresentationRefresh);
+  return <AnswerFeedback conversationId={value.conversationId} turnId={value.turnId} onPresentationChanged={refresh} />;
+}
 import "./conversation.css";
 
 // Registered generative-UI parts; any other data part name renders nothing.
-const PARTS = { data: { by_name: { "vault-card": VaultCardPart, "vault-card-skeleton": VaultCardSkeletonPart } } };
+const PARTS = { data: { by_name: { "vault-card": VaultCardPart, "vault-card-skeleton": VaultCardSkeletonPart,
+  "vault-feedback": FeedbackPart } } };
 function Message({ user = false }: { user?: boolean }) {
   return <MessagePrimitive.Root className={`vault-chat-message${user ? " is-user" : ""}`}>
     <span className="vault-chat-message-author">{user ? "You" : "Vault"}</span>
@@ -18,11 +27,13 @@ function Message({ user = false }: { user?: boolean }) {
   </MessagePrimitive.Root>;
 }
 type Part = { type: "text"; text: string } | { type: `data-${string}`; data: unknown };
-function assistantParts(text: string | null, cards: ChatCardPart[] | undefined, skeleton?: string): Part[] {
+function assistantParts(text: string | null, cards: ChatCardPart[] | undefined, skeleton?: string,
+  feedback?: { conversationId: string; turnId: string }): Part[] {
   const parts: Part[] = [];
   if (text) parts.push({ type: "text", text });
   for (const card of cards ?? []) parts.push({ type: "data-vault-card", data: card });
   if (skeleton) parts.push({ type: "data-vault-card-skeleton", data: { layout: skeleton } });
+  if (feedback) parts.push({ type: "data-vault-feedback", data: feedback });
   return parts;
 }
 function UserMessage() { return <Message user />; }
@@ -46,14 +57,23 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
     for (const turn of chat.turns) {
       result.push({ id: `${turn.turnId}-user`, role: "user", content: [{ type: "text", text: turn.input + (turn.attachments?.length ? "\n\nAttachments: " + turn.attachments.map(a => `${a.name} (${a.coverage})`).join(", ") : "") }] });
       if (turn.answer || turn.ui?.length) result.push({ id: `${turn.turnId}-answer`, role: "assistant",
-        content: assistantParts(turn.answer, turn.ui) });
+        content: assistantParts(turn.answer, turn.ui, undefined, turn.state === "completed" && chat.selected
+          ? { conversationId: chat.selected, turnId: turn.turnId } : undefined) });
     }
     // A predicted layout shows a skeleton until the first real card streams in.
     const skeleton = chat.liveCards.length ? undefined : chat.liveHint[0];
     if (chat.running && (chat.liveText || chat.liveCards.length || skeleton)) result.push({ id: `${chat.running}-live`,
       role: "assistant", content: assistantParts(chat.liveText, chat.liveCards, skeleton) });
     return result;
-  }, [chat.turns, chat.running, chat.liveText, chat.liveCards, chat.liveHint]);
+  }, [chat.turns, chat.running, chat.liveText, chat.liveCards, chat.liveHint, chat.selected]);
+  const [presentation, setPresentation] = useState<PresentationState | null>(null);
+  const refreshPresentation = useCallback(() => {
+    // The tuner runs in the background after a choice; look again shortly.
+    for (const delay of [0, 2500, 8000]) setTimeout(() => {
+      genuiApi.presentation().then(setPresentation).catch(() => {});
+    }, delay);
+  }, []);
+  useEffect(() => { if (active) refreshPresentation(); }, [active, refreshPresentation]);
   const cardActions = useMemo(() => ({ choose: (text: string) => { void chat.choose(text); },
     busy: Boolean(chat.running) || chat.sending || chat.loading }), [chat.choose, chat.running, chat.sending, chat.loading]);
   const runtime = useExternalStoreRuntime({ messages, isRunning: Boolean(chat.running),
@@ -77,6 +97,14 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
         <span>Live Memory<small>{chat.preparation.preference?.enabled ? "On" : "Off"}</small></span>
         <span className="vault-chat-switch-track" aria-hidden="true"><span /></span></button>
       {chat.preparation.preferenceError ? <small role="alert">{chat.preparation.preferenceError}</small> : null}
+      <details className="vault-chat-presentation">
+        <summary>Presentation learning</summary>
+        <FeedbackExport />
+        <button type="button" onClick={() => {
+          if (window.confirm("Forget all presentation feedback and learned format preferences for this workspace?"))
+            void genuiApi.reset().then(setPresentation).catch(() => {});
+        }}>Reset learned formats</button>
+      </details>
       <h3>Sessions</h3>
         {chat.items.length === 0 ? <p>No saved chats yet.</p> : chat.items.map(item =>
           <button key={item.conversationId} type="button" disabled={chat.sending}
@@ -96,6 +124,7 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
           </svg>
         </button></header>
       <CardActionsContext.Provider value={cardActions}>
+      <PresentationRefresh.Provider value={refreshPresentation}>
       <AssistantRuntimeProvider runtime={runtime}>
         <ThreadPrimitive.Root className="vault-chat-thread">
           <ThreadPrimitive.Viewport className="vault-chat-scroll">
@@ -113,7 +142,9 @@ export function ChatPanel({ active, voiceActive, voiceBusy, onToggleVoice }: {
           <ThreadPrimitive.ScrollToBottom className="browser-voice-pill vault-chat-jump">Latest message</ThreadPrimitive.ScrollToBottom>
         </ThreadPrimitive.Root>
       </AssistantRuntimeProvider>
+      </PresentationRefresh.Provider>
       </CardActionsContext.Provider>
+      {presentation ? <PresentationNoticeCard state={presentation} onDone={setPresentation} /> : null}
       <div className="vault-chat-status" role="status">{chat.loading ? "Loading chat…" : chat.sending ? "Sending…" : chat.status}</div>
       <LivePreparationPanel value={chat.preparation.value} />
       {chat.error ? <div className="vault-chat-error" role="alert"><p>{chat.error}</p>

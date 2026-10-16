@@ -99,3 +99,42 @@
 .vault-card-grid article { padding: 12px; border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
 .vault-card-grid b { display: block; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
 .vault-card-grid-label { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--card-pink); margin-bottom: 4px; }
+
+/* Feedback, "How can I do better?" carousel, tuner notice, export */
+.vault-feedback { margin: 4px 0 12px; }
+.vault-feedback-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vault-feedback-bar button { min-height: 36px; min-width: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--browser-voice-line, #294354); background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
+.vault-feedback-bar button[aria-pressed="true"] { background: rgba(236,63,122,.18); border-color: #ec3f7a; }
+.vault-feedback-bar .vault-feedback-better { font-size: 12px; opacity: .8; }
+.vault-feedback-bar button:focus-visible, .vault-better button:focus-visible, .vault-better-stage:focus-visible { outline: 2px solid #ec3f7a; outline-offset: 2px; }
+.vault-better, .vault-notice { margin: 8px 0; padding: 14px; border-radius: 22px; color: #121216; white-space: normal;
+  background: linear-gradient(160deg, #fbf6fb, #f3eefc 50%, #e9f6f5); border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 24px 48px -22px rgba(236,63,122,.45); animation: vault-card-in .5s cubic-bezier(.2,.9,.25,1.15) both; }
+.vault-better header { display: flex; justify-content: space-between; align-items: center; }
+.vault-better h3 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+.vault-better header button { width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(0,0,0,.06); cursor: pointer; color: #121216; }
+.vault-better-lead, .vault-better-status { margin: 6px 0 10px; font-size: 13px; color: #4a4a55; }
+.vault-better-stage { touch-action: pan-y; border-radius: 18px; }
+.vault-better-slide { animation: vault-card-in .35s ease both; }
+.vault-better-slide .vault-card { margin: 4px 0 0; }
+.vault-better-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #c22a63; }
+.vault-better-text { margin: 4px 0 0; padding: 12px; border-radius: 16px; background: #fff; font-size: 14px; line-height: 1.45; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+.vault-better-controls { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 10px; }
+.vault-better-controls button { width: 40px; height: 40px; border-radius: 50%; border: 0; background: #16161b; color: #fff; font-size: 16px; cursor: pointer; }
+.vault-better-controls button:disabled { opacity: .3; cursor: default; }
+.vault-better-dots { display: flex; gap: 6px; }
+.vault-better-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(0,0,0,.18); }
+.vault-better-dots i.is-active { width: 20px; border-radius: 4px; background: linear-gradient(90deg, #ec3f7a, #9a6cf0); }
+.vault-better-check { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 14px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
+.vault-better-check input { width: 20px; height: 20px; accent-color: #ec3f7a; }
+.vault-notice-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #c22a63; }
+.vault-notice p { margin: 6px 0 4px; font-size: 15px; font-weight: 500; }
+.vault-notice-actions { display: flex; gap: 8px; margin-top: 8px; }
+.vault-notice-actions button { min-height: 40px; padding: 0 18px; border-radius: 999px; border: 0; background: rgba(0,0,0,.07); color: #121216; font: inherit; font-weight: 600; cursor: pointer; }
+.vault-notice-actions .is-primary { background: #16161b; color: #fff; }
+.vault-export { display: grid; gap: 10px; }
+.vault-export h3 { margin: 0; }
+.vault-export p { margin: 0; font-size: 13px; opacity: .85; }
+.vault-export-preview { max-height: 220px; overflow: auto; font-size: 11px; padding: 10px; border-radius: 10px; background: rgba(0,0,0,.25); white-space: pre-wrap; }
+.vault-export button { justify-self: start; min-height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--browser-voice-line, #294354); background: transparent; color: inherit; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .vault-better, .vault-notice, .vault-better-slide { animation: none; } }

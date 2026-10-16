@@ -79,3 +79,6 @@
 @media (max-width: 800px) {
   .browser-voice-shell.is-b0r .browser-voice-app-frame.is-chat-page { padding: 0 12px; }
 }
+.vault-chat-presentation { margin-top: 20px; padding: 12px; border: 1px solid var(--browser-voice-line); border-radius: 12px; }
+.vault-chat-presentation summary { cursor: pointer; min-height: 32px; }
+.vault-chat-presentation > button { margin-top: 12px; }
