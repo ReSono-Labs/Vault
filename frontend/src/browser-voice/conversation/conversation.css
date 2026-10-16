@@ -82,3 +82,8 @@
 .vault-chat-presentation { margin-top: 20px; padding: 12px; border: 1px solid var(--browser-voice-line); border-radius: 12px; }
 .vault-chat-presentation summary { cursor: pointer; min-height: 32px; }
 .vault-chat-presentation > button { margin-top: 12px; }
+/* Assistant replies: text in the bubble, generative cards as standalone entities beneath it. */
+.vault-chat-message.is-assistant { padding: 0; background: none; border-radius: 0; white-space: normal; }
+.vault-chat-bubble { padding: 12px 16px; border-radius: 14px; background: var(--browser-voice-assistant); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+.vault-chat-message.is-assistant .vault-card, .vault-chat-message.is-assistant .vault-feedback { margin-top: 14px; }
+.vault-chat-message.is-assistant .vault-card { max-width: 680px; }

@@ -18,11 +18,18 @@ function FeedbackPart({ data }: { data: unknown }) {
 import "./conversation.css";
 
 // Registered generative-UI parts; any other data part name renders nothing.
-const PARTS = { data: { by_name: { "vault-card": VaultCardPart, "vault-card-skeleton": VaultCardSkeletonPart,
+// Assistant text stays in its chat bubble; cards and feedback render as their own entities below it.
+function BubbleText({ text }: { text: string }) {
+  return text ? <div className="vault-chat-bubble"><span className="vault-chat-message-author">Vault</span>{text}</div> : null;
+}
+const PARTS = { Text: BubbleText, data: { by_name: { "vault-card": VaultCardPart, "vault-card-skeleton": VaultCardSkeletonPart,
   "vault-feedback": FeedbackPart } } };
 function Message({ user = false }: { user?: boolean }) {
-  return <MessagePrimitive.Root className={`vault-chat-message${user ? " is-user" : ""}`}>
-    <span className="vault-chat-message-author">{user ? "You" : "Vault"}</span>
+  if (user) return <MessagePrimitive.Root className="vault-chat-message is-user">
+    <span className="vault-chat-message-author">You</span>
+    <MessagePrimitive.Content />
+  </MessagePrimitive.Root>;
+  return <MessagePrimitive.Root className="vault-chat-message is-assistant">
     <MessagePrimitive.Content components={PARTS} />
   </MessagePrimitive.Root>;
 }
