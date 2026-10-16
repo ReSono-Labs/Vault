@@ -80,7 +80,7 @@
 .g-mini { flex: 0 0 168px; scroll-snap-align: start; text-align: left; padding: 8px; border-radius: 18px; border: 1px solid var(--g-tile-edge);
   background: var(--g-tile); color: var(--g-ink); font: inherit; display: flex; flex-direction: column; gap: 8px; }
 button.g-mini { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
-button.g-mini:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 0 0 2px var(--g-accent), 0 16px 30px -14px var(--g-accent); }
+button.g-mini:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--g-accent), 0 12px 24px -16px var(--g-accent); }
 button.g-mini:focus-visible, .g-action:focus-visible { outline: 3px solid var(--g-accent); outline-offset: 2px; }
 button.g-mini:disabled { cursor: default; }
 .g-mini-body { display: grid; gap: 3px; padding: 0 4px 4px; }
@@ -248,7 +248,7 @@ button.g-mini:disabled { cursor: default; }
 /* ── dimension, light and motion ───────────────────── */
 .vault-card { --g-rx: 0deg; --g-ry: 0deg; --g-mx: 50%; --g-my: 0%;
   transform: perspective(1100px) rotateX(var(--g-rx)) rotateY(var(--g-ry)); transform-style: preserve-3d;
-  transition: transform .45s cubic-bezier(.2,.8,.2,1), box-shadow .45s ease;
+  transition: transform .7s cubic-bezier(.2,.8,.2,1), box-shadow .6s ease;
   box-shadow: var(--g-shadow), 0 2px 0 -1px rgba(255,255,255,.08) inset, 0 40px 80px -48px var(--g-accent); }
 /* Gradient rim: brighter on the top edge, like light on glass. */
 .vault-card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
@@ -257,10 +257,10 @@ button.g-mini:disabled { cursor: default; }
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
 /* Spotlight that follows the pointer. */
 .vault-card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
-  background: radial-gradient(380px circle at var(--g-mx) var(--g-my), color-mix(in srgb, var(--g-accent) 16%, transparent), transparent 60%);
+  background: radial-gradient(380px circle at var(--g-mx) var(--g-my), color-mix(in srgb, var(--g-accent) 7%, transparent), transparent 60%);
   transition: opacity .35s ease; }
 .vault-card.is-lit::after { opacity: 1; }
-.vault-card.is-lit { box-shadow: var(--g-shadow), 0 50px 90px -40px var(--g-accent); }
+.vault-card.is-lit { box-shadow: var(--g-shadow), 0 44px 84px -46px var(--g-accent); }
 .vault-card > * { position: relative; z-index: 1; }
 
 /* Content cascades in after the card lands. */
@@ -279,12 +279,12 @@ button.g-mini:disabled { cursor: default; }
 .g-mini, .g-metric, .g-bento article, .g-forecast li { box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 12px 24px -18px rgba(0,0,0,.6); }
 .g-mini { position: relative; overflow: hidden; transform: translateZ(18px); }
 .g-mini::after { content: ""; position: absolute; inset: 0; pointer-events: none; transform: translateX(-120%);
-  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.18) 50%, transparent 65%); transition: transform .7s ease; }
+  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.07) 50%, transparent 65%); transition: transform .9s ease; }
 .g-mini:hover::after { transform: translateX(120%); }
 .g-media::before { transition: transform .6s cubic-bezier(.2,.8,.2,1); }
-.g-mini:hover .g-media::before { transform: scale(1.08); }
+.g-mini:hover .g-media::before { transform: scale(1.03); }
 .g-metric.is-hero, .g-chart { transform: translateZ(26px); box-shadow: 0 24px 40px -24px var(--g-accent), 0 1px 0 rgba(255,255,255,.25) inset; }
-.g-bento article { transition: transform .3s ease; } .g-bento article:hover { transform: translateY(-3px) translateZ(12px); }
+.g-bento article { transition: transform .3s ease; } .g-bento article:hover { transform: translateY(-1px) translateZ(12px); }
 
 /* Chart draws itself; the last point breathes. */
 .g-chart-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: g-draw 1.3s .25s cubic-bezier(.6,0,.2,1) forwards; }

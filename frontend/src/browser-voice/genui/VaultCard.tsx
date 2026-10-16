@@ -253,7 +253,7 @@ function useTilt() {
     const x = (event.clientX - box.left) / box.width, y = (event.clientY - box.top) / box.height;
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
-      node.style.setProperty("--g-rx", `${(0.5 - y) * 5}deg`); node.style.setProperty("--g-ry", `${(x - 0.5) * 7}deg`);
+      node.style.setProperty("--g-rx", `${(0.5 - y) * 1.5}deg`); node.style.setProperty("--g-ry", `${(x - 0.5) * 2}deg`);
       node.style.setProperty("--g-mx", `${x * 100}%`); node.style.setProperty("--g-my", `${y * 100}%`);
       node.classList.add("is-lit");
     });
