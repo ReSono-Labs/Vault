@@ -36,6 +36,7 @@
   .browser-voice-live-activity { left: 12px; right: 12px; bottom: 12px; }
 }
 .browser-voice-live-preparation { position: fixed; bottom: 24px; left: max(230px, calc(50% - 360px)); right: 20px; max-width: 720px; max-height: 32dvh; overflow: auto; z-index: 21; background: #041625; border-radius: 12px; }
+.browser-voice-live-preparation:empty { display: none; }
 .browser-voice-mobile-menu { display: none; }
 @media (max-width: 800px) {
   .browser-voice-mobile-menu { display: block; }

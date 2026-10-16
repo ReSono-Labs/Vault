@@ -1095,7 +1095,7 @@ export function BrowserVoiceApp() {
           />
         ) : null}
       </section>
-      {activeUser && destination === "home" && voicePreparation ? <div className="browser-voice-live-preparation"><LivePreparationPanel value={voicePreparation} /></div> : null}
+      {activeUser && destination === "home" && voicePreparation ? <div className="browser-voice-live-preparation"><LivePreparationPanel value={voicePreparation} surface="voice" /></div> : null}
       {activeUser ? <PluginImportDialogHost /> : null}
     </main>
   );

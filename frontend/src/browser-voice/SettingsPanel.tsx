@@ -6,7 +6,8 @@ import {
   removeComputerFolderHandle,
 } from "@/browser-voice/computerFolders";
 import { localApi, type HostFilesystemMount, type HostFilesystemSettings, type LocalUser } from "@/browser-voice/localApi";
-import { BrowserVoiceWorkspaceIcon } from "@/browser-voice/presentation/BrowserVoiceIcons";
+import { BrowserVoiceMicrophoneIcon, BrowserVoiceWorkspaceIcon, ChatIcon } from "@/browser-voice/presentation/BrowserVoiceIcons";
+import { livePanelShown, setLivePanelShown, type LiveSurface } from "@/browser-voice/conversation/livePanel";
 
 type PendingPick = {
   mountId: string;
@@ -196,6 +197,14 @@ export function SettingsPanel({ user }: { user: LocalUser }) {
         </div>
       </div>
       <AppearancePicker />
+
+      <div className="browser-voice-section-head">
+        <div>
+          <h3>Live window</h3>
+          <p>Show the live memory and tool preparation while you speak or type. Hiding it only hides the window; live preparation keeps working.</p>
+        </div>
+      </div>
+      <LiveWindowSwitches />
 
       <div className="browser-voice-section-head">
         <div>
@@ -436,5 +445,27 @@ function AppearancePicker() {
       <span className={`browser-voice-theme-swatch is-${option.key}`} aria-hidden="true"><i /><i /><i /></span>
       <strong>{option.name}</strong><small>{option.detail}</small>
     </button>)}
+  </div>;
+}
+
+function LiveWindowSwitches() {
+  const [shown, setShown] = useState({ chat: livePanelShown("chat"), voice: livePanelShown("voice") });
+  const rows: { surface: LiveSurface; name: string; detail: string }[] = [
+    { surface: "voice", name: "Voice", detail: "Live window on the Voice screen." },
+    { surface: "chat", name: "Chat", detail: "Live window under the Chat conversation." },
+  ];
+  return <div className="browser-voice-agent-list browser-voice-live-window-settings">
+    {rows.map(row => {
+      const on = shown[row.surface];
+      return <article key={row.surface} className={`browser-voice-agent-row is-${on ? "on" : "off"}`}>
+        <span className="browser-voice-agent-row-main">
+          <span className="browser-voice-agent-mark">{row.surface === "voice" ? <BrowserVoiceMicrophoneIcon /> : <ChatIcon />}</span>
+          <span><strong>{row.name}</strong><small>{row.detail}</small><small>{on ? "Shown" : "Hidden"} · This browser</small></span>
+        </span>
+        <button aria-label={`${on ? "Hide" : "Show"} the ${row.name} live window`} aria-pressed={on}
+          className="browser-voice-agent-switch" onClick={() => { setLivePanelShown(row.surface, !on); setShown(current => ({ ...current, [row.surface]: !on })); }}
+          role="switch" type="button"><span /></button>
+      </article>;
+    })}
   </div>;
 }

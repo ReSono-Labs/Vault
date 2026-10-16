@@ -140,7 +140,7 @@ export function BrowserVoiceSettingsIcon({ className }: IconProps) {
 
 export type BrowserVoiceDestination = "account" | "agent2agent" | "background" | "capabilities" | "chat" | "connections" | "documents" | "home" | "memory" | "settings" | "workspace";
 
-function ChatIcon({ className }: IconProps) {
+export function ChatIcon({ className }: IconProps) {
   return <svg {...sharedIconProps} className={className}><path d="M4 4h16v12H9l-5 4V4Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>;
 }
 
