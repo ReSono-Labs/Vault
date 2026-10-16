@@ -42,7 +42,7 @@ async def _generate(runtime, principal, facts, shown):
     instructions = (INSTRUCTIONS.format(count=MAX_PREVIEWS, shown=", ".join(shown) or "none")
                     + catalog.prompt_section())
     await runtime.runner(api_key=access["api_key"], model=access["model"], instructions=instructions,
-                         input_text=build_input(facts), base_url=access["base_url"], reasoning_effort="low",
+                         input_text=build_input(facts), base_url=access["base_url"], reasoning_effort="none",
                          max_turns=MAX_PREVIEWS + 2, agent_name="Vault Presentation Previews",
                          function_tools=[tool], **access["extra"])
     return previews

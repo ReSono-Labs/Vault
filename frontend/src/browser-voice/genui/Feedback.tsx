@@ -41,8 +41,12 @@ export function BetterCarousel({ conversationId, turnId, onClose, onChosen }: {
   const touch = useRef<number | null>(null);
   useEffect(() => {
     let current = true;
-    genuiApi.alternatives(conversationId, turnId).then(value => { if (current) { setData(value); setState("ready"); } })
-      .catch(() => { if (current) setState("error"); });
+    // Previews are cached on the server as soon as they finish, so a dropped slow request is retried.
+    const load = (attempt: number): Promise<void> => genuiApi.alternatives(conversationId, turnId)
+      .then(value => { if (current) { setData(value); setState("ready"); } })
+      .catch(() => attempt < 3 && current ? new Promise<void>(resolve => setTimeout(resolve, 4000)).then(() => load(attempt + 1))
+        : void (current && setState("error")));
+    void load(0);
     return () => { current = false; };
   }, [conversationId, turnId]);
   const options = data?.previews ?? [];
@@ -61,7 +65,7 @@ export function BetterCarousel({ conversationId, turnId, onClose, onChosen }: {
   }
   return <section className="vault-better" aria-label="How can I do better?" aria-roledescription="carousel">
     <header><h3>How can I do better?</h3><button type="button" aria-label="Close" onClick={onClose}>✕</button></header>
-    {state === "loading" ? <p role="status" className="vault-better-status">Trying other formats…</p> : null}
+    {state === "loading" ? <p role="status" className="vault-better-status">Trying other formats… this can take up to half a minute.</p> : null}
     {state === "error" ? <p role="alert" className="vault-better-status">Other formats are unavailable right now.</p> : null}
     {data && !count ? <p className="vault-better-status">This answer already uses the best fit I can find.</p> : null}
     {data && count ? <>
