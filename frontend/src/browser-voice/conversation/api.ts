@@ -63,6 +63,7 @@ export const conversationApi = {
     { method: "POST", body: JSON.stringify({ expectedHistoryVersion }) }),
   activity: (id: string) => request(`${path(id)}/activity`, { method: "POST", body: "{}" }),
   send: (id: string, value: SendRequest) => request<TurnStatus>(`${path(id)}/turns`, { method: "POST", body: JSON.stringify(value) }),
+  turnStatus: (id: string, turn: string) => request<TurnStatus>(`${path(id)}/turns/${encodeURIComponent(turn)}`),
   stop: (id: string, turn: string) => request<TurnStatus>(`${path(id)}/turns/${encodeURIComponent(turn)}/stop`, { method: "POST", body: "{}" }),
   stream: (id: string, turn: string) => new EventSource(`${path(id)}/turns/${encodeURIComponent(turn)}/events`, { withCredentials: true }),
 };

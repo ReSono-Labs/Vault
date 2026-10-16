@@ -120,7 +120,17 @@ export function useConversation(active: boolean) {
       } catch { setError("Invalid response event. Reopen the session to reload canonical history."); stream.close(); }
     });
     stream.addEventListener("unavailable", () => { if (current) setStatus("Stream busy; reconnecting…"); });
-    stream.onerror = () => { if (current) setStatus("Reconnecting to response…"); };
+    stream.onerror = () => {
+      if (!current) return;
+      setStatus("Reconnecting to response…");
+      // A dropped stream must not leave a finished reply looking stuck: ask the server directly.
+      void api.turnStatus(selected, running).then(value => {
+        if (current && !activeTurn(value.state)) {
+          current = false; stream.close(); setRunning(null); setStatus(""); setLiveCards([]); setLiveHint([]);
+          setReload(previous => previous + 1);
+        }
+      }).catch(() => {});
+    };
     return () => { current = false; stream.close(); };
   }, [active, selected, running, reload]);
 

@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useConversation } from "./useConversation";
 
-const api = vi.hoisted(() => ({ attach: vi.fn(), removeAttachment: vi.fn(), older: vi.fn(), activity: vi.fn(), recent: vi.fn(), create: vi.fn(), load: vi.fn(), send: vi.fn(), stop: vi.fn(), stream: vi.fn(), endSession: vi.fn() }));
+const api = vi.hoisted(() => ({ attach: vi.fn(), removeAttachment: vi.fn(), older: vi.fn(), activity: vi.fn(), recent: vi.fn(), create: vi.fn(), load: vi.fn(), send: vi.fn(), stop: vi.fn(), stream: vi.fn(), endSession: vi.fn(), turnStatus: vi.fn() }));
 vi.mock("./api", () => ({ conversationApi: api }));
 class Stream extends EventTarget {
   closed = false;
@@ -82,6 +82,21 @@ describe("scoped Chat controller", () => {
     act(() => stream.emit(2, "terminal", { state: "completed" }));
     await waitFor(() => expect(result.current.running).toBeNull());
     expect(result.current.draft).toBe("Next draft while responding");
+  });
+
+  it("a dropped stream for a reply that already finished recovers instead of staying stuck", async () => {
+    const { result } = renderHook(() => useConversation(true));
+    act(() => result.current.setDraft("Hello"));
+    api.load.mockResolvedValue({ ...header, turns: [{ turnId: "t", input: "Hello", answer: null, state: "running" }] });
+    await act(() => result.current.send());
+    await waitFor(() => expect(api.stream).toHaveBeenCalled());
+    const stream = api.stream.mock.results.at(-1)!.value as Stream;
+    api.turnStatus.mockResolvedValue({ conversationId: "c", turnId: "t", input: "Hello", historyVersion: 2, state: "completed" });
+    api.load.mockResolvedValue({ ...header, turns: [{ turnId: "t", input: "Hello", answer: "Done", state: "completed" }] });
+    act(() => stream.onerror?.());
+    await waitFor(() => expect(result.current.running).toBeNull());
+    expect(stream.closed).toBe(true);
+    await waitFor(() => expect(result.current.turns[0].answer).toBe("Done"));
   });
 
   it("retries a lost acknowledgment using the exact original key and input", async () => {
