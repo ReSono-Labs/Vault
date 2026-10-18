@@ -129,9 +129,14 @@ def handle_chat(runtime: Any, principal: Any, *, method: str, parts: list[str], 
                 if turn.get("answer"):
                     cards = [{"id": u.get("cardId"), "card": u.get("card")} for u in turn.get("ui") or []
                              if isinstance(u, dict) and isinstance(u.get("card"), dict)]
+                    # Ordered reply bubbles: each card then the reply text, mirroring the
+                    # run response's messages[] so reloaded history renders the same way.
+                    bubbles = [{"cards": [card]} for card in cards]
+                    bubbles.append({"text": turn["answer"]})
                     messages.append({"id": f"{turn['turnId']}:assistant", "role": "assistant",
                                      "text": turn["answer"], "timestamp": _epoch(turn.get("updatedAt")),
-                                     **({"cards": cards} if cards else {})})
+                                     **({"cards": cards} if cards else {}),
+                                     "bubbles": bubbles})
             return respond(200, {"messages": messages, "next_before": page.get("nextBefore")})
 
     # Live preparation while typing: the same engine browser Chat uses (live memory + live tool route).
@@ -200,6 +205,11 @@ def handle_chat(runtime: Any, principal: Any, *, method: str, parts: list[str], 
             cards = store.turn_cards(principal, conversation_id, turn_id)
             if cards:
                 body["cards"] = cards
+            # Ordered reply bubbles for clients that render several messages per run
+            # (e.g. multiple cards). Older clients keep using text/cards above.
+            messages = store.turn_messages(principal, conversation_id, turn_id)
+            if messages:
+                body["messages"] = messages
         elif state == "failed":
             body["error"] = "interrupted" if status["state"] == "interrupted" else "failed"
         return respond(200, body)

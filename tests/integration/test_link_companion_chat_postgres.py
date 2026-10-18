@@ -88,7 +88,9 @@ def test_companion_owner_chat_end_to_end(mounted):
     assert retried.status_code == 202 and retried.payload["run_id"] == run_id, "retries must not send twice"
 
     done = _run(m, token, run_id)
-    assert done == {"state": "completed", "session_id": session, "text": "Hello from Vault."}
+    # text stays for older clients; messages[] is the ordered bubble list for new clients.
+    assert done == {"state": "completed", "session_id": session, "text": "Hello from Vault.",
+                    "messages": [{"text": "Hello from Vault."}]}
     assert len(seen) == 1
     with psycopg.connect(m.url) as connection:
         mimes = [r[0] for r in connection.execute(

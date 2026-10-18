@@ -96,6 +96,11 @@ def test_present_ui_streams_validated_card_with_real_provenance_and_history(moun
     ui = [e['payload'] for e in events if e['kind'] == 'ui']
     assert len(ui) == 1 and ui[0]['card']['layout'] == 'timeline' and ui[0]['sources'] == ['contacts_search']
     assert ui[0]['cardId'] == seen['shown']['cardId']
+    # Ordered reply bubbles: the card first, then the final reply text (what the Link
+    # companion exposes as messages[] so a run renders as multiple bubbles).
+    bubbles = runtime.store.turn_messages(m.principal, conversation, turn)
+    assert bubbles == [{'cards': [{'id': ui[0]['cardId'], 'card': ui[0]['card']}]},
+                       {'text': 'Here is Saturday.'}]
     assert not any(e['kind'] == 'tool_status' and e['payload']['name'] == 'present_ui' for e in events)
     with psycopg.connect(m.url) as connection:
         names = [r[0] for r in connection.execute('SELECT tool_name FROM vault_private.vault_voice_tool_invocations')]

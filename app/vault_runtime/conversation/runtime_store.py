@@ -426,6 +426,32 @@ class ConversationRuntimeStore(ConversationRepository):
               ORDER BY sequence""",(*self._scope(principal,conversation_id),turn_id))
             return [dict(id=r[0],card=r[1]) for r in cursor.fetchall() if isinstance(r[1],dict)]
 
+    def turn_messages(self,principal,conversation_id,turn_id):
+        """Ordered reply bubbles for one completed turn, in emission order.
+
+        A single run can present several cards and a reply. Projecting the turn's
+        ``ui`` and ``assistant_final`` events by sequence lets a client render each as
+        its own bubble (e.g. three card styles as three messages), rather than one
+        flattened text+cards blob. Each card becomes ``{cards:[{id,card}]}`` and the
+        final reply text becomes ``{text}``, preserving any interleaving. Display-only;
+        same validated payloads as ``turn_cards``/``final_text``.
+        """
+        with self._connect() as connection,connection.cursor() as cursor:
+            self._require_authority(cursor,principal)
+            cursor.execute("""SELECT kind,payload->'cardId',payload->'card',payload->>'text'
+              FROM vault_private.vault_conversation_events
+              WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND turn_id=%s
+                AND kind IN ('ui','assistant_final')
+              ORDER BY sequence""",(*self._scope(principal,conversation_id),turn_id))
+            rows = cursor.fetchall()
+        messages = []
+        for kind,card_id,card,text in rows:
+            if kind=='ui' and isinstance(card,dict):
+                messages.append(dict(cards=[dict(id=card_id,card=card)]))
+            elif kind=='assistant_final' and isinstance(text,str) and text.strip():
+                messages.append(dict(text=text))
+        return messages
+
     def history(self,principal,conversation_id,*,segment_id=None):
         self.load(principal,conversation_id)
         selected="""WITH selected_turns AS (
