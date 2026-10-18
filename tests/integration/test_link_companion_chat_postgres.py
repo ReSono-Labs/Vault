@@ -67,7 +67,7 @@ def test_companion_owner_chat_end_to_end(mounted):
     assert _chat(m, "GET", "health", None).payload == {"ready": True, "images": True}
 
     # Only the companion credential opens chat: not nothing, not a forged token, not the owner's browser session.
-    assert _chat(m, "POST", "sessions", None, {}).payload == {"error": "not_paired"}
+    assert _chat(m, "POST", "sessions", None, {}).payload == {"error": {"code": "not_paired", "retryable": False}}
     assert _chat(m, "POST", "sessions", "forged", {}).status_code == 401
     cookie_only = m.app.handle(method="POST", target="/link-companion/chat/sessions", headers=m.headers, body=b"{}")
     assert cookie_only.status_code == 401
@@ -109,14 +109,14 @@ def test_companion_owner_chat_end_to_end(mounted):
     assert any(item["conversationId"] == session for item in listed)
 
     # Safe codes only.
-    assert _chat(m, "GET", "sessions/missing/messages", token).payload == {"error": "not_found"}
-    assert _chat(m, "GET", "runs/missing", token).payload == {"error": "not_found"}
-    assert _chat(m, "POST", f"sessions/{session}/messages", token, {"text": ""}).payload == {"error": "rejected"}
+    assert _chat(m, "GET", "sessions/missing/messages", token).payload == {"error": {"code": "not_found", "retryable": False}}
+    assert _chat(m, "GET", "runs/missing", token).payload == {"error": {"code": "not_found", "retryable": False}}
+    assert _chat(m, "POST", f"sessions/{session}/messages", token, {"text": ""}).payload == {"error": {"code": "rejected", "retryable": False}}
     too_many = [{"media_type": "image/png", "data": _image("PNG")}] * 5
     assert _chat(m, "POST", f"sessions/{session}/messages", token,
-                 {"text": "x", "images": too_many}).payload == {"error": "rejected"}
+                 {"text": "x", "images": too_many}).payload == {"error": {"code": "rejected", "retryable": False}}
     assert _chat(m, "POST", f"sessions/{session}/messages", token,
-                 {"text": "x", "images": [{"media_type": "image/bmp", "data": _image("BMP")}]}).payload == {"error": "rejected"}
+                 {"text": "x", "images": [{"media_type": "image/bmp", "data": _image("BMP")}]}).payload == {"error": {"code": "rejected", "retryable": False}}
     image_only = _chat(m, "POST", f"sessions/{session}/messages", token,
                        {"images": [{"media_type": "image/jpeg", "data": _image("JPEG")}]})
     assert image_only.status_code == 202 and _run(m, token, image_only.payload["run_id"])["state"] == "completed"

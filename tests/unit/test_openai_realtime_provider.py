@@ -80,6 +80,7 @@ def test_chatgpt_oauth_uses_codex_transport(monkeypatch) -> None:
 
     class Response:
         text = "v=0\r\no=answer"
+        headers = {}
 
         @staticmethod
         def raise_for_status():
@@ -122,3 +123,32 @@ def test_live_transcription_session_requests_low_delay_and_client_commit() -> No
         input_audio_transcription_model="gpt-live-transcribe", input_audio_transcription_delay="low"))
     assert session == {"type": "transcription", "audio": {"input": {
         "transcription": {"model": "gpt-live-transcribe", "delay": "low"}, "turn_detection": None}}}
+
+
+def test_server_controlled_call_uses_vault_credential_and_keeps_call_id(monkeypatch) -> None:
+    """Link Companion: either credential creates the call server-side; no client secret is produced."""
+    captured = []
+
+    class Response:
+        text = "v=0\r\no=answer"
+        headers = {"location": "/v1/realtime/calls/rtc_abc123"}
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    def post(url, **kwargs):
+        captured.append((url, kwargs["headers"]["Authorization"]))
+        return Response()
+
+    monkeypatch.setattr("app.vault_runtime.voice.openai_realtime.httpx.post", post)
+    offer = "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"
+    for credential in (ProviderCredential("sk-key", auth_method="api_key"),
+                       ProviderCredential("oauth-token", auth_method="chatgpt_oauth")):
+        result = OpenAIRealtimeProvider().create_realtime_session(
+            RealtimeSessionRequest(model_key="gpt-realtime", connection_mode="webrtc", offer_sdp=offer,
+                                   server_controlled=True), credential=credential)
+        assert result.call_id == "rtc_abc123" and result.provider_session_id == "rtc_abc123"
+        assert result.client_secret is None and result.sdp_answer.startswith("v=0")
+    assert captured == [("https://api.openai.com/v1/realtime/calls", "Bearer sk-key"),
+                        ("https://api.openai.com/v1/realtime/calls", "Bearer oauth-token")]

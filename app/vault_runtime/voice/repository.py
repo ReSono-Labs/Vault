@@ -245,6 +245,21 @@ class VoiceSessionRepository:
                     require_open=False,
                 )
 
+    def recent_open_session(self, *, user_id: str, workspace_id: str, within_seconds: int = 600) -> bool:
+        """An open Voice session for this account with activity in the window (stale ones never block)."""
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT 1 FROM vault_private.vault_voice_sessions s
+                   WHERE s.user_id=%s AND s.workspace_id=%s AND s.status IN ('starting','transport_open')
+                     AND greatest(s.updated_at, s.opened_at, coalesce((SELECT max(e.created_at)
+                         FROM vault_private.vault_voice_provider_events e
+                         WHERE e.voice_session_id=s.voice_session_id), s.opened_at))
+                         > now() - make_interval(secs => %s)
+                   LIMIT 1""",
+                (user_id, workspace_id, within_seconds),
+            )
+            return cursor.fetchone() is not None
+
     def capture_state(self,*,user_id,workspace_id,local_session_id,voice_session_id):
         with self._connect() as connection,connection.cursor() as cursor:
             self._require_authority(cursor,user_id=user_id,workspace_id=workspace_id,local_session_id=local_session_id)

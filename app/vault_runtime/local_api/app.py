@@ -155,6 +155,7 @@ class VaultLocalApiApp:
         self._host_filesystem_integrations = host_filesystem_integrations
         self._host_filesystem = host_filesystem
         self._link_companion = link_companion
+        self._companion_voice = None  # Built on first Link Companion voice use.
         self._a2a_service = a2a_service
         self._help_assistant = help_assistant
         self._builtin_plugins = builtin_plugins
@@ -169,6 +170,8 @@ class VaultLocalApiApp:
 
     def close(self) -> None:
         """Release owned runtime workers without changing durable local state."""
+        if self._companion_voice is not None:
+            self._companion_voice.shutdown()  # Hang up live phone calls and finalize their transcripts.
         if self._conversation_runtime is not None:
             self._conversation_runtime.close()
         if self._background_service is not None:
@@ -318,6 +321,10 @@ class VaultLocalApiApp:
                 code = getattr(exc, "code", "external_memory_request_failed")
                 status = 400 if isinstance(exc, ValueError) else 403
                 return LocalApiResponse(status, {"error": {"code": code, "message": str(exc)}})
+        if path.startswith("/link-companion/voice/"):
+            return self._handle_link_companion_voice(
+                method=method.upper(), path=path, query=target_parts.query, headers=headers, body=body,
+            )
         if path.startswith("/link-companion/chat/"):
             return self._handle_link_companion_chat(
                 method=method.upper(), path=path, query=target_parts.query, headers=headers, body=body,
@@ -1391,6 +1398,50 @@ class VaultLocalApiApp:
             return LocalApiResponse(200, result, (("Cache-Control", "no-store"),))
         return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
 
+    def _close_voice_session(self, principal, voice_session_id: str, transcript_capture_failures=None) -> dict[str, Any]:
+        """Close a Voice session and queue its review (browser Voice and Link Companion share this)."""
+        if self._voice_sessions is None:
+            raise RuntimeError("Local Voice sessions are unavailable.")
+        if self._conversation_runtime is not None and self._conversation_runtime.preparation is not None:
+            from app.vault_runtime.live_memory.voice_host import PREFIX
+            current=self._voice_sessions.session(user_id=principal.user_id,workspace_id=principal.workspace_id,
+                local_session_id=principal.session_id,voice_session_id=voice_session_id)
+            if current.status in {"starting","transport_open"}:
+                self._conversation_runtime.preparation.discard(principal,PREFIX+voice_session_id)
+        session = self._voice_sessions.close_session(
+            user_id=principal.user_id, workspace_id=principal.workspace_id,
+            local_session_id=principal.session_id, voice_session_id=voice_session_id,
+            transcript_capture_failures=transcript_capture_failures,
+        )
+        if self._voice_coordinator is not None:
+            self._voice_coordinator.close_modes(voice_session_id)
+        response: dict[str, Any] = {
+            "voiceRealtimeSessionId": session.voice_session_id, "status": session.status,
+        }
+        capture_state = self._voice_sessions.capture_state(user_id=principal.user_id,workspace_id=principal.workspace_id,
+            local_session_id=principal.session_id,voice_session_id=voice_session_id)
+        response["captureState"] = capture_state
+        if capture_state=="incomplete":
+            response.update(learning="deferred_incomplete_capture",decisionReview={"state":"blocked_incomplete_capture"})
+            return response
+        if self._voice_learning is not None and self._conversation_runtime is not None:
+            self._conversation_runtime.queue_voice_review(principal=principal,voice_session_id=voice_session_id)
+            response.update(learning="queued")
+            return response
+        if self._voice_learning is not None:
+            finalized = (self._conversation_runtime.finalize_voice(principal=principal,voice_session_id=voice_session_id)
+                if self._conversation_runtime is not None else self._voice_learning.finalize(
+                    principal=principal,voice_session_id=voice_session_id))
+            response.update({
+                "learning": "completed" if finalized is not None else "skipped_empty",
+                "memoryCount": finalized.memory_count if finalized is not None else 0,
+                "embeddedCount": finalized.embedded_count if finalized is not None else 0,
+                "embeddingsAvailable": finalized.embeddings_available if finalized is not None else False,
+            })
+            if finalized is not None and finalized.decision_review is not None:
+                response["decisionReview"] = finalized.decision_review
+        return response
+
     def _link_companion_principal(self, headers: Mapping[str, str]):
         """Authenticate the paired companion: its bearer token must be the linked owner session."""
         repository, identity = self._link_companion, self._identity_service
@@ -1410,6 +1461,108 @@ class VaultLocalApiApp:
         repository.touch_session(linked)
         return principal
 
+    def _companion_voice_service(self):
+        if self._companion_voice is None:
+            if None in (self._voice_coordinator, self._provider_credential_resolver, self._voice_provider_credentials,
+                        self._voice_tools, self._voice_learning, self._voice_sessions):
+                return None
+            from app.vault_runtime.voice.companion import CompanionVoiceService
+            sessions = self._voice_sessions
+            self._companion_voice = CompanionVoiceService(
+                coordinator=self._voice_coordinator,
+                credential_resolver=self._provider_credential_resolver,
+                credential_status=lambda principal, provider: self._voice_provider_credentials.status(principal, provider),
+                voice_tools=self._voice_tools, voice_learning=self._voice_learning,
+                recent_session_open=lambda principal: sessions.recent_open_session(
+                    user_id=principal.user_id, workspace_id=principal.workspace_id),
+                finish_close=lambda principal, voice_session_id: self._close_voice_session(principal, voice_session_id),
+                greeting=connect_greeting_event,
+            )
+        return self._companion_voice
+
+    def _handle_link_companion_voice(
+        self, *, method: str, path: str, query: str, headers: Mapping[str, str], body: bytes,
+    ) -> LocalApiResponse:
+        from app.vault_runtime.voice.companion import CompanionVoiceError
+        parts = path.removeprefix("/link-companion/voice/").strip("/").split("/")
+        service = self._companion_voice_service()
+        no_store = (("Cache-Control", "no-store"),)
+        if parts == ["health"] and method == "GET":
+            reason = None
+            try:
+                principal = self._link_companion_principal(headers)
+            except Exception:
+                reason = "not_paired"
+            if reason is None and service is None:
+                reason = "not_ready"
+            if reason is None:
+                try:
+                    selected = self._voice_provider_credentials.selected_provider(
+                        user_id=principal.user_id, workspace_id=principal.workspace_id)
+                except Exception:
+                    selected = "openai"
+                reason = "provider_unsupported" if selected != "openai" else service.readiness(principal)
+            return LocalApiResponse(200, {"ready": reason is None, "modes": ["live"] if reason is None else [],
+                                          **({"reason": reason} if reason else {})}, no_store)
+        try:
+            principal = self._link_companion_principal(headers)
+        except Exception:
+            return _companion_error(401, "not_paired")
+        if service is None:
+            return _companion_error(503, "not_ready")
+        account = _header(headers, "x-link-account") or ""
+        try:
+            if parts == ["sessions"] and method == "POST":
+                if len(body) > 40_000:
+                    return _companion_error(413, "bound_exceeded")
+                payload = _json_object(body, max_bytes=40_000)
+                offer = payload.get("offerSdp")
+                if not isinstance(offer, str) or not offer.strip() or len(offer.encode()) > 32_768:
+                    return _companion_error(400, "rejected")
+                if payload.get("modeKey") not in (None, "live"):
+                    return _companion_error(400, "rejected")
+                if self._mcp_lifecycle is not None:
+                    self._mcp_lifecycle.restore_scope(user_id=principal.user_id,
+                        workspace_id=principal.workspace_id, agent=AgentKind.VOICE)
+                started = service.start(principal, offer_sdp=offer)
+                if account:
+                    from hashlib import sha256
+                    logging.getLogger(__name__).info("companion_voice_started",
+                        extra={"account": sha256(account.encode()).hexdigest()[:12]})
+                sid = started["sessionId"]
+                base = f"/link-companion/voice/sessions/{sid}"
+                return LocalApiResponse(201, {"sessionId": sid, "sdpAnswer": started["sdpAnswer"],
+                    "maxSeconds": started["maxSeconds"], "idleSeconds": started["idleSeconds"],
+                    "control": {"events": base + "/events", "connected": base + "/connected", "close": base + "/close"}},
+                    no_store)
+            if len(parts) == 3 and parts[0] == "sessions":
+                sid = parts[1]
+                if len(body) > 65_536:
+                    return _companion_error(413, "bound_exceeded")
+                if parts[2] == "connected" and method == "POST":
+                    service.connected(principal, sid)
+                    return LocalApiResponse(200, {"status": "connected"}, no_store)
+                if parts[2] == "close" and method == "POST":
+                    return LocalApiResponse(200, {"status": service.close(principal, sid)}, no_store)
+                if parts[2] == "events" and method == "GET":
+                    values = parse_qs(query, keep_blank_values=True)
+                    try:
+                        after = max(0, int(values.get("after", ["0"])[0]))
+                        wait = max(0.0, min(float(values.get("wait", ["20"])[0]), 25.0))
+                    except ValueError:
+                        return _companion_error(400, "rejected")
+                    call = service.call(principal, sid)
+                    events, latest = call.wait(after, wait)
+                    return LocalApiResponse(200, {"events": events, "next": latest, "closed": call.closed}, no_store)
+            return _companion_error(404, "not_found")
+        except CompanionVoiceError as exc:
+            status = {"not_found": 404, "busy": 409, "not_ready": 409, "provider_refused": 502,
+                      "provider_unavailable": 503}.get(exc.code, 400)
+            return _companion_error(status, exc.code, exc.retryable)
+        except Exception:
+            logging.getLogger(__name__).warning("link_companion_voice_failed")
+            return _companion_error(503, "provider_unavailable", True)
+
     def _handle_link_companion_chat(
         self, *, method: str, path: str, query: str, headers: Mapping[str, str], body: bytes,
     ) -> LocalApiResponse:
@@ -1417,7 +1570,7 @@ class VaultLocalApiApp:
         from app.vault_runtime.link_companion.chat import ChatRejected, handle_chat
         no_store = (("Cache-Control", "no-store"),)
         def fail(status: int, code: str) -> LocalApiResponse:
-            return LocalApiResponse(status, {"error": code}, no_store)
+            return _companion_error(status, code)
         parts = path.removeprefix("/link-companion/chat/").strip("/").split("/")
         runtime = self._conversation_runtime
         if parts == ["health"] and method == "GET":
@@ -1755,6 +1908,9 @@ class VaultLocalApiApp:
             if self._voice_coordinator is None or self._provider_credential_resolver is None:
                 raise RuntimeError("Local Voice provider is unavailable.")
             provider_key = _required_text(payload, "providerKey")
+            if self._companion_voice is not None and self._companion_voice.active_for(principal.user_id, principal.workspace_id):
+                return LocalApiResponse(409, {"error": {"code": "voice_busy",
+                    "message": "A Voice session is already active for this account on another device."}})
             if self._mcp_lifecycle is not None:
                 self._mcp_lifecycle.restore_scope(
                     user_id=principal.user_id, workspace_id=principal.workspace_id,
@@ -1845,45 +2001,8 @@ class VaultLocalApiApp:
             if self._voice_sessions is None:
                 raise RuntimeError("Local Voice sessions are unavailable.")
             voice_session_id = path.removeprefix("/voice/sessions/").removesuffix("/close").strip("/")
-            if self._conversation_runtime is not None and self._conversation_runtime.preparation is not None:
-                from app.vault_runtime.live_memory.voice_host import PREFIX
-                current=self._voice_sessions.session(user_id=principal.user_id,workspace_id=principal.workspace_id,
-                    local_session_id=principal.session_id,voice_session_id=voice_session_id)
-                if current.status in {"starting","transport_open"}:
-                    self._conversation_runtime.preparation.discard(principal,PREFIX+voice_session_id)
-            session = self._voice_sessions.close_session(
-                user_id=principal.user_id, workspace_id=principal.workspace_id,
-                local_session_id=principal.session_id, voice_session_id=voice_session_id,
-                transcript_capture_failures=payload.get("transcriptCaptureFailures"),
-            )
-            if self._voice_coordinator is not None:
-                self._voice_coordinator.close_modes(voice_session_id)
-            response: dict[str, Any] = {
-                "voiceRealtimeSessionId": session.voice_session_id, "status": session.status,
-            }
-            capture_state = self._voice_sessions.capture_state(user_id=principal.user_id,workspace_id=principal.workspace_id,
-                local_session_id=principal.session_id,voice_session_id=voice_session_id)
-            response["captureState"] = capture_state
-            if capture_state=="incomplete":
-                response.update(learning="deferred_incomplete_capture",decisionReview={"state":"blocked_incomplete_capture"})
-                return LocalApiResponse(200,response)
-            if self._voice_learning is not None and self._conversation_runtime is not None:
-                self._conversation_runtime.queue_voice_review(principal=principal,voice_session_id=voice_session_id)
-                response.update(learning="queued")
-                return LocalApiResponse(200,response)
-            if self._voice_learning is not None:
-                finalized = (self._conversation_runtime.finalize_voice(principal=principal,voice_session_id=voice_session_id)
-                    if self._conversation_runtime is not None else self._voice_learning.finalize(
-                        principal=principal,voice_session_id=voice_session_id))
-                response.update({
-                    "learning": "completed" if finalized is not None else "skipped_empty",
-                    "memoryCount": finalized.memory_count if finalized is not None else 0,
-                    "embeddedCount": finalized.embedded_count if finalized is not None else 0,
-                    "embeddingsAvailable": finalized.embeddings_available if finalized is not None else False,
-                })
-                if finalized is not None and finalized.decision_review is not None:
-                    response["decisionReview"] = finalized.decision_review
-            return LocalApiResponse(200, response)
+            return LocalApiResponse(200, self._close_voice_session(principal, voice_session_id,
+                                                                   payload.get("transcriptCaptureFailures")))
         if method == "POST" and path.startswith("/voice/sessions/") and path.endswith("/events"):
             if self._voice_learning is None:
                 raise RuntimeError("Local Voice learning is unavailable.")
@@ -2470,6 +2589,16 @@ def _cookie_value(headers: Mapping[str, str], name: str) -> str:
     cookie.load(_header(headers, "cookie") or "")
     morsel = cookie.get(name)
     return morsel.value if morsel is not None else ""
+
+
+_COMPANION_RETRYABLE = {"busy", "unavailable", "provider_unavailable"}
+
+
+def _companion_error(status: int, code: str, retryable: bool | None = None) -> LocalApiResponse:
+    """Link Companion errors: a short safe code and whether retrying the same request can help."""
+    return LocalApiResponse(status, {"error": {"code": code,
+        "retryable": code in _COMPANION_RETRYABLE if retryable is None else retryable}},
+        (("Cache-Control", "no-store"),))
 
 
 def _session_token(headers: Mapping[str, str]) -> str:

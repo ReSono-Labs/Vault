@@ -65,3 +65,48 @@ Errors are `{"error": "<code>"}` with no other detail:
 | `unavailable` | 503 |
 
 The connector never has to hold a connection open; it polls `runs/{run_id}` (every 1–2 s is fine).
+
+## Live voice (OpenAI)
+
+Vault creates the OpenAI call with its own credential (API key or ChatGPT sign-in; both verified live on
+2026-10-18) and controls it over OpenAI's server-side connection (`wss://api.openai.com/v1/realtime?call_id=`).
+The phone's audio goes directly to OpenAI over WebRTC. No key, pass or provider token ever reaches the phone.
+Gemini/xAI are deferred: `health` reports them as not ready (`provider_unsupported`).
+
+| Call | Response |
+|---|---|
+| `GET /link-companion/voice/health` | `{"ready": bool, "modes": ["live"] or [], "reason"?}`. Reason is one of `not_paired`, `not_ready`, `provider_unsupported`. |
+| `POST /link-companion/voice/sessions` with `{"offerSdp", "modeKey"?: "live", "client"?: {"platform", "appVersion"}}` (offer ≤ 32 KB) | 201 `{"sessionId", "sdpAnswer", "maxSeconds": 1800, "idleSeconds": 300, "control": {"events", "connected", "close"}}` |
+| `POST …/sessions/{id}/connected` with `{}` | Send once the phone's WebRTC connection is up. Vault then speaks the greeting; audio sent before this would be lost. |
+| `GET …/sessions/{id}/events?after=<seq>&wait=<0–25 s>` | `{"events": [...], "next": <seq>, "closed": bool}`. Waits up to `wait` seconds for new events; pass `next` as `after`. |
+| `POST …/sessions/{id}/close` with `{}` | `{"status": "closed"}`. Vault hangs up, saves the transcript and queues review. |
+
+Phone events are display-only, in order, each with a `seq`:
+
+| `type` | Fields | Meaning |
+|---|---|---|
+| `ready` | none | session configured |
+| `state` | `state`: `listening` or `responding` | |
+| `transcript` | `role`: `user` or `assistant`; `text` | final lines, as Vault recorded them |
+| `tool` | `name`; `state`: `running`, `completed` or `failed` | |
+| `mode` | none | Vault changed the session (for example, goal intake) |
+| `closed` | `reason`: `ended`, `idle`, `max_duration`, `provider_closed`, `provider_unavailable` or `vault_stopping` | |
+
+Rules:
+- **One Voice session per account across all devices.** A second start gets `busy` (retryable), and a browser Voice start during a phone call is refused the same way.
+- **The phone only carries audio and shows what Vault reports.** On the `oai-events` data channel it must never send `session.update` or `conversation.item.create`, and never answer function calls; Vault does all of that. It may read the channel's own events for live captions.
+- **Interrupting** is handled by OpenAI's speech detection on the call; nothing extra is needed from the phone.
+- **Link account header:** the connector may send `X-Link-Account: <pseudonym>`. Vault logs only a hash of it.
+
+Voice errors use the same `{"error":{"code","retryable"}}` shape:
+
+| Code | Status | Retryable |
+|---|---|---|
+| `not_paired` | 401 | no |
+| `not_ready` | 409 | no |
+| `busy` | 409 | yes |
+| `provider_refused` | 502 | no |
+| `provider_unavailable` | 503 | yes |
+| `not_found` | 404 | no |
+| `rejected` | 400 | no |
+| `bound_exceeded` | 413 | no |

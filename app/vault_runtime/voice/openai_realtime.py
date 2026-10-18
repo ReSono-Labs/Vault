@@ -49,6 +49,8 @@ class OpenAIRealtimeProvider:
     ) -> RealtimeSessionResult:
         if request.connection_mode != "webrtc":
             raise OpenAIRealtimeError("Browser client-secret creation requires WebRTC mode.")
+        if request.server_controlled:
+            return self._create_server_call(request, credential)
         if credential.auth_method == "chatgpt_oauth":
             return self._create_chatgpt_session(request, credential)
         url = f"{self._base_url}/realtime/client_secrets"
@@ -103,10 +105,34 @@ class OpenAIRealtimeProvider:
             sdp_answer=answer,
         )
 
+    def _create_server_call(
+        self, request: RealtimeSessionRequest, credential: ProviderCredential,
+    ) -> RealtimeSessionResult:
+        """Create the call with Vault's credential (API key or ChatGPT sign-in) and keep its call_id."""
+        offer = normalize_webrtc_sdp(request.offer_sdp or "")
+        validate_webrtc_offer(offer)
+        session_object = build_openai_realtime_session_object(request)
+        answer, call_id = self._realtime_call(access_token=credential.value, offer_sdp=offer,
+                                              session=session_object, organization=self._organization)
+        if not call_id:
+            raise OpenAIRealtimeError("OpenAI Realtime did not return a call id.")
+        return RealtimeSessionResult(
+            provider_key=self.provider_key, model_key=request.model_key,
+            connection_mode=request.connection_mode, provider_session_id=call_id,
+            session_update_event={"type": "session.update", "session": session_object},
+            sdp_answer=answer, call_id=call_id,
+        )
+
     @staticmethod
     def _create_oauth_realtime_call(
         *, access_token: str, offer_sdp: str, session: dict[str, Any],
     ) -> str:
+        return OpenAIRealtimeProvider._realtime_call(access_token=access_token, offer_sdp=offer_sdp, session=session)[0]
+
+    @staticmethod
+    def _realtime_call(
+        *, access_token: str, offer_sdp: str, session: dict[str, Any], organization: str | None = None,
+    ) -> tuple[str, str | None]:
         body, content_type = _multipart_form(
             ("sdp", offer_sdp),
             ("session", json.dumps(session, separators=(",", ":"))),
@@ -119,6 +145,7 @@ class OpenAIRealtimeProvider:
                     "Authorization": f"Bearer {access_token}",
                     "Content-Type": content_type,
                     "Accept": "application/sdp, text/plain",
+                    **({"OpenAI-Organization": organization} if organization else {}),
                 },
                 timeout=30.0,
             )
@@ -143,7 +170,12 @@ class OpenAIRealtimeProvider:
                 answer = ""
         if not answer.startswith("v=0"):
             raise OpenAIRealtimeError("ChatGPT OAuth Voice returned an invalid answer.")
-        return answer + ("" if answer.endswith("\r\n") else "\r\n")
+        location = response.headers.get("location") or ""
+        call_id = location.rstrip("/").rsplit("/", 1)[-1] if location else None
+        if call_id is not None and not (0 < len(call_id) <= 128
+                                        and call_id.replace("_", "").replace("-", "").isalnum()):
+            call_id = None
+        return answer + ("" if answer.endswith("\r\n") else "\r\n"), call_id
 
     @staticmethod
     def _default_transport(

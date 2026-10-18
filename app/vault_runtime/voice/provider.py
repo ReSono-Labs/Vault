@@ -61,6 +61,9 @@ class RealtimeSessionRequest:
     voice_session_id: str | None = None
     display_name: str | None = None
     session_type: str = "realtime"
+    # Server-controlled (Link Companion): Vault creates the call with its own credential and
+    # controls it over the provider's call_id sideband; no key or pass is returned for the client.
+    server_controlled: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +81,7 @@ class RealtimeSessionResult:
     websocket_protocol: str | None = field(default=None, repr=False)
     input_sample_rate: int | None = None
     output_sample_rate: int | None = None
+    call_id: str | None = None
 
 
 class RealtimeProvider(Protocol):
@@ -168,6 +172,7 @@ class VoiceSessionCoordinator:
         credential: ProviderCredential,
         voice: str | None = None,
         offer_sdp: str | None = None,
+        server_controlled: bool = False,
     ) -> StartedVoiceSession:
         local = self._sessions.create_session(
             user_id=principal.user_id, workspace_id=principal.workspace_id,
@@ -193,7 +198,7 @@ class VoiceSessionCoordinator:
                 goal_intake_tools=lambda items=goal: tuple(item.realtime_definition() for item in items),
             )
         # The conversation may run on OAuth; the transcription session has its own API-key credential.
-        live_transcription=bool(provider_key=="openai"
+        live_transcription=bool(not server_controlled and provider_key=="openai"
             and self.live_preparation is not None and self.live_preparation(principal)
             and self.transcription_available is not None and self.transcription_available(principal))
         request = RealtimeSessionRequest(
@@ -215,6 +220,7 @@ class VoiceSessionCoordinator:
             offer_sdp=offer_sdp,
             voice_session_id=local.voice_session_id,
             display_name=context.display_name,
+            server_controlled=server_controlled,
         )
         provider = self._providers.require(provider_key)
         try:
