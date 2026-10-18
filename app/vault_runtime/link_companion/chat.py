@@ -16,7 +16,7 @@ from uuid import uuid4
 
 MAX_IMAGES = 4
 MAX_IMAGE_BYTES = 1_500_000
-MAX_TEXT_CHARS = 16_000
+MAX_TEXT_CHARS = 16_384  # Matches the Link chat helper; 4-byte UTF-8 still fits the 64 KiB turn limit.
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/gif": "png", "image/webp": "webp"}
 IMAGE_ONLY_TEXT = "(Image attached.)"
 RUN_STATES = {"submitted": "queued", "running": "running", "completed": "completed",
