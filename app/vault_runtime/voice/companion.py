@@ -18,6 +18,15 @@ from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
+if not logger.handlers:
+    # No global logging config sets a root handler, so module INFO diagnostics
+    # (companion voice/transcription markers) would be dropped at the default
+    # WARNING threshold. Attach a dedicated stdout handler like LiveDiagnostics.
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 SIDEBAND_URL = "wss://api.openai.com/v1/realtime?call_id={call_id}"
 HANGUP_URL = "https://api.openai.com/v1/realtime/calls/{call_id}/hangup"
@@ -84,8 +93,9 @@ class LivePreparation:
         if not self.enabled or not item or (self.active and self.active["item"] == item):
             return
         await self._update_memory(None, send)
+        self._log_utterance_deltas()
         self.epoch += 1
-        self.active = {"item": item, "utterance": str(uuid4()), "revision": 0, "committed": False}
+        self.active = {"item": item, "utterance": str(uuid4()), "revision": 0, "committed": False, "deltas": 0}
         self.posted = 0
         if len(self.items) > 64:
             self.items.clear()
@@ -95,7 +105,10 @@ class LivePreparation:
         if not self.active or self.active["item"] != item or self.active["committed"]:
             return
         self.active["committed"] = True
-        if self.transcription_send is not None:
+        # Only commit when audio produced at least one transcription delta on the dedicated call.
+        # Committing an empty buffer makes OpenAI raise input_audio_buffer_commit_empty, which is
+        # just noise when the phone's second audio connection delivered no audio.
+        if self.transcription_send is not None and self.active.get("deltas", 0) > 0:
             await self.transcription_send({"type": "input_audio_buffer.commit"})
 
     async def _post(self, update: dict[str, Any]) -> bool:
@@ -127,6 +140,7 @@ class LivePreparation:
             return
         item["text"] = text
         self.active["revision"] += 1
+        self.active["deltas"] = self.active.get("deltas", 0) + 1
         revision, utterance, epoch = self.active["revision"], self.active["utterance"], self.epoch
         if await self._post({"utteranceId": utterance, "revision": revision, "text": text, "composing": False}):
             self.posted = max(self.posted, revision)
@@ -164,7 +178,17 @@ class LivePreparation:
                 return
             await asyncio.sleep(0.35)
 
+    def _log_utterance_deltas(self) -> None:
+        """Content-free: when an utterance ends, record how many transcription deltas it received.
+        deltas==0 means speech started but no words reached the engine (the empty revision-0 symptom)."""
+        active = self.active
+        if active is not None and active.get("revision", 0) >= 0:
+            logger.info("companion_voice_utterance_transcription mode=%s deltas=%d committed=%s",
+                        "native" if self.native else "dedicated",
+                        active.get("deltas", 0), bool(active.get("committed")))
+
     async def close(self) -> None:
+        self._log_utterance_deltas()
         self.epoch += 1
         self.active = None
         try:
@@ -458,6 +482,11 @@ class CompanionVoiceService:
         except Exception:
             logger.info("companion_voice_transcription_sideband_failed")
             return
+        # Content-free localization of a missing transcript: the sideband attached, so missing words
+        # mean the dedicated call produced no transcription events (audio not reaching it, or none
+        # emitted). Counts only; transcript text is never logged.
+        logger.info("companion_voice_transcription_sideband_open")
+        events_total = deltas = finals = 0
         async def transcription_send(event: dict[str, Any]) -> None:
             await ws.send(json.dumps(event))
         call.live_prep.transcription_send = transcription_send
@@ -474,9 +503,25 @@ class CompanionVoiceService:
                 except (TypeError, ValueError):
                     continue
                 if isinstance(event, dict):
+                    events_total += 1
+                    kind = str(event.get("type") or "")
+                    if kind == "conversation.item.input_audio_transcription.delta":
+                        deltas += 1
+                    elif kind in USER_FINAL:
+                        finals += 1
+                    elif kind == "error":
+                        code = (event.get("error") or {}).get("code") if isinstance(event.get("error"), dict) else None
+                        logger.info("companion_voice_transcription_provider_error code=%s",
+                                    str(code or "unknown")[:64])
                     await call.live_prep.delta(event, send, from_call=False)
         finally:
             call.live_prep.transcription_send = None
+            # Summary localizes the drop without words: events_total==0 means the dedicated call
+            # emitted nothing (phone's second audio connection is not reaching it); deltas==0 with
+            # events_total>0 means OpenAI sent other events but no transcription (e.g. no speech
+            # detected or wrong session type); deltas>0 means words reached the engine.
+            logger.info("companion_voice_transcription_summary events=%d deltas=%d finals=%d",
+                        events_total, deltas, finals)
             try:
                 await ws.close()
             except Exception:
