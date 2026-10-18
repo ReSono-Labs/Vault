@@ -1565,12 +1565,14 @@ class VaultLocalApiApp:
                     return LocalApiResponse(200, {"status": "connected"}, no_store)
                 if parts[2] == "close" and method == "POST":
                     return LocalApiResponse(200, {"status": service.close(principal, sid)}, no_store)
-                if parts[2] == "events" and method == "GET":
-                    values = parse_qs(query, keep_blank_values=True)
+                if parts[2] == "events" and method in ("GET", "POST"):
+                    # POST {after, wait} is the form for clients that cannot send query strings.
+                    source = (_json_object(body, max_bytes=1024) if body else {}) if method == "POST" else \
+                        {k: v[0] for k, v in parse_qs(query, keep_blank_values=True).items() if v}
                     try:
-                        after = max(0, int(values.get("after", ["0"])[0]))
-                        wait = max(0.0, min(float(values.get("wait", ["20"])[0]), 25.0))
-                    except ValueError:
+                        after = max(0, int(source.get("after", 0)))
+                        wait = max(0.0, min(float(source.get("wait", 20)), 25.0))
+                    except (TypeError, ValueError):
                         return _companion_error(400, "rejected")
                     call = service.call(principal, sid)
                     events, latest = call.wait(after, wait)

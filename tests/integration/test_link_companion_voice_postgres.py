@@ -99,7 +99,7 @@ def test_companion_live_voice_end_to_end(mounted, monkeypatch):
     _until(lambda: sidebands)
     band = sidebands[0]
     band.push(type="session.updated", event_id="e1")
-    events = _voice(m, "GET", f"sessions/{sid}/events", token, query="?after=0&wait=3").payload
+    events = _voice(m, "POST", f"sessions/{sid}/events", token, {"after": 0, "wait": 3}).payload
     assert [e["type"] for e in events["events"]][:1] == ["ready"]
     assert _voice(m, "POST", f"sessions/{sid}/connected", token, {}).status_code == 200
     _until(lambda: any(e.get("type") == "response.create" and "instructions" in e.get("response", {}) for e in band.sent))
@@ -207,6 +207,7 @@ def test_companion_voice_uses_live_memory_and_tool_route_like_browser(mounted, m
     call_band, words = bands["rtc_live1"], bands["rtc_live2"]
 
     call_band.push(type="input_audio_buffer.speech_started", event_id="s1", item_id="u1")
+    _until(lambda: engine.updates)  # Speech start registers the utterance before words arrive (as on a real call).
     for delta in ("When does Dana ", "like calls?"):
         words.push(type="conversation.item.input_audio_transcription.delta", item_id="w1", content_index=0, delta=delta)
     _until(lambda: any(e.get("type") == "session.update" and "Dana prefers morning calls" in e["session"]["instructions"]

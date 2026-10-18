@@ -106,11 +106,11 @@ def test_companion_owner_chat_end_to_end(mounted):
 
     # Live preparation while typing goes through the same engine as browser Chat.
     drafted = _chat(m, "POST", f"sessions/{session}/draft", token,
-                    {"draft_id": "draft-1", "revision": 1, "text": "What did I say about Dana last week?"})
-    assert drafted.status_code == 202 and isinstance(drafted.payload["state"], str), drafted.payload
-    status = _chat(m, "GET", f"sessions/{session}/draft?draft_id=draft-1&revision=1", token)
+                    {"draft_id": "draft-1", "revision": 1, "text": "What did I say about Dana last week?", "wait": 0.5})
+    assert drafted.status_code == 200 and set(drafted.payload) == {"revision", "state", "memories", "tools"}, drafted.payload
+    status = _chat(m, "POST", f"sessions/{session}/draft/status", token, {"draft_id": "draft-1", "revision": 1})
     assert status.status_code == 200 and set(status.payload) == {"revision", "state", "memories", "tools"}
-    assert _chat(m, "DELETE", f"sessions/{session}/draft", token).status_code == 200
+    assert _chat(m, "POST", f"sessions/{session}/draft/clear", token, {}).status_code == 200
 
     # The phone conversation is the owner's normal Vault chat.
     listed = m.app.handle(method="GET", target="/conversations", headers=m.headers).payload["items"]

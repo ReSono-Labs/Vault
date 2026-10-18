@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import binascii
 from io import BytesIO
+from time import monotonic, sleep
 from typing import Any, Callable
 from urllib.parse import parse_qs
 from uuid import uuid4
@@ -135,33 +136,56 @@ def handle_chat(runtime: Any, principal: Any, *, method: str, parts: list[str], 
 
     # Live preparation while typing: the same engine browser Chat uses (live memory + live tool route).
     # The final send picks the prepared result up automatically when the text matches.
-    if len(parts) == 3 and parts[0] == "sessions" and parts[2] == "draft":
+    if len(parts) in (3, 4) and parts[0] == "sessions" and parts[2] == "draft":
         conversation_id = identifier(parts[1])
         preparation = runtime.preparation
         if preparation is None:
             return respond(200, {"state": "off", "memories": [], "tools": []})
-        if method == "POST":
-            if set(payload) - {"draft_id", "revision", "text"}:
-                raise ChatRejected("unexpected fields")
-            draft_id, revision, text = payload.get("draft_id"), payload.get("revision"), payload.get("text")
+        def view(draft_id: str, revision: int) -> dict[str, Any]:
+            value = preparation.status(principal, conversation_id, identifier(draft_id), revision)
+            return {"revision": value.get("revision", revision), "state": value.get("state"),
+                    "memories": [{"text": m.get("text")} for m in value.get("memories") or []],
+                    "tools": [{"name": t.get("name"), "description": t.get("description")} for t in value.get("tools") or []]}
+
+        def cursor(source: dict[str, Any]) -> tuple[str, int]:
+            draft_id, revision = source.get("draft_id"), source.get("revision")
+            if isinstance(revision, str) and revision.isdigit():
+                revision = int(revision)
             if (not isinstance(draft_id, str) or not 1 <= len(draft_id) <= 100 or type(revision) is not int
-                    or not 0 <= revision <= 2**31 - 1 or not isinstance(text, str) or len(text) > MAX_TEXT_CHARS):
+                    or not 0 <= revision <= 2**31 - 1):
+                raise ChatRejected("invalid draft")
+            return draft_id, revision
+
+        if method == "POST" and parts[2:] == ["draft"]:
+            # One call does it all: accept the draft, wait briefly (default 1 s, max 2 s) for the
+            # prepared result and return it, so a phone over Link needs no status polling.
+            if set(payload) - {"draft_id", "revision", "text", "wait"}:
+                raise ChatRejected("unexpected fields")
+            draft_id, revision = cursor(payload)
+            text, wait = payload.get("text"), payload.get("wait", 1.0)
+            if not isinstance(text, str) or len(text) > MAX_TEXT_CHARS or type(wait) not in (int, float):
                 raise ChatRejected("invalid draft")
             result = preparation.update(principal, conversation_id,
                                         {"utteranceId": draft_id, "revision": revision, "text": text, "composing": False})
-            enabled = not (isinstance(result, dict) and result.get("enabled") is False)
-            return respond(202, {"state": (result or {}).get("state", "accepted") if enabled else "off"})
-        if method == "GET":
+            if isinstance(result, dict) and result.get("enabled") is False:
+                return respond(200, {"revision": revision, "state": "off", "memories": [], "tools": []})
+            deadline = monotonic() + max(0.0, min(float(wait), 2.0))
+            current = view(draft_id, revision)
+            while current["state"] in ("searching", "accepted", None) and monotonic() < deadline:
+                sleep(0.1)
+                current = view(draft_id, revision)
+            return respond(200, current)
+        if method == "POST" and parts[2:] == ["draft", "status"]:
+            if set(payload) - {"draft_id", "revision"}:
+                raise ChatRejected("unexpected fields")
+            return respond(200, view(*cursor(payload)))
+        if method == "POST" and parts[2:] == ["draft", "clear"]:
+            preparation.discard(principal, conversation_id)
+            return respond(200, {"state": "cleared"})
+        if method == "GET" and parts[2:] == ["draft"]:
             values = parse_qs(query, keep_blank_values=True)
-            try:
-                draft_id, revision = values["draft_id"][0], int(values["revision"][0])
-            except (KeyError, IndexError, ValueError):
-                raise ChatRejected("invalid cursor") from None
-            value = preparation.status(principal, conversation_id, identifier(draft_id), revision)
-            return respond(200, {"revision": value.get("revision", revision), "state": value.get("state"),
-                "memories": [{"text": m.get("text")} for m in value.get("memories") or []],
-                "tools": [{"name": t.get("name"), "description": t.get("description")} for t in value.get("tools") or []]})
-        if method == "DELETE":
+            return respond(200, view(*cursor({k: v[0] for k, v in values.items() if v})))
+        if method == "DELETE" and parts[2:] == ["draft"]:
             preparation.discard(principal, conversation_id)
             return respond(200, {"state": "cleared"})
 
