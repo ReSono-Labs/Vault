@@ -417,6 +417,15 @@ class ConversationRuntimeStore(ConversationRepository):
             row = cursor.fetchone()
         return row[0] if row else None
 
+    def turn_cards(self,principal,conversation_id,turn_id):
+        """Validated, display-only GenUI cards of one turn (the same ones browser Chat renders)."""
+        with self._connect() as connection,connection.cursor() as cursor:
+            self._require_authority(cursor,principal)
+            cursor.execute("""SELECT payload->'cardId',payload->'card' FROM vault_private.vault_conversation_events
+              WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND turn_id=%s AND kind='ui'
+              ORDER BY sequence""",(*self._scope(principal,conversation_id),turn_id))
+            return [dict(id=r[0],card=r[1]) for r in cursor.fetchall() if isinstance(r[1],dict)]
+
     def history(self,principal,conversation_id,*,segment_id=None):
         self.load(principal,conversation_id)
         selected="""WITH selected_turns AS (

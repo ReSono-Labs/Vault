@@ -104,6 +104,14 @@ def test_companion_owner_chat_end_to_end(mounted):
     assert all(isinstance(x["timestamp"], int) and x["timestamp"] > 1_700_000_000 for x in messages)
     assert set(messages[0]) == {"id", "role", "text", "timestamp"}
 
+    # Live preparation while typing goes through the same engine as browser Chat.
+    drafted = _chat(m, "POST", f"sessions/{session}/draft", token,
+                    {"draft_id": "draft-1", "revision": 1, "text": "What did I say about Dana last week?"})
+    assert drafted.status_code == 202 and isinstance(drafted.payload["state"], str), drafted.payload
+    status = _chat(m, "GET", f"sessions/{session}/draft?draft_id=draft-1&revision=1", token)
+    assert status.status_code == 200 and set(status.payload) == {"revision", "state", "memories", "tools"}
+    assert _chat(m, "DELETE", f"sessions/{session}/draft", token).status_code == 200
+
     # The phone conversation is the owner's normal Vault chat.
     listed = m.app.handle(method="GET", target="/conversations", headers=m.headers).payload["items"]
     assert any(item["conversationId"] == session for item in listed)

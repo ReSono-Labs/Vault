@@ -126,9 +126,44 @@ def handle_chat(runtime: Any, principal: Any, *, method: str, parts: list[str], 
                 messages.append({"id": f"{turn['turnId']}:user", "role": "user", "text": turn["input"],
                                  "timestamp": _epoch(turn.get("createdAt"))})
                 if turn.get("answer"):
+                    cards = [{"id": u.get("cardId"), "card": u.get("card")} for u in turn.get("ui") or []
+                             if isinstance(u, dict) and isinstance(u.get("card"), dict)]
                     messages.append({"id": f"{turn['turnId']}:assistant", "role": "assistant",
-                                     "text": turn["answer"], "timestamp": _epoch(turn.get("updatedAt"))})
+                                     "text": turn["answer"], "timestamp": _epoch(turn.get("updatedAt")),
+                                     **({"cards": cards} if cards else {})})
             return respond(200, {"messages": messages, "next_before": page.get("nextBefore")})
+
+    # Live preparation while typing: the same engine browser Chat uses (live memory + live tool route).
+    # The final send picks the prepared result up automatically when the text matches.
+    if len(parts) == 3 and parts[0] == "sessions" and parts[2] == "draft":
+        conversation_id = identifier(parts[1])
+        preparation = runtime.preparation
+        if preparation is None:
+            return respond(200, {"state": "off", "memories": [], "tools": []})
+        if method == "POST":
+            if set(payload) - {"draft_id", "revision", "text"}:
+                raise ChatRejected("unexpected fields")
+            draft_id, revision, text = payload.get("draft_id"), payload.get("revision"), payload.get("text")
+            if (not isinstance(draft_id, str) or not 1 <= len(draft_id) <= 100 or type(revision) is not int
+                    or not 0 <= revision <= 2**31 - 1 or not isinstance(text, str) or len(text) > MAX_TEXT_CHARS):
+                raise ChatRejected("invalid draft")
+            result = preparation.update(principal, conversation_id,
+                                        {"utteranceId": draft_id, "revision": revision, "text": text, "composing": False})
+            enabled = not (isinstance(result, dict) and result.get("enabled") is False)
+            return respond(202, {"state": (result or {}).get("state", "accepted") if enabled else "off"})
+        if method == "GET":
+            values = parse_qs(query, keep_blank_values=True)
+            try:
+                draft_id, revision = values["draft_id"][0], int(values["revision"][0])
+            except (KeyError, IndexError, ValueError):
+                raise ChatRejected("invalid cursor") from None
+            value = preparation.status(principal, conversation_id, identifier(draft_id), revision)
+            return respond(200, {"revision": value.get("revision", revision), "state": value.get("state"),
+                "memories": [{"text": m.get("text")} for m in value.get("memories") or []],
+                "tools": [{"name": t.get("name"), "description": t.get("description")} for t in value.get("tools") or []]})
+        if method == "DELETE":
+            preparation.discard(principal, conversation_id)
+            return respond(200, {"state": "cleared"})
 
     if len(parts) == 2 and parts[0] == "runs" and method == "GET":
         turn_id = identifier(parts[1])
@@ -138,6 +173,9 @@ def handle_chat(runtime: Any, principal: Any, *, method: str, parts: list[str], 
         body: dict[str, Any] = {"state": state, "session_id": conversation_id}
         if state == "completed":
             body["text"] = store.final_text(principal, conversation_id, turn_id) or ""
+            cards = store.turn_cards(principal, conversation_id, turn_id)
+            if cards:
+                body["cards"] = cards
         elif state == "failed":
             body["error"] = "interrupted" if status["state"] == "interrupted" else "failed"
         return respond(200, body)

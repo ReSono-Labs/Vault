@@ -77,6 +77,7 @@ Gemini/xAI are deferred: `health` reports them as not ready (`provider_unsupport
 |---|---|
 | `GET /link-companion/voice/health` | `{"ready": bool, "modes": ["live"] or [], "reason"?}`. Reason is one of `not_paired`, `not_ready`, `provider_unsupported`. |
 | `POST /link-companion/voice/sessions` with `{"offerSdp", "modeKey"?: "live", "client"?: {"platform", "appVersion"}}` (offer ≤ 32 KB) | 201 `{"sessionId", "sdpAnswer", "maxSeconds": 1800, "idleSeconds": 300, "control": {"events", "connected", "close"}}` |
+| `POST …/sessions/{id}/transcription` with `{"offerSdp"}` (only when the start response has `liveTranscription: true`) | 201 `{"sdpAnswer"}`. Vault creates the live-transcription call with its API key and reads your words while you speak (live memory and live tool route, as in browser Voice). |
 | `POST …/sessions/{id}/connected` with `{}` | Send once the phone's WebRTC connection is up. Vault then speaks the greeting; audio sent before this would be lost. |
 | `GET …/sessions/{id}/events?after=<seq>&wait=<0–25 s>` | `{"events": [...], "next": <seq>, "closed": bool}`. Waits up to `wait` seconds for new events; pass `next` as `after`. |
 | `POST …/sessions/{id}/close` with `{}` | `{"status": "closed"}`. Vault hangs up, saves the transcript and queues review. |
@@ -90,6 +91,7 @@ Phone events are display-only, in order, each with a `seq`:
 | `transcript` | `role`: `user` or `assistant`; `text` | final lines, as Vault recorded them |
 | `tool` | `name`; `state`: `running`, `completed` or `failed` | |
 | `mode` | none | Vault changed the session (for example, goal intake) |
+| `live` | `state`; `memories`: `[{"text"}]`; `tools`: `[names]` | live memory and tool route applied for the current request (like the browser's live window) |
 | `closed` | `reason`: `ended`, `idle`, `max_duration`, `provider_closed`, `provider_unavailable` or `vault_stopping` | |
 
 Rules:

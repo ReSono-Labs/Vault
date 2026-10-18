@@ -84,7 +84,7 @@ def test_companion_live_voice_end_to_end(mounted, monkeypatch):
     body = started.payload
     sid = body["sessionId"]
     assert body["sdpAnswer"] == ANSWER and body["maxSeconds"] == 1800
-    assert set(body) == {"sessionId", "sdpAnswer", "maxSeconds", "idleSeconds", "control"}
+    assert set(body) == {"sessionId", "sdpAnswer", "maxSeconds", "idleSeconds", "liveMemory", "liveTranscription", "control"}
     assert "sk-synthetic" not in json.dumps(body)
     session = created_calls[0]["session"]
     assert session["instructions"] and session["tools"], "Vault builds the full session itself"
@@ -151,3 +151,79 @@ def test_companion_live_voice_end_to_end(mounted, monkeypatch):
     assert reason == "idle" and hangups == ["rtc_test1", "rtc_test2"]
     assert service.active_for(m.principal.user_id, m.principal.workspace_id) is None
     assert _voice(m, "GET", "sessions/unknown/events", token).payload["error"]["code"] == "not_found"
+
+
+class Engine:
+    """Records what the shared preparation engine is fed and answers like it does with one memory hit."""
+    def __init__(self):
+        self.updates, self.receipts, self.discarded = [], [], 0
+
+    def update(self, principal, source, payload):
+        self.updates.append((source, payload))
+        return {"revision": payload["revision"], "state": "accepted"}
+
+    def status(self, principal, source, utterance, revision):
+        return {"revision": revision, "state": "ready", "toolState": "proposed",
+                "memories": [{"id": "m1", "text": "Dana prefers morning calls", "methods": ["vector"]}],
+                "tools": [{"id": "t1", "name": "contacts_search", "description": "Find contacts"}]}
+
+    def delivered(self, principal, source, utterance, memories, tools):
+        self.receipts.append((memories, tools))
+
+    def discard(self, principal, source, utterance=None):
+        self.discarded += 1
+
+
+def test_companion_voice_uses_live_memory_and_tool_route_like_browser(mounted, monkeypatch):
+    m = mounted
+    grant(m)
+    calls, bands = [], {}
+
+    def realtime_call(*, access_token, offer_sdp, session, organization=None):
+        calls.append(session)
+        return ANSWER, f"rtc_live{len(calls)}"
+
+    monkeypatch.setattr("app.vault_runtime.voice.openai_realtime.OpenAIRealtimeProvider._realtime_call",
+                        staticmethod(realtime_call))
+    token, _ = _pair(m)
+    service = m.app._companion_voice_service()
+    engine = Engine()
+    service._preparation, service._live_enabled = engine, (lambda principal: True)
+    async def connect(call_id, credential):
+        bands[call_id] = Sideband()
+        return bands[call_id]
+    service._connect = connect
+    service._hangup = lambda call_id, credential: None
+
+    started = _voice(m, "POST", "sessions", token, {"offerSdp": OFFER})
+    assert started.status_code == 201, started.payload
+    body = started.payload
+    assert body["liveMemory"] is True and body["liveTranscription"] is True
+    sid = body["sessionId"]
+    answer = _voice(m, "POST", f"sessions/{sid}/transcription", token, {"offerSdp": OFFER})
+    assert answer.status_code == 201 and answer.payload == {"sdpAnswer": ANSWER}
+    assert calls[1]["type"] == "transcription", "Vault created the live-transcription call itself"
+    _until(lambda: "rtc_live1" in bands and "rtc_live2" in bands)
+    call_band, words = bands["rtc_live1"], bands["rtc_live2"]
+
+    call_band.push(type="input_audio_buffer.speech_started", event_id="s1", item_id="u1")
+    for delta in ("When does Dana ", "like calls?"):
+        words.push(type="conversation.item.input_audio_transcription.delta", item_id="w1", content_index=0, delta=delta)
+    _until(lambda: any(e.get("type") == "session.update" and "Dana prefers morning calls" in e["session"]["instructions"]
+                       for e in call_band.sent))
+    update = next(e for e in call_band.sent if e.get("type") == "session.update"
+                  and "Dana prefers morning calls" in e["session"]["instructions"])
+    assert update["session"]["instructions"].startswith(calls[0]["instructions"]), "mode instructions keep authority"
+    assert "Live tool route" in update["session"]["instructions"] and "contacts_search" in update["session"]["instructions"]
+    texts = [p["text"] for s, p in engine.updates]
+    assert texts[0] == "" and texts[-1] == "When does Dana like calls?"
+    assert all(s == f"voice-live:{sid}" for s, _ in engine.updates), "same source as browser Voice"
+    assert engine.receipts and engine.receipts[-1] == (1, 1)
+    call_band.push(type="input_audio_buffer.speech_stopped", event_id="s2", item_id="u1")
+    _until(lambda: {"type": "input_audio_buffer.commit"} in words.sent)
+    shown = _voice(m, "GET", f"sessions/{sid}/events", token, query="?after=0&wait=0").payload["events"]
+    live = [e for e in shown if e["type"] == "live"]
+    assert live and live[-1]["memories"] == [{"text": "Dana prefers morning calls"}] and live[-1]["tools"] == ["contacts_search"]
+
+    assert _voice(m, "POST", f"sessions/{sid}/close", token, {}).payload == {"status": "closed"}
+    assert engine.discarded == 1 and words.closed

@@ -148,7 +148,7 @@ class VoiceSessionCoordinator:
         # principal -> whether a dedicated live-transcription credential (API key) exists.
         self.transcription_available = None
 
-    def start_transcription(self,*,principal,voice_session_id,credential):
+    def start_transcription(self,*,principal,voice_session_id,credential,offer_sdp=None):
         session=self._sessions.session(user_id=principal.user_id,workspace_id=principal.workspace_id,
             local_session_id=principal.session_id,voice_session_id=voice_session_id,require_open=True)
         if session.provider_key!="openai" or credential.auth_method!="api_key":
@@ -156,7 +156,7 @@ class VoiceSessionCoordinator:
         return self._providers.require("openai").create_realtime_session(
             RealtimeSessionRequest(model_key="gpt-live-transcribe",connection_mode="webrtc",
                 session_type="transcription",input_audio_transcription_model="gpt-live-transcribe",
-                input_audio_transcription_delay="low"),
+                input_audio_transcription_delay="low",offer_sdp=offer_sdp,server_controlled=offer_sdp is not None),
             credential=credential)
 
     def provider_descriptors(self) -> tuple[ProviderDescriptor, ...]:

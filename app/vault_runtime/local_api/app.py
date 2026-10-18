@@ -1477,8 +1477,19 @@ class VaultLocalApiApp:
                     user_id=principal.user_id, workspace_id=principal.workspace_id),
                 finish_close=lambda principal, voice_session_id: self._close_voice_session(principal, voice_session_id),
                 greeting=connect_greeting_event,
+                # Same live memory + live tool routing engine and the same choice of word source as browser Voice.
+                preparation=self._conversation_runtime.preparation if self._conversation_runtime is not None else None,
+                live_enabled=self._voice_coordinator.live_preparation,
+                transcription_credential=self._companion_transcription_credential,
+                start_transcription=self._voice_coordinator.start_transcription,
             )
         return self._companion_voice
+
+    def _companion_transcription_credential(self, principal):
+        available = self._voice_coordinator.transcription_available if self._voice_coordinator is not None else None
+        if available is None or not available(principal):
+            return None
+        return self._provider_credential_resolver(principal, "openai", capability="live_transcription")
 
     def _handle_link_companion_voice(
         self, *, method: str, path: str, query: str, headers: Mapping[str, str], body: bytes,
@@ -1531,14 +1542,24 @@ class VaultLocalApiApp:
                         extra={"account": sha256(account.encode()).hexdigest()[:12]})
                 sid = started["sessionId"]
                 base = f"/link-companion/voice/sessions/{sid}"
+                control = {"events": base + "/events", "connected": base + "/connected", "close": base + "/close"}
+                if started["liveTranscription"]:
+                    control["transcription"] = base + "/transcription"
                 return LocalApiResponse(201, {"sessionId": sid, "sdpAnswer": started["sdpAnswer"],
                     "maxSeconds": started["maxSeconds"], "idleSeconds": started["idleSeconds"],
-                    "control": {"events": base + "/events", "connected": base + "/connected", "close": base + "/close"}},
-                    no_store)
+                    "liveMemory": started["liveMemory"], "liveTranscription": started["liveTranscription"],
+                    "control": control}, no_store)
             if len(parts) == 3 and parts[0] == "sessions":
                 sid = parts[1]
                 if len(body) > 65_536:
                     return _companion_error(413, "bound_exceeded")
+                if parts[2] == "transcription" and method == "POST":
+                    payload = _json_object(body, max_bytes=40_000)
+                    offer = payload.get("offerSdp")
+                    if not isinstance(offer, str) or not offer.strip() or len(offer.encode()) > 32_768:
+                        return _companion_error(400, "rejected")
+                    return LocalApiResponse(201, {"sdpAnswer": service.transcription(principal, sid, offer_sdp=offer)},
+                                            no_store)
                 if parts[2] == "connected" and method == "POST":
                     service.connected(principal, sid)
                     return LocalApiResponse(200, {"status": "connected"}, no_store)
