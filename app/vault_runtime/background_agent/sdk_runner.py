@@ -118,6 +118,19 @@ async def run_agent_turn(
                 if watcher is not None:
                     watcher.cancel()
                     await asyncio.gather(watcher,return_exceptions=True)
+                # Close the stream generator here, in the same coroutine/context that
+                # iterated it. The SDK wraps the stream in model_run_context_stream,
+                # whose `with model_run_context(owner)` resets a ContextVar on exit.
+                # If the generator is instead finalized later (GC or a foreign context
+                # after an immediate cancel), that reset raises "Token created in a
+                # different Context". Explicit aclose() runs GeneratorExit now, so the
+                # reset happens in the right context. Never let cleanup mask the result.
+                aclose = getattr(events,"aclose",None)
+                if aclose is not None:
+                    try:
+                        await aclose()
+                    except BaseException:
+                        pass
             if streamed.run_loop_exception is not None:
                 raise streamed.run_loop_exception
             return streamed.final_output if output_type is not None else str(streamed.final_output)
