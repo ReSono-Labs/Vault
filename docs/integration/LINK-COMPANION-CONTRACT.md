@@ -48,21 +48,32 @@ Messages:
 - **Confirmations are plain text:** when an action needs the owner's approval, the agent asks in its reply, and the owner answers in the next message.
 
 History:
-- It contains only visible user and assistant text: no tools, system prompt, internal steps or cards.
+- It contains only visible user and assistant text: no tools, system prompt or internal steps. Assistant messages may carry `cards` (see below).
 - Pages hold up to 100 turns, newest page first. Pass `next_before` as `before` to get older pages.
 
 Sessions:
 - Phone conversations are the owner's normal Vault chats. They appear in Vault's Chat history and go through the same memory and learning review.
 
-Errors are `{"error": "<code>"}` with no other detail:
+**Live preparation while typing.** This uses the same engine as browser Chat: live memory and the live tool route. All of it is POST only, with no query strings.
+- `POST …/sessions/{id}/draft` with `{"draft_id", "revision", "text", "wait"?}`.
+  - Vault accepts the draft, waits up to `wait` seconds (default 1, maximum 2) for the prepared result, and returns it: `{"revision", "state", "memories": [{"text"}], "tools": [{"name", "description"}]}`.
+  - When `state` is `ready`, the result is final. When it is `searching`, the caller can follow up with a status check.
+- `POST …/sessions/{id}/draft/status` with `{"draft_id", "revision"}` returns the same shape. It is a fallback only.
+- `POST …/sessions/{id}/draft/clear` with `{}` clears the draft.
+- Sending the message normally picks up the prepared result automatically when the text matches.
+- Use one `draft_id` per message, and raise `revision` on every change. A newer revision supersedes older ones.
 
-| Code | Status |
-|---|---|
-| `not_paired` | 401 |
-| `not_found` | 404 |
-| `rejected` | 400 |
-| `busy` | 409 |
-| `unavailable` | 503 |
+**Cards.** Completed runs and assistant history messages may include `cards: [{"id", "card"}]`. These are the same validated, display-only cards that browser Chat renders. The format and the Link Cards v1 mapping are at the end of this file.
+
+Errors are `{"error": {"code": "<code>", "retryable": bool}}`, with no other detail:
+
+| Code | Status | Retryable |
+|---|---|---|
+| `not_paired` | 401 | no |
+| `not_found` | 404 | no |
+| `rejected` | 400 | no |
+| `busy` | 409 | yes |
+| `unavailable` | 503 | yes |
 
 The connector never has to hold a connection open; it polls `runs/{run_id}` (every 1–2 s is fine).
 
@@ -79,7 +90,7 @@ Gemini/xAI are deferred: `health` reports them as not ready (`provider_unsupport
 | `POST /link-companion/voice/sessions` with `{"offerSdp", "modeKey"?: "live", "client"?: {"platform", "appVersion"}}` (offer ≤ 32 KB) | 201 `{"sessionId", "sdpAnswer", "maxSeconds": 1800, "idleSeconds": 300, "control": {"events", "connected", "close"}}` |
 | `POST …/sessions/{id}/transcription` with `{"offerSdp"}` (only when the start response has `liveTranscription: true`) | 201 `{"sdpAnswer"}`. Vault creates the live-transcription call with its API key and reads your words while you speak (live memory and live tool route, as in browser Voice). |
 | `POST …/sessions/{id}/connected` with `{}` | Send once the phone's WebRTC connection is up. Vault then speaks the greeting; audio sent before this would be lost. |
-| `GET …/sessions/{id}/events?after=<seq>&wait=<0–25 s>` | `{"events": [...], "next": <seq>, "closed": bool}`. Waits up to `wait` seconds for new events; pass `next` as `after`. |
+| `POST …/sessions/{id}/events` with `{"after": <seq>, "wait": <0–25 s>}` (the GET form with a query string also works) | `{"events": [...], "next": <seq>, "closed": bool}`. Waits up to `wait` seconds for new events; pass `next` as `after`. |
 | `POST …/sessions/{id}/close` with `{}` | `{"status": "closed"}`. Vault hangs up, saves the transcript and queues review. |
 
 Phone events are display-only, in order, each with a `seq`:
@@ -112,3 +123,31 @@ Voice errors use the same `{"error":{"code","retryable"}}` shape:
 | `not_found` | 404 | no |
 | `rejected` | 400 | no |
 | `bound_exceeded` | 413 | no |
+
+## Vault card format (for the chat helper's mapping to Link Cards v1)
+
+`card` has these fields:
+- `layout`, plus `version`;
+- `fallbackText` (always present, at most 600 characters);
+- `title?`;
+- `body?` (summary only);
+- `items?`, `columns?`, `rows?` and `chartKind?`, depending on the layout.
+
+| Vault layout | Fields | Suggested Link Cards v1 |
+|---|---|---|
+| `timeline` | `items[{time, title, detail?, state?}]` | `appointment` (one item) or `list` |
+| `checklist` | `items[{text, done?}]` | `list` |
+| `steps` | `items[{title, detail?}]` | `list` (numbered) |
+| `summary` | `body?`, `items[{text}]` | `list` |
+| `headlines` | `items[{title, source?, time?, detail?, url? (https)}]` | `list` |
+| `places` | `items[{title, detail?, rating?, distance?, status?}]` | `list` |
+| `cards` | `items[{title, label?, detail?}]` | `list` |
+| `metrics` | `items[{label, value, detail?, trend?}]` | `status` (one item) or `list` |
+| `weather` | `items[{label, value, detail?, condition?}]` (first item is now) | `status` |
+| `table`, `comparison` | `columns[]`, `rows[[...]]` | `fallbackText` |
+| `chart` | `chartKind`, `items[{label, amount}]` | `fallbackText` |
+| `options` | `items[{title, detail?}]` | `list`, never `choice` |
+
+- Never map a Vault card to `choice`. Vault cards are display-only and never approvals (LI-P10). If the user picks an option, it is sent as an ordinary typed reply.
+- Anything that does not map is shown as `fallbackText`.
+- A reply can carry several cards. Show the first, and append the others' `fallbackText`, until Chat v1 carries a list.
