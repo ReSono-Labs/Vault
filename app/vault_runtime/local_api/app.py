@@ -318,10 +318,14 @@ class VaultLocalApiApp:
                 code = getattr(exc, "code", "external_memory_request_failed")
                 status = 400 if isinstance(exc, ValueError) else 403
                 return LocalApiResponse(status, {"error": {"code": code, "message": str(exc)}})
+        if path.startswith("/link-companion/chat/"):
+            return self._handle_link_companion_chat(
+                method=method.upper(), path=path, query=target_parts.query, headers=headers, body=body,
+            )
         if path in ("/link-companion/pairing/start", "/link-companion/pairing/status", "/link-companion/agent-network/apply"):
             try:
                 return self._handle_link_companion_pairing(
-                    method=method.upper(), path=path, body=body,
+                    method=method.upper(), path=path, headers=headers, body=body,
                 )
             except LinkCompanionAuthorizationError as exc:
                 return LocalApiResponse(403, {"error": {"code": exc.code, "message": str(exc)}})
@@ -1351,7 +1355,7 @@ class VaultLocalApiApp:
         return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
 
     def _handle_link_companion_pairing(
-        self, *, method: str, path: str, body: bytes,
+        self, *, method: str, path: str, headers: Mapping[str, str], body: bytes,
     ) -> LocalApiResponse:
         repository = self._link_companion
         if repository is None:
@@ -1370,10 +1374,9 @@ class VaultLocalApiApp:
                 pairing_id=_required_text(payload, "pairingId"),
                 poll_token=_required_text(payload, "pollToken"),
             )
-            return LocalApiResponse(200, {"status": status}, (("Cache-Control", "no-store"),))
+            return LocalApiResponse(200, status, (("Cache-Control", "no-store"),))
         if path == "/link-companion/agent-network/apply":
-            if repository.current_link() is None:
-                raise LinkCompanionAuthorizationError("Link Companion is not paired.")
+            self._link_companion_principal(headers)
             service = self._a2a_service
             if service is None:
                 raise RuntimeError("Agent2Agent is unavailable.")
@@ -1387,6 +1390,65 @@ class VaultLocalApiApp:
             )
             return LocalApiResponse(200, result, (("Cache-Control", "no-store"),))
         return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
+
+    def _link_companion_principal(self, headers: Mapping[str, str]):
+        """Authenticate the paired companion: its bearer token must be the linked owner session."""
+        repository, identity = self._link_companion, self._identity_service
+        if repository is None or identity is None:
+            raise RuntimeError("Link Companion is unavailable.")
+        linked = repository.link_session_id()
+        authorization = _header(headers, "authorization") or ""
+        token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+        if not linked or not token:
+            raise LinkCompanionAuthorizationError("Link Companion is not paired.")
+        try:
+            principal = identity.authenticate(session_token=token)
+        except Exception:
+            raise LinkCompanionAuthorizationError("Link Companion is not paired.") from None
+        if principal.session_id != linked or not principal.is_device_owner:
+            raise LinkCompanionAuthorizationError("Link Companion is not paired.")
+        repository.touch_session(linked)
+        return principal
+
+    def _handle_link_companion_chat(
+        self, *, method: str, path: str, query: str, headers: Mapping[str, str], body: bytes,
+    ) -> LocalApiResponse:
+        from app.vault_runtime.conversation.contracts import ConflictError, InputError, NotFoundError
+        from app.vault_runtime.link_companion.chat import ChatRejected, handle_chat
+        no_store = (("Cache-Control", "no-store"),)
+        def fail(status: int, code: str) -> LocalApiResponse:
+            return LocalApiResponse(status, {"error": code}, no_store)
+        parts = path.removeprefix("/link-companion/chat/").strip("/").split("/")
+        runtime = self._conversation_runtime
+        if parts == ["health"] and method == "GET":
+            ready = False
+            try:
+                current = self._link_companion.current_link() if self._link_companion is not None else None
+                ready = bool(current and current["status"] == "paired") and runtime is not None
+            except Exception:
+                ready = False
+            images = ready and getattr(runtime, "attachments", None) is not None
+            return LocalApiResponse(200, {"ready": ready, "images": images}, no_store)
+        try:
+            principal = self._link_companion_principal(headers)
+        except Exception:
+            return fail(401, "not_paired")
+        if runtime is None:
+            return fail(503, "unavailable")
+        try:
+            payload = _json_object(body, max_bytes=min(self._max_body_bytes, 9_000_000)) if body else {}
+            response = handle_chat(runtime, principal, method=method, parts=parts, query=query, payload=payload,
+                respond=lambda status, value: LocalApiResponse(status, value, no_store))
+            return response if response is not None else fail(404, "not_found")
+        except NotFoundError:
+            return fail(404, "not_found")
+        except ConflictError:
+            return fail(409, "busy")
+        except (ChatRejected, InputError, ValueError):
+            return fail(400, "rejected")
+        except Exception:
+            logging.getLogger(__name__).warning("link_companion_chat_failed")  # No message text, images or internal detail.
+            return fail(503, "unavailable")
 
     def _handle_link_companion(
         self, *, method: str, path: str, headers: Mapping[str, str], body: bytes,
@@ -1409,7 +1471,15 @@ class VaultLocalApiApp:
             raise LinkCompanionAuthorizationError("Only the Vault owner can confirm Link Companion.")
         if path.startswith("/link-companion/pairing/") and path.endswith("/approve"):
             pairing_id = path.removeprefix("/link-companion/pairing/").removesuffix("/approve").strip("/")
-            return LocalApiResponse(200, repository.approve_pairing(pairing_id=pairing_id))
+            # The companion gets its own owner session; its token never reaches this browser.
+            companion = identity.issue_link_companion_session(principal=principal)
+            try:
+                approved = repository.approve_pairing(pairing_id=pairing_id,
+                    session_id=companion.principal.session_id, companion_token=companion.session_token)
+            except Exception:
+                identity.revoke_link_companion_session(session_token=companion.session_token)
+                raise
+            return LocalApiResponse(200, approved)
         if path == "/link-companion/unpair":
             repository.unpair()
             if self._a2a_service is not None:

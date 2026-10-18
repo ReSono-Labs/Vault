@@ -28,3 +28,13 @@ def ensure_link_companion_schema(cursor: Any) -> None:
         )
         """
     )
+    # Companion credential (2026-10-18): approval issues a dedicated owner session whose token is
+    # handed to the polling companion exactly once; revocations keep when/why for diagnosis.
+    for statement in (
+        "ALTER TABLE vault_private.link_companion_pairings ADD COLUMN IF NOT EXISTS session_id text",
+        "ALTER TABLE vault_private.link_companion_pairings ADD COLUMN IF NOT EXISTS delivery_token text",
+        "ALTER TABLE vault_private.link_companion_pairings ADD COLUMN IF NOT EXISTS revoked_at timestamptz",
+        "ALTER TABLE vault_private.link_companion_pairings ADD COLUMN IF NOT EXISTS revocation_reason text",
+        "ALTER TABLE vault_private.link_companion_link ADD COLUMN IF NOT EXISTS session_id text",
+    ):
+        cursor.execute(statement)

@@ -29,6 +29,11 @@ class Identity:
     def require_csrf(self, *, principal: Principal, csrf_token: str) -> None:
         assert csrf_token == "csrf"
 
+    def issue_link_companion_session(self, *, principal):
+        from types import SimpleNamespace
+        assert principal.is_device_owner
+        return SimpleNamespace(session_token="companion-token", principal=SimpleNamespace(session_id="cs1"))
+
 
 class Companion:
     def __init__(self) -> None:
@@ -43,14 +48,18 @@ class Companion:
 
     def pairing_status(self, *, pairing_id: str, poll_token: str):
         assert pairing_id == "p1" and poll_token == "poll"
-        return "approved" if self.approved else "pending"
+        if not self.approved:
+            return {"status": "pending"}
+        token, self.token = self.token, None
+        return {"status": "approved", **({"companionToken": token} if token else {})}
 
     def pairing_by_code(self, *, pairing_code: str):
         assert pairing_code == "ABCD-EF01"
         return {"pairingId": "p1", "displayName": "This computer", "status": "pending"}
 
-    def approve_pairing(self, *, pairing_id: str):
-        self.approved = pairing_id
+    def approve_pairing(self, *, pairing_id: str, session_id: str, companion_token: str):
+        assert session_id == "cs1"
+        self.approved, self.token = pairing_id, companion_token
         return {
             "status": "paired",
             "displayName": "This computer",
@@ -113,14 +122,14 @@ def test_owner_confirms_and_guest_cannot() -> None:
     )
     assert approved.status_code == 200
     assert approved.payload["status"] == "paired"
-    status = VaultLocalApiApp(store=Health(), token="secret", link_companion=companion).handle(
-        method="POST",
-        target="/link-companion/pairing/status",
-        headers={},
-        body=b'{"pairingId":"p1","pollToken":"poll"}',
-    )
-    assert status.status_code == 200
-    assert status.payload["status"] == "approved"
+    assert "companion-token" not in str(approved.payload)  # Never handed to the approving browser.
+    poller = VaultLocalApiApp(store=Health(), token="secret", link_companion=companion)
+    def poll():
+        return poller.handle(method="POST", target="/link-companion/pairing/status", headers={},
+                             body=b'{"pairingId":"p1","pollToken":"poll"}')
+    first, second = poll(), poll()
+    assert first.status_code == 200 and first.payload == {"status": "approved", "companionToken": "companion-token"}
+    assert second.payload == {"status": "approved"}  # Delivered once.
 
 
 def test_wrong_poll_token_is_not_treated_as_success() -> None:

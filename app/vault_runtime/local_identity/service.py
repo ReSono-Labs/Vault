@@ -289,14 +289,28 @@ class LocalIdentityService:
             age_group=str(record[10]),
         )
 
+    def issue_link_companion_session(self, *, principal: LocalPrincipal) -> LocalSessionTokens:
+        """A separate owner session for the paired Link Companion (bearer only, revocable by unpair)."""
+        if not principal.is_device_owner:
+            raise LocalAuthorizationError("Only the Vault owner can pair Link Companion.")
+        return self._issue_session(
+            user_id=principal.user_id, username=principal.username, display_name=principal.display_name,
+            experience_style=principal.experience_style, is_device_owner=True,
+            workspace_id=principal.workspace_id, password_mode=principal.password_mode,
+            age_group=principal.age_group, ttl_days=365,
+        )
+
+    def revoke_link_companion_session(self, *, session_token: str) -> None:
+        self._repository.revoke_session(token_hash=hash_token(session_token), reason="link_companion_unused")
+
     def _issue_session(
         self, *, user_id: str, username: str, display_name: str, experience_style: str,
         workspace_id: str, is_device_owner: bool = True,
         password_mode: str = "user_managed", must_change_password: bool = False,
-        age_group: str = "adult",
+        age_group: str = "adult", ttl_days: int = SESSION_TTL_DAYS,
     ) -> LocalSessionTokens:
         issued_at = datetime.now(UTC)
-        expires_at = issued_at + timedelta(days=SESSION_TTL_DAYS)
+        expires_at = issued_at + timedelta(days=ttl_days)
         session_token, csrf_token = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
         session_id = self._repository.create_session(
             user_id=user_id, token_hash=hash_token(session_token), csrf_token_hash=hash_token(csrf_token),

@@ -382,7 +382,8 @@ class ConversationRuntimeStore(ConversationRepository):
                 (SELECT jsonb_agg(jsonb_build_object('cardId',u.payload->'cardId','card',u.payload->'card',
                    'sources',u.payload->'sources') ORDER BY u.sequence) FROM vault_private.vault_conversation_events u
                  WHERE u.user_id=t.user_id AND u.workspace_id=t.workspace_id
-                   AND u.conversation_id=t.conversation_id AND u.turn_id=t.turn_id AND u.kind='ui')
+                   AND u.conversation_id=t.conversation_id AND u.turn_id=t.turn_id AND u.kind='ui'),
+                extract(epoch FROM t.created_at)::bigint,extract(epoch FROM t.updated_at)::bigint
                 FROM vault_private.vault_conversation_turns t
                 WHERE t.user_id=%s AND t.workspace_id=%s AND t.conversation_id=%s
                   AND (%s::bigint IS NULL OR t.ordinal<%s)
@@ -391,9 +392,30 @@ class ConversationRuntimeStore(ConversationRepository):
             rows = cursor.fetchall()
         more = len(rows)>limit
         rows = rows[:limit]
-        return dict(turns=[dict(turnId=r[0],input=r[1],state=r[2],answer=r[3],**({"ui":r[5]} if r[5] else {}))
+        return dict(turns=[dict(turnId=r[0],input=r[1],state=r[2],answer=r[3],createdAt=r[6],updatedAt=r[7],
+                                **({"ui":r[5]} if r[5] else {}))
                            for r in reversed(rows)],
                     nextBefore=rows[-1][4] if more and rows else None)
+
+    def turn_conversation(self,principal,turn_id):
+        """Owning conversation of a turn inside the principal's scope (for run-id-only status lookups)."""
+        with self._connect() as connection,connection.cursor() as cursor:
+            self._require_authority(cursor,principal)
+            cursor.execute("""SELECT conversation_id FROM vault_private.vault_conversation_turns
+              WHERE user_id=%s AND workspace_id=%s AND turn_id=%s""",(principal.user_id,principal.workspace_id,turn_id))
+            row = cursor.fetchone()
+        if row is None:
+            raise NotFoundError("Conversation turn unavailable.")
+        return str(row[0])
+
+    def final_text(self,principal,conversation_id,turn_id):
+        with self._connect() as connection,connection.cursor() as cursor:
+            self._require_authority(cursor,principal)
+            cursor.execute("""SELECT payload->>'text' FROM vault_private.vault_conversation_events
+              WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND turn_id=%s AND kind='assistant_final'
+              ORDER BY sequence DESC LIMIT 1""",(*self._scope(principal,conversation_id),turn_id))
+            row = cursor.fetchone()
+        return row[0] if row else None
 
     def history(self,principal,conversation_id,*,segment_id=None):
         self.load(principal,conversation_id)
