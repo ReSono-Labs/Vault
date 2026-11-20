@@ -36,7 +36,7 @@ All notable changes to Vault are listed here. The version comes from
   and server errors get distinct messages; a timed-out call is never repeated. A tool's
   own error is returned even when it declares an output schema, and images, audio and
   resources are described instead of dropped. Both starters now run a server that
-  speaks both revisions.
+  speaks both revisions, and both pass against the official MCP Python SDK client.
 - **Docs:** hosted executable plugins are described as trusted code with Vault's
   access until OS confinement exists.
 

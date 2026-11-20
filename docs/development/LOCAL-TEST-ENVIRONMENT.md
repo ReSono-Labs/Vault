@@ -94,6 +94,19 @@ PYTHONPATH=src uv run --frozen --extra dev --project ../.. python -m pytest -q t
 checkout from `HERMES_DONOR_PATH` (default `~/.hermes/hermes-agent`), so CI runs
 only `test_pairing_ca.py`. The OpenClaw adapter has no automated tests.
 
+## MCP interop with an independent peer
+
+`tests/unit/test_mcp_independent_peer.py` runs Vault's MCP client against the
+official MCP Python SDK server (both 2026-07-28 and the 2025-11-25 fallback), and
+the SDK client against both starters. The SDK runs as a subprocess from its own
+folder, so Vault never imports it. Without `VAULT_MCP_PEER_PATH` the tests skip
+(as in CI):
+
+```bash
+uv pip install --python .venv/bin/python --target <scratch>/mcp-peer "mcp==2.3.0"
+VAULT_MCP_PEER_PATH=<scratch>/mcp-peer .venv/bin/python -m pytest -q tests/unit/test_mcp_independent_peer.py
+```
+
 ## A test Vault for manual browser testing
 
 `scripts/internet_test_env.py` runs Vault from source against a separate database,

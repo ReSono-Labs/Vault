@@ -101,6 +101,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         meta = params.get("_meta") if isinstance(params.get("_meta"), dict) else {}
         version = meta.get("io.modelcontextprotocol/protocolVersion")
+        self._current = (method, version is not None)
         if version is not None:
             self._modern(request_id, method, params, version)
         else:
@@ -149,6 +150,11 @@ class Handler(BaseHTTPRequestHandler):
         self._result(request_id, _greeting(str(arguments.get("name", "there")), prefix))
 
     def _result(self, request_id: Any, result: dict[str, Any]) -> None:
+        method, modern = getattr(self, "_current", (None, False))
+        if modern:  # 2026-07-28 results say they are complete; list/discover add a cache hint
+            result = {**result, "resultType": "complete"}
+            if method in ("server/discover", "tools/list"):
+                result.update({"ttlMs": 0, "cacheScope": "public"})
         self._send_json(200, {"jsonrpc": "2.0", "id": request_id, "result": result})
 
     def _error(self, status: int, request_id: Any, code: int, message: str, data: Any = None) -> None:
