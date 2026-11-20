@@ -118,16 +118,21 @@ class ExtensionRepository:
                 return cursor.rowcount > 0
 
     def identity_still_installed(
-        self, *, workspace_id: str, identity: str, excluding_extension_id: str | None = None,
+        self, *, identity: str, excluding_extension_id: str | None = None,
     ) -> bool:
+        """Whether any non-removed install of any kind, in any workspace, has this identity.
+
+        Extension data folders are keyed by identity alone, so this is the check
+        before deleting one.
+        """
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """SELECT 1 FROM vault_private.vault_extensions
-                       WHERE installed_in_workspace_id=%s AND identity=%s AND state <> 'removed'
+                       WHERE identity=%s AND state <> 'removed'
                          AND (%s::text IS NULL OR extension_id <> %s::text)
                        LIMIT 1""",
-                    (workspace_id, identity, excluding_extension_id, excluding_extension_id),
+                    (identity, excluding_extension_id, excluding_extension_id),
                 )
                 return cursor.fetchone() is not None
 

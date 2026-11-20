@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 import shutil
 from pathlib import Path
 
@@ -82,6 +83,8 @@ class MigrationImportResult:
     status: dict[str, str]
     imported: tuple[str, ...]
     skipped: tuple[str, ...]
+    # (target, saved copy) for each existing target the import replaced.
+    set_aside: tuple[tuple[Path, Path], ...] = ()
 
 
 def validate_migration_payload(
@@ -135,47 +138,99 @@ def import_migration_payload(
     assessment: MigrationAssessment,
     replace_package: bool,
     replace_migration: bool,
+    set_aside_root: Path | None = None,
 ) -> MigrationImportResult:
+    """Import the payload. With ``set_aside_root``, replaced targets are moved there
+    (same filesystem) so the caller can restore them byte for byte if a later step fails."""
     data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     imported: list[str] = []
     skipped: list[str] = []
     status: dict[str, str] = {}
+    set_aside: list[tuple[Path, Path]] = []
 
-    if migration.database is not None:
-        action = _resolve_action(
-            assessment.database is not None, migration.on_conflict,
-            replace_package=replace_package, replace_migration=replace_migration,
-        )
-        if action == "import":
-            target = data_dir / migration.database.target
-            target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            shutil.copy2(_resolve_source(package_root, migration.database.source), target)
-            target.chmod(0o600)
-            imported.append("database")
-            status["database"] = "imported"
+    def make_room(target: Path, name: str) -> None:
+        if not target.exists() and not target.is_symlink():
+            return
+        if set_aside_root is None:
+            if target.is_dir() and not target.is_symlink():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+            return
+        set_aside_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        saved = set_aside_root / name
+        os.replace(target, saved)
+        set_aside.append((target, saved))
+
+    try:
+        if migration.database is not None:
+            action = _resolve_action(
+                assessment.database is not None, migration.on_conflict,
+                replace_package=replace_package, replace_migration=replace_migration,
+            )
+            if action == "import":
+                target = data_dir / migration.database.target
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                make_room(target, "database")
+                shutil.copy2(_resolve_source(package_root, migration.database.source), target)
+                target.chmod(0o600)
+                imported.append("database")
+                status["database"] = "imported"
+            else:
+                skipped.append("database")
+                status["database"] = "skipped" if assessment.database else "absent"
+
+        if migration.workspace is not None:
+            action = _resolve_action(
+                assessment.workspace is not None, migration.on_conflict,
+                replace_package=replace_package, replace_migration=replace_migration,
+            )
+            target_root = data_dir / migration.workspace.target
+            if action == "import":
+                source = _resolve_source(package_root, migration.workspace.source)
+                make_room(target_root, "workspace")
+                shutil.copytree(source, target_root, symlinks=False)
+                _chmod_tree(target_root)
+                imported.append("workspace")
+                status["workspace"] = "imported"
+            else:
+                skipped.append("workspace")
+                status["workspace"] = "skipped" if assessment.workspace else "absent"
+    except Exception:
+        restore_set_aside(tuple(set_aside))
+        raise
+
+    return MigrationImportResult(
+        status=status, imported=tuple(imported), skipped=tuple(skipped), set_aside=tuple(set_aside),
+    )
+
+
+def restore_set_aside(set_aside: tuple[tuple[Path, Path], ...]) -> None:
+    """Put replaced migration targets back, newest first."""
+    for target, saved in reversed(set_aside):
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        elif target.exists() or target.is_symlink():
+            target.unlink()
+        os.replace(saved, target)
+    _remove_set_aside_folders(set_aside)
+
+
+def discard_set_aside(set_aside: tuple[tuple[Path, Path], ...]) -> None:
+    for _target, saved in set_aside:
+        if saved.is_dir() and not saved.is_symlink():
+            shutil.rmtree(saved, ignore_errors=True)
         else:
-            skipped.append("database")
-            status["database"] = "skipped" if assessment.database else "absent"
+            saved.unlink(missing_ok=True)
+    _remove_set_aside_folders(set_aside)
 
-    if migration.workspace is not None:
-        action = _resolve_action(
-            assessment.workspace is not None, migration.on_conflict,
-            replace_package=replace_package, replace_migration=replace_migration,
-        )
-        target_root = data_dir / migration.workspace.target
-        if action == "import":
-            source = _resolve_source(package_root, migration.workspace.source)
-            if target_root.exists():
-                shutil.rmtree(target_root)
-            shutil.copytree(source, target_root, symlinks=False)
-            _chmod_tree(target_root)
-            imported.append("workspace")
-            status["workspace"] = "imported"
-        else:
-            skipped.append("workspace")
-            status["workspace"] = "skipped" if assessment.workspace else "absent"
 
-    return MigrationImportResult(status=status, imported=tuple(imported), skipped=tuple(skipped))
+def _remove_set_aside_folders(set_aside: tuple[tuple[Path, Path], ...]) -> None:
+    for folder in {saved.parent for _target, saved in set_aside}:
+        try:
+            folder.rmdir()
+        except OSError:
+            pass
 
 
 def _resolve_action(

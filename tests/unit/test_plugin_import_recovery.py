@@ -37,9 +37,9 @@ class Repository:
             return None
         return record
 
-    def identity_still_installed(self, *, workspace_id, identity, excluding_extension_id=None):
-        for (scope, kind, name), record in self.records.items():
-            if scope != workspace_id or name != identity or record.state is ExtensionState.REMOVED:
+    def identity_still_installed(self, *, identity, excluding_extension_id=None):
+        for (_scope, _kind, name), record in self.records.items():
+            if name != identity or record.state is ExtensionState.REMOVED:
                 continue
             if excluding_extension_id and record.extension_id == excluding_extension_id:
                 continue

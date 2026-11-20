@@ -175,6 +175,10 @@ class ExtensionFilesystem:
     def plugin_data_dir(self, identity: str) -> Path:
         return extension_data_path(root=self._root, identity=identity)
 
+    def data_set_aside_dir(self) -> Path:
+        """A fresh, not yet created folder for data an import moves aside (same filesystem)."""
+        return self._recovery / f"data-{uuid4().hex}"
+
     def remove_plugin_data(self, identity: str) -> None:
         shutil.rmtree(self.plugin_data_dir(identity), ignore_errors=True)
 

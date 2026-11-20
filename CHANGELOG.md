@@ -11,6 +11,12 @@ All notable changes to Vault are listed here. The version comes from
   package may only use references inside itself (`#/$defs/...`). Discovery
   refuses a tool whose schema points at another document (http, https, file or
   any other URI), and Vault never fetches such a reference while validating.
+- **Failed upgrades and removals keep shared data.** If installing an update to
+  a plugin or hosted MCP package fails, its previous files and data are restored
+  byte for byte. Removing an extension deletes its data folder only when no
+  other install with the same name, of any kind and in any workspace, still uses
+  it. Removing a hosted MCP package now deletes both its current and previous
+  versions.
 
 ## 0.1.0 — first public release (not yet published)
 

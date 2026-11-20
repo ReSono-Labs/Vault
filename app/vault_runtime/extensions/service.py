@@ -26,8 +26,11 @@ from app.vault_runtime.extensions.mcp_package_manifest import (
 from app.vault_runtime.extensions.mcp_package_migration import (
     McpPackageMigrationError,
     MigrationAssessment,
+    MigrationImportResult,
     assess_migration,
+    discard_set_aside,
     import_migration_payload,
+    restore_set_aside,
     validate_migration_payload,
 )
 from app.vault_runtime.extensions.plugin_package_contract import LocalShareManifest
@@ -284,31 +287,39 @@ class ExtensionImportService:
             workspace_id=workspace_id,
             expires_at=datetime.now(UTC),
         )
+        data_existed = self._filesystem.plugin_data_dir(preview.identity).exists()
+        tree_replaced = False
+        migration_result: MigrationImportResult | None = None
         try:
+            migration_assessment = None
+            if migration is not None:
+                # Decide before touching any file, so a refusal changes nothing.
+                migration_assessment = candidate.migration_assessment or assess_migration(
+                    data_dir=self._filesystem.plugin_data_dir(candidate.manifest.name),
+                    migration=migration,
+                )
+                if migration_assessment.requires_decision and not replace_migration:
+                    raise McpPackageManifestError(
+                        "Package data already exists. Confirm migration replacement to continue."
+                    )
             self._filesystem.replace(
                 category="plugins", identity=preview.identity,
                 candidate_root=candidate.archive.content_root,
                 exclude_root_names=exclude_roots,
             )
+            tree_replaced = True
             migration_status: dict[str, str] | None = None
-            if migration is not None:
-                assessment = candidate.migration_assessment or assess_migration(
-                    data_dir=self._filesystem.plugin_data_dir(candidate.manifest.name),
-                    migration=migration,
-                )
-                if assessment.requires_decision and not replace_migration:
-                    raise McpPackageManifestError(
-                        "Package data already exists. Confirm migration replacement to continue."
-                    )
-                result = import_migration_payload(
+            if migration is not None and migration_assessment is not None:
+                migration_result = import_migration_payload(
                     package_root=candidate.archive.content_root,
                     data_dir=self._filesystem.plugin_data_dir(candidate.manifest.name),
                     migration=migration,
-                    assessment=assessment,
+                    assessment=migration_assessment,
                     replace_package=replace,
                     replace_migration=replace_migration,
+                    set_aside_root=self._filesystem.data_set_aside_dir(),
                 )
-                migration_status = result.status
+                migration_status = migration_result.status
             workspace_import_status: dict[str, str] | None = None
             if workspace_import is not None:
                 if self._workspace_store is None:
@@ -413,23 +424,22 @@ class ExtensionImportService:
                         },
                     ) for server in candidate.mcp_servers),
                 )
-            return self._start_supervised_if_enabled(
+            started = self._start_supervised_if_enabled(
                 actor_user_id=actor_user_id, workspace_id=workspace_id, record=record,
             )
+            if migration_result is not None:
+                discard_set_aside(migration_result.set_aside)
+            return started
         except Exception:
             if local_share is not None and local_share.created_during_import and self._folders is not None:
                 try:
                     self._folders.remove_folder(principal=principal, folder_id=local_share.folder_id)
                 except Exception:
                     pass
-            if migration is not None:
-                check_shared = getattr(self._repository, "identity_still_installed", lambda **_kwargs: False)
-                if not check_shared(
-                    workspace_id=workspace_id,
-                    identity=preview.identity,
-                    excluding_extension_id=None,
-                ):
-                    self._filesystem.remove_plugin_data(preview.identity)
+            self._restore_package_data(
+                identity=preview.identity, data_existed=data_existed,
+                migration_result=migration_result, created_by_import=migration is not None,
+            )
             if (
                 imported_workspace
                 and workspace_import is not None
@@ -441,10 +451,11 @@ class ExtensionImportService:
                     manifest=workspace_import,
                     imported=imported_workspace,
                 )
-            self._filesystem.revert(
-                category="plugins", identity=preview.identity,
-                had_active_install=preview.current_hash is not None,
-            )
+            if tree_replaced:
+                self._filesystem.revert(
+                    category="plugins", identity=preview.identity,
+                    had_active_install=preview.current_hash is not None,
+                )
             raise
         finally:
             candidate.archive.discard()
@@ -583,31 +594,43 @@ class ExtensionImportService:
         companion_identity = (
             candidate.companion_plugin.name if candidate.companion_plugin is not None else None
         )
+        companion_was_active = companion_identity is not None and self._active_install(
+            user_id=actor_user_id, workspace_id=workspace_id,
+            kind=ExtensionKind.PLUGIN, identity=companion_identity, owner=True,
+        ) is not None
+        data_existed = self._filesystem.plugin_data_dir(preview.identity).exists()
+        tree_replaced = companion_replaced = False
+        migration_result: MigrationImportResult | None = None
         try:
+            migration_assessment = None
+            if candidate.manifest.migration is not None:
+                # Decide before touching any file, so a refusal changes nothing.
+                migration_assessment = candidate.migration_assessment or assess_migration(
+                    data_dir=self._filesystem.plugin_data_dir(candidate.manifest.name),
+                    migration=candidate.manifest.migration,
+                )
+                if migration_assessment.requires_decision and not replace_migration:
+                    raise McpPackageManifestError(
+                        "Package data already exists. Confirm migration replacement to continue."
+                    )
             self._filesystem.replace(
                 category="mcps", identity=preview.identity,
                 candidate_root=candidate.archive.content_root,
                 exclude_root_names=frozenset({"migration"}),
             )
+            tree_replaced = True
             migration_status: dict[str, str] | None = None
-            if candidate.manifest.migration is not None:
-                assessment = candidate.migration_assessment or assess_migration(
-                    data_dir=self._filesystem.plugin_data_dir(candidate.manifest.name),
-                    migration=candidate.manifest.migration,
-                )
-                if assessment.requires_decision and not replace_migration:
-                    raise McpPackageManifestError(
-                        "Package data already exists. Confirm migration replacement to continue."
-                    )
-                result = import_migration_payload(
+            if candidate.manifest.migration is not None and migration_assessment is not None:
+                migration_result = import_migration_payload(
                     package_root=candidate.archive.content_root,
                     data_dir=self._filesystem.plugin_data_dir(candidate.manifest.name),
                     migration=candidate.manifest.migration,
-                    assessment=assessment,
+                    assessment=migration_assessment,
                     replace_package=replace,
                     replace_migration=replace_migration,
+                    set_aside_root=self._filesystem.data_set_aside_dir(),
                 )
-                migration_status = result.status
+                migration_status = migration_result.status
             mcp_configuration: dict[str, object] = {
                 "audience": sorted(agent.value for agent in preview.audience.agents),
                 "packageType": "hosted",
@@ -651,6 +674,7 @@ class ExtensionImportService:
                 self._filesystem.replace(
                     category="plugins", identity=plugin_identity, candidate_root=plugin_root,
                 )
+                companion_replaced = True
                 components = tuple(("skill", name, digest) for name, _document, digest in candidate.companion_skills)
                 plugin_record = self._repository.install(
                     actor_user_id=actor_user_id, workspace_id=workspace_id,
@@ -691,27 +715,52 @@ class ExtensionImportService:
                         extension_id=record.extension_id, event_type="migration_imported",
                         detail={"status": migration_status},
                     )
+            if migration_result is not None:
+                discard_set_aside(migration_result.set_aside)
             return record
         except Exception:
-            self._cleanup_hosted_package_files(
-                identity=preview.identity,
-                companion_identity=companion_identity,
-                remove_companion=candidate.manifest.companion_plugin is not None
-                and candidate.manifest.companion_plugin.remove_with_package,
-                had_active_install=preview.current_hash is not None,
+            self._restore_package_data(
+                identity=preview.identity, data_existed=data_existed,
+                migration_result=migration_result, created_by_import=True,
             )
+            if tree_replaced:
+                self._filesystem.revert(
+                    category="mcps", identity=preview.identity,
+                    had_active_install=preview.current_hash is not None,
+                )
+            if companion_replaced and companion_identity is not None:
+                self._filesystem.revert(
+                    category="plugins", identity=companion_identity,
+                    had_active_install=companion_was_active,
+                )
             raise
         finally:
             candidate.archive.discard()
 
-    def _cleanup_hosted_package_files(
-        self, *, identity: str, companion_identity: str | None,
-        remove_companion: bool, had_active_install: bool,
+    def _restore_package_data(
+        self, *, identity: str, data_existed: bool,
+        migration_result: MigrationImportResult | None, created_by_import: bool,
     ) -> None:
-        self._filesystem.revert(category="mcps", identity=identity, had_active_install=had_active_install)
+        """Undo a failed import's data changes; never delete data that existed before it."""
+        if migration_result is not None:
+            try:
+                restore_set_aside(migration_result.set_aside)
+            except Exception:
+                # The replaced data stays in the extension recovery folder.
+                _LOG.exception("extension_data_restore_failed identity=%s", identity)
+                return
+        if created_by_import and not data_existed:
+            self._remove_unshared_data(identity, excluding_extension_id=None)
+
+    def _remove_unshared_data(self, identity: str, *, excluding_extension_id: str | None) -> None:
+        """Plugin data is keyed by identity alone, so an install of any kind in any
+        workspace with the same identity may still use it."""
+        still_installed = getattr(self._repository, "identity_still_installed", None)
+        if still_installed is not None and still_installed(
+            identity=identity, excluding_extension_id=excluding_extension_id,
+        ):
+            return
         self._filesystem.remove_plugin_data(identity)
-        if remove_companion and companion_identity:
-            self._filesystem.remove(category="plugins", identity=companion_identity)
 
     def _start_supervised_if_enabled(
         self, *, actor_user_id: str, workspace_id: str, record: ExtensionRecord,
@@ -793,12 +842,9 @@ class ExtensionImportService:
                     and current.configuration.get("companionRemoveWithPackage", True)
                 )
                 if current.configuration.get("packageType") == "hosted":
-                    self._cleanup_hosted_package_files(
-                        identity=current.identity,
-                        companion_identity=None,
-                        remove_companion=False,
-                        had_active_install=True,
-                    )
+                    # Its own current and previous trees; data only when nothing else uses it.
+                    self._filesystem.remove(category="mcps", identity=current.identity)
+                    self._remove_unshared_data(current.identity, excluding_extension_id=current.extension_id)
                 else:
                     if current.configuration.get("managedByPluginId") is None:
                         self._filesystem.remove(category="mcps", identity=current.identity)
@@ -816,17 +862,8 @@ class ExtensionImportService:
             elif current.kind in {ExtensionKind.SKILL, ExtensionKind.PLUGIN}:
                 category = "skills" if current.kind is ExtensionKind.SKILL else "plugins"
                 self._filesystem.remove(category=category, identity=current.identity)
-                check_shared = getattr(self._repository, "identity_still_installed", lambda **_kwargs: False)
-                if (
-                    current.kind is ExtensionKind.PLUGIN
-                    and current.configuration.get("packageData")
-                    and not check_shared(
-                        workspace_id=workspace_id,
-                        identity=current.identity,
-                        excluding_extension_id=current.extension_id,
-                    )
-                ):
-                    self._filesystem.remove_plugin_data(current.identity)
+                if current.kind is ExtensionKind.PLUGIN and current.configuration.get("packageData"):
+                    self._remove_unshared_data(current.identity, excluding_extension_id=current.extension_id)
         return record
 
     def _sync_companion_plugin_state(

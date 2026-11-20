@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from hashlib import sha256
+import json
 import os
 from io import BytesIO
+from pathlib import Path
 import zipfile
 
 import psycopg
@@ -112,11 +115,21 @@ def test_plugin_managed_mcp_children_follow_parent_lifecycle(extension_state) ->
 
 
 def test_identity_still_installed_accepts_null_exclusion(extension_state) -> None:
-    extensions, _identities, owner, _member = extension_state
+    extensions, identities, owner, _member = extension_state
     assert extensions.identity_still_installed(
-        workspace_id=owner.principal.workspace_id,
         identity="missing.plugin",
         excluding_extension_id=None,
+    ) is False
+    # Data folders are keyed by identity alone: any kind, any workspace counts.
+    second = identities.create_workspace(principal=owner.principal, display_name="Second")
+    hosted = extensions.install(
+        actor_user_id=owner.principal.user_id, workspace_id=second,
+        kind=ExtensionKind.MCP, identity="shared.name", display_name="shared.name", version=None,
+        description="MCP", content_hash="hash", configuration={"packageType": "hosted"},
+    )
+    assert extensions.identity_still_installed(identity="shared.name") is True
+    assert extensions.identity_still_installed(
+        identity="shared.name", excluding_extension_id=hosted.extension_id,
     ) is False
 
 
@@ -320,3 +333,188 @@ def test_skill_progressive_disclosure_rechecks_scope_revocation_and_safe_mode(ex
         user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
         agent=AgentKind.VOICE,
     ) == ()
+
+
+def _zip(files: dict[str, str]) -> bytes:
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        for name, value in files.items():
+            archive.writestr(name, value)
+    return output.getvalue()
+
+
+def _tree_hash(root: Path) -> str:
+    """sha256 over every file's relative path and bytes; a missing tree hashes as 'absent'."""
+    if not root.exists():
+        return "absent"
+    digest = sha256()
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        digest.update(path.relative_to(root).as_posix().encode()); digest.update(b"\0")
+        digest.update(path.read_bytes()); digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _migration(on_conflict: str) -> dict[str, object]:
+    return {"workspace": {"source": "migration/workspace", "target": "workspace"}, "onConflict": on_conflict}
+
+
+def _hosted_package(name: str, *, version: str, marker: str, on_conflict: str | None = "replace") -> bytes:
+    manifest: dict[str, object] = {
+        "$schema": "https://schemas.resonolabs.com/vault/mcp-package/v1.json",
+        "name": name, "version": version, "configuration": "config.schema.json",
+        "runtime": {
+            "type": "process", "command": ["python3", "server.py"], "cwd": ".",
+            "port": 8791, "healthPath": "/health", "mcpPath": "/mcp",
+        },
+    }
+    files = {
+        f"{name}/config.schema.json": json.dumps({
+            "$schema": "https://schemas.resonolabs.com/vault/plugin-config/v1.json", "fields": [],
+        }),
+        f"{name}/server.py": f"print('{marker}')\n",
+    }
+    if on_conflict is not None:
+        manifest["migration"] = _migration(on_conflict)
+        files[f"{name}/migration/workspace/NOTES.md"] = f"package {marker}\n"
+    files[f"{name}/mcp.package.json"] = json.dumps(manifest)
+    return _zip(files)
+
+
+def _data_plugin(name: str, *, version: str, marker: str, on_conflict: str = "replace") -> bytes:
+    return _zip({
+        f"{name}/plugin.json": json.dumps({
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": name, "version": version, "description": f"Plugin {marker}",
+        }),
+        f"{name}/vault.json": json.dumps({
+            "$schema": "https://schemas.resonolabs.com/vault/plugin/v1.json",
+            "minimumVaultVersion": "0.1.0", "agents": ["voice"], "migration": _migration(on_conflict),
+        }),
+        f"{name}/migration/workspace/NOTES.md": f"plugin {marker}\n",
+    })
+
+
+def _imports(extensions, tmp_path):
+    root = tmp_path / "extensions"
+    return ExtensionImportService(
+        repository=extensions, inspector=ArchiveInspector(tmp_path / "quarantine"),
+        filesystem=ExtensionFilesystem(root),
+    ), root
+
+
+def _confirm_hosted(imports, owner, payload, *, workspace_id=None, replace=False, replace_migration=False):
+    workspace_id = workspace_id or owner.principal.workspace_id
+    preview = imports.preflight_mcp_package(
+        payload, "package.zip", actor_user_id=owner.principal.user_id, workspace_id=workspace_id,
+        audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
+    )
+    return imports.confirm_mcp_package(
+        preview.token, actor_user_id=owner.principal.user_id, workspace_id=workspace_id,
+        replace=replace, replace_migration=replace_migration,
+    )
+
+
+def _confirm_plugin(imports, owner, payload, *, workspace_id=None, replace=False, replace_migration=False):
+    workspace_id = workspace_id or owner.principal.workspace_id
+    preview = imports.preflight_plugin(
+        payload, "plugin.zip", actor_user_id=owner.principal.user_id, workspace_id=workspace_id,
+        audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
+    )
+    return imports.confirm_plugin(
+        preview.token, actor_user_id=owner.principal.user_id, workspace_id=workspace_id,
+        replace=replace, replace_migration=replace_migration,
+    )
+
+
+def _remove(imports, owner, record):
+    return imports.set_state(
+        actor_user_id=owner.principal.user_id, workspace_id=record.workspace_id,
+        extension_id=record.extension_id, state=ExtensionState.REMOVED,
+    )
+
+
+def _fail_install_after_replacement(monkeypatch, extensions) -> None:
+    def failing_install(**_kwargs):
+        raise RuntimeError("injected failure after replacement started")
+    monkeypatch.setattr(extensions, "install", failing_install)
+
+
+def test_failed_hosted_package_upgrade_keeps_previous_data_byte_for_byte(extension_state, tmp_path, monkeypatch) -> None:
+    extensions, _identities, owner, _member = extension_state
+    imports, root = _imports(extensions, tmp_path)
+    _confirm_hosted(imports, owner, _hosted_package("resono.business", version="0.1.0", marker="v1"))
+    data, tree = root / "data/resono.business", root / "mcps/resono.business/current"
+    (data / "runtime-state.json").write_text('{"written":"by the running package"}', encoding="utf-8")
+    before = (_tree_hash(data), _tree_hash(tree))
+    assert (data / "workspace/NOTES.md").read_text(encoding="utf-8") == "package v1\n"
+
+    # The owner has to approve replacing existing data; refusing touches nothing.
+    with pytest.raises(Exception, match="Confirm migration replacement"):
+        _confirm_hosted(imports, owner, _hosted_package(
+            "resono.business", version="0.2.0", marker="v2", on_conflict="ask",
+        ), replace=True)
+    assert (_tree_hash(data), _tree_hash(tree)) == before
+
+    # The tree is replaced and the migration has overwritten data when the fault hits.
+    _fail_install_after_replacement(monkeypatch, extensions)
+    with pytest.raises(RuntimeError, match="injected"):
+        _confirm_hosted(imports, owner, _hosted_package("resono.business", version="0.2.0", marker="v2"), replace=True)
+    assert (_tree_hash(data), _tree_hash(tree)) == before
+    assert not any((root / "recovery").glob("data-*"))
+
+
+def test_failed_plugin_upgrade_keeps_previous_data_byte_for_byte(extension_state, tmp_path, monkeypatch) -> None:
+    extensions, _identities, owner, _member = extension_state
+    imports, root = _imports(extensions, tmp_path)
+    _confirm_plugin(imports, owner, _data_plugin("demo.data", version="0.1.0", marker="v1"))
+    data, tree = root / "data/demo.data", root / "plugins/demo.data/current"
+    (data / "user-notes.txt").write_text("kept", encoding="utf-8")
+    before = (_tree_hash(data), _tree_hash(tree))
+
+    with pytest.raises(Exception, match="Confirm migration replacement"):
+        _confirm_plugin(imports, owner, _data_plugin("demo.data", version="0.2.0", marker="v2", on_conflict="ask"), replace=True)
+    assert (_tree_hash(data), _tree_hash(tree)) == before
+
+    _fail_install_after_replacement(monkeypatch, extensions)
+    with pytest.raises(RuntimeError, match="injected"):
+        _confirm_plugin(imports, owner, _data_plugin("demo.data", version="0.2.0", marker="v2"), replace=True)
+    assert (_tree_hash(data), _tree_hash(tree)) == before
+    assert (data / "workspace/NOTES.md").read_text(encoding="utf-8") == "plugin v1\n"
+
+
+def test_hosted_package_removal_keeps_data_a_same_identity_plugin_uses(extension_state, tmp_path) -> None:
+    extensions, _identities, owner, _member = extension_state
+    imports, root = _imports(extensions, tmp_path)
+    # The live resono.business case: a packageData plugin and a hosted package share data/resono.business.
+    plugin = _confirm_plugin(imports, owner, _data_plugin("resono.business", version="0.1.0", marker="plugin"))
+    hosted = _confirm_hosted(imports, owner, _hosted_package(
+        "resono.business", version="0.1.0", marker="hosted", on_conflict=None,
+    ))
+    data = root / "data/resono.business"
+    (data / "business.db").write_bytes(b"customer records")
+    before = _tree_hash(data)
+
+    _remove(imports, owner, hosted)
+    assert _tree_hash(data) == before
+    assert not (root / "mcps/resono.business").exists()
+    assert (root / "plugins/resono.business/current/plugin.json").is_file()
+
+    _remove(imports, owner, plugin)
+    assert not data.exists()
+
+
+def test_hosted_package_removal_deletes_its_current_and_previous_trees(extension_state, tmp_path) -> None:
+    extensions, _identities, owner, _member = extension_state
+    imports, root = _imports(extensions, tmp_path)
+    _confirm_hosted(imports, owner, _hosted_package("demo.hosted", version="0.1.0", marker="v1"))
+    upgraded = _confirm_hosted(
+        imports, owner, _hosted_package("demo.hosted", version="0.2.0", marker="v2"), replace=True,
+    )
+    base = root / "mcps/demo.hosted"
+    assert (base / "current/server.py").read_text(encoding="utf-8") == "print('v2')\n"
+    assert (base / "previous/server.py").read_text(encoding="utf-8") == "print('v1')\n"
+
+    _remove(imports, owner, upgraded)
+    assert not (base / "current").exists() and not (base / "previous").exists()
+    assert not base.exists()
+    assert not (root / "data/demo.hosted").exists()
