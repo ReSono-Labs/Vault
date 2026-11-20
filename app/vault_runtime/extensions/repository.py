@@ -453,6 +453,17 @@ class ExtensionRepository:
                 cursor.execute("UPDATE vault_private.vault_extension_runtime_settings SET enabled=%s,changed_by_user_id=%s,updated_at=now() WHERE setting_key='third_party_extensions'", (not enabled,actor_user_id))
                 self._event(cursor, None, workspace_id, actor_user_id, "safe_mode_changed", {"enabled": enabled})
 
+    def device_safe_mode(self) -> bool:
+        """Device-wide safe mode for Vault's own supervisor; no user scope, read only."""
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT enabled FROM vault_private.vault_extension_runtime_settings "
+                    "WHERE setting_key='third_party_extensions'"
+                )
+                row = cursor.fetchone()
+                return row is None or not bool(row[0])
+
     def safe_mode(self, *, actor_user_id: str, workspace_id: str) -> bool:
         """Return the durable owner-controlled extension gate, never a UI guess."""
         with self._connect() as connection:

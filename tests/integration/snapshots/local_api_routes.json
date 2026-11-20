@@ -5148,7 +5148,8 @@
    "owner": {
     "headers": [],
     "payload": {
-     "safeMode": true
+     "safeMode": true,
+     "scope": "device"
     },
     "status": 200
    },
@@ -5157,7 +5158,8 @@
    "wrongCsrf": {
     "headers": [],
     "payload": {
-     "safeMode": true
+     "safeMode": true,
+     "scope": "device"
     },
     "status": 200
    }

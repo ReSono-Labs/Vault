@@ -146,6 +146,8 @@ def test_grants_are_exact_and_safe_mode_or_disable_revokes_immediately(extension
         agent=AgentKind.VOICE, enabled=True,
     )
     # Third-party capabilities are off after first boot until the device owner exits safe mode.
+    # The supervisor reads the same device-wide row without a user scope.
+    assert extensions.device_safe_mode() is True
     assert not extensions.granted(
         user_id=member_scoped.user_id, workspace_id=owner.principal.workspace_id,
         extension_id=installed.extension_id, agent=AgentKind.VOICE,
@@ -154,6 +156,7 @@ def test_grants_are_exact_and_safe_mode_or_disable_revokes_immediately(extension
         actor_user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
         enabled=False,
     )
+    assert extensions.device_safe_mode() is False
     assert extensions.granted(
         user_id=member_scoped.user_id, workspace_id=owner.principal.workspace_id,
         extension_id=installed.extension_id, agent=AgentKind.VOICE,
@@ -166,6 +169,7 @@ def test_grants_are_exact_and_safe_mode_or_disable_revokes_immediately(extension
         actor_user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
         enabled=True,
     )
+    assert extensions.device_safe_mode() is True
     assert not extensions.granted(
         user_id=member_scoped.user_id, workspace_id=owner.principal.workspace_id,
         extension_id=installed.extension_id, agent=AgentKind.VOICE,

@@ -17,6 +17,10 @@ All notable changes to Vault are listed here. The version comes from
   other install with the same name, of any kind and in any workspace, still uses
   it. Removing a hosted MCP package now deletes both its current and previous
   versions.
+- **Safe mode stops supervised processes.** Turning safe mode on now stops every
+  hosted MCP package and supervised plugin process, with its child processes,
+  and nothing starts again (install, enable, boot or restart) until the device
+  owner turns it off. The safe mode responses now include `"scope": "device"`.
 
 ## 0.1.0 — first public release (not yet published)
 

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
+import socket
+import time
 from urllib.request import Request, urlopen
 
+import pytest
+
 from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
-from app.vault_runtime.extensions.mcp_runtime import McpRuntimeSupervisor
+from app.vault_runtime.extensions.mcp_runtime import McpRuntimeSafeModeError, McpRuntimeSupervisor
+from app.vault_runtime.extensions.service import ExtensionImportService
 from app.vault_runtime.extensions.models import ExtensionKind, ExtensionState
 from app.vault_runtime.extensions.repository import ExtensionRecord
 
@@ -20,6 +25,17 @@ class _FakeSecrets:
 class Repository:
     def __init__(self) -> None:
         self.records: dict[str, ExtensionRecord] = {}
+        # Stands in for the durable device-wide row; shared by every supervisor built on it.
+        self.safe_mode = False
+
+    def device_safe_mode(self) -> bool:
+        return self.safe_mode
+
+    def by_id(self, *, extension_id, **_):
+        return self.records[extension_id]
+
+    def list_installed(self, **_):
+        return tuple(self.records.values())
 
     def list_enabled_hosted_mcps(self) -> tuple[ExtensionRecord, ...]:
         return tuple(
@@ -154,3 +170,83 @@ def test_plugin_environment_excludes_vault_secrets(tmp_path: Path, monkeypatch) 
     assert "RESONO_VAULT_DATABASE_URL" not in env
     assert env["SSL_CERT_FILE"] == "/etc/ssl/certs/ca.pem"
     assert env["PATH"] and env["VAULT_MCP_PORT"] == "8790"
+
+
+def _gone(pid: int) -> bool:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return True
+        if stat.rsplit(")", 1)[1].split()[0] == "Z":
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _accepts(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def test_safe_mode_stops_supervised_processes_and_keeps_them_stopped(tmp_path: Path) -> None:
+    starter = _install_starter(tmp_path)
+    runtime = dict(starter.configuration["runtime"])
+    # The server forks a helper child into its process group that ignores SIGTERM.
+    runtime["command"] = [
+        "sh", "-c",
+        '(trap "" TERM; exec sleep 600) & echo $! > "$VAULT_PLUGIN_DATA/child.pid"; exec python3 server.py',
+    ]
+    record = replace(starter, state=ExtensionState.ENABLED, configuration={**starter.configuration, "runtime": runtime})
+    repository = Repository()
+    repository.records[record.extension_id] = record
+    extension_root = tmp_path / "extensions"
+
+    def supervisor() -> McpRuntimeSupervisor:
+        return McpRuntimeSupervisor(
+            repository=repository,  # type: ignore[arg-type]
+            secrets=_FakeSecrets(),  # type: ignore[arg-type]
+            extension_root=extension_root,
+        )
+
+    running = supervisor()
+    status = running.start(actor_user_id="owner", workspace_id="workspace", record=record)
+    assert status.state == "running" and status.pid is not None and status.port is not None
+    child = int((extension_root / "data/starter.example/child.pid").read_text(encoding="utf-8"))
+    assert _accepts(status.port)
+
+    repository.safe_mode = True
+    assert running.stop_all() == 1
+    assert _gone(status.pid) and _gone(child)
+    assert not _accepts(status.port)
+    assert repository.records[record.extension_id].configuration["runtimeStatus"]["state"] == "stopped"
+    with pytest.raises(McpRuntimeSafeModeError, match="Safe mode is on"):
+        running.start(actor_user_id="owner", workspace_id="workspace", record=record)
+
+    # A Vault restart: boot restore and automatic restart start nothing.
+    restarted = supervisor()
+    restarted.restore_on_boot()
+    restarted.restart_enabled(actor_user_id="owner", workspace_id="workspace")
+    # Confirm and enable go through the import service, which starts nothing either.
+    imports = ExtensionImportService(
+        repository=repository,  # type: ignore[arg-type]
+        inspector=object(),  # type: ignore[arg-type]
+        filesystem=ExtensionFilesystem(extension_root),
+        mcp_runtime=restarted,
+    )
+    imports._start_supervised_if_enabled(actor_user_id="owner", workspace_id="workspace", record=record)
+    imports._sync_supervised_runtime(
+        actor_user_id="owner", workspace_id="workspace", record=record, state=ExtensionState.ENABLED,
+    )
+    assert restarted.status(repository.records[record.extension_id]).state == "stopped"
+    assert not _accepts(status.port)
+
+    repository.safe_mode = False
+    resumed = restarted.start(actor_user_id="owner", workspace_id="workspace", record=record)
+    assert resumed.state == "running" and _accepts(resumed.port)
+    restarted.stop_all()
+    assert _gone(resumed.pid)

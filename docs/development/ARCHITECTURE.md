@@ -286,6 +286,11 @@ same `invoke` path the agent uses.
 - **Hosted MCP packages** run as child processes of Vault on `127.0.0.1`, on
   ports 8788–8899, supervised by `extensions/mcp_runtime.py`. They inherit only a
   short list of harmless environment variables, never Vault's secrets.
+- **Safe mode** is one device-wide, persistent setting
+  (`vault_extension_runtime_settings`, key `third_party_extensions`). While it
+  is on, no third-party capability is projected, the supervisor refuses every
+  start (confirm, enable, boot restore, restart), and turning it on stops every
+  supervised process group and unpublishes its host port.
 - **Remote MCP endpoints** are checked before every connection and cannot target
   private, link-local, metadata or reserved networks (`app/core/security/outbound.py`).
 - **Skills** become available through the `SkillActivation` tool.

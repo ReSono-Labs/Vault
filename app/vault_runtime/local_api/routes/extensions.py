@@ -88,7 +88,7 @@ class ExtensionRoutes:
         if method == "GET" and path == "/extensions/runtime":
             return LocalApiResponse(200, {"safeMode": repository.safe_mode(
                 actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-            )})
+            ), "scope": "device"})
         if method not in {"POST", "DELETE"}:
             return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
         identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))
@@ -167,13 +167,22 @@ class ExtensionRoutes:
             return LocalApiResponse(201, _extension_payload(record))
         if path == "/extensions/safe-mode":
             enabled = _required_bool(payload, "enabled")
+            was_enabled = repository.safe_mode(
+                actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
+            )
             repository.set_safe_mode(
                 actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
                 enabled=enabled,
             )
-            if enabled and self._mcp_lifecycle is not None:
-                self._mcp_lifecycle.enter_safe_mode()
-            return LocalApiResponse(200, {"safeMode": enabled})
+            # Safe mode is device-wide: it covers every workspace's extensions.
+            if enabled:
+                if self._mcp_lifecycle is not None:
+                    self._mcp_lifecycle.enter_safe_mode()
+                if imports is not None:
+                    imports.enter_safe_mode()
+            elif was_enabled and imports is not None:
+                imports.leave_safe_mode()
+            return LocalApiResponse(200, {"safeMode": enabled, "scope": "device"})
         if path.startswith("/extensions/"):
             suffix = path.removeprefix("/extensions/")
             extension_id, _, operation = suffix.partition("/")

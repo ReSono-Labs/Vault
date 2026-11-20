@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
+from threading import Thread
 
 from app.vault_runtime.extensions.archives import ArchiveInspector, MAX_MCP_PACKAGE_UPLOAD_BYTES, QuarantinedArchive
 from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
@@ -793,6 +794,9 @@ class ExtensionImportService:
         if self._mcp_runtime is None or supervised_runtime_configuration(record) is None:
             return
         if state is ExtensionState.ENABLED:
+            if self._mcp_runtime.safe_mode_active():
+                # The state change stands; the process starts when safe mode is turned off.
+                return
             refreshed = self._repository.by_id(
                 actor_user_id=actor_user_id, workspace_id=workspace_id,
                 extension_id=record.extension_id, owner=True,
@@ -805,6 +809,19 @@ class ExtensionImportService:
                 record=record, actor_user_id=actor_user_id, workspace_id=workspace_id,
                 release_port=state is ExtensionState.REMOVED,
             )
+
+    def enter_safe_mode(self) -> None:
+        """Stop every supervised process; the durable setting already blocks new starts."""
+        if self._mcp_runtime is not None:
+            self._mcp_runtime.stop_all()
+
+    def leave_safe_mode(self) -> None:
+        """Start enabled supervised runtimes again, in the background like boot restore."""
+        if self._mcp_runtime is not None:
+            Thread(
+                target=self._mcp_runtime.restore_on_boot,
+                name="resono-vault-mcp-resume", daemon=True,
+            ).start()
 
     def set_state(
         self, *, actor_user_id: str, workspace_id: str,

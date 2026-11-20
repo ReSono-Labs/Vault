@@ -1005,9 +1005,13 @@ companion plugins.
 
 ## 16. Connections safe mode
 
-Open **Connections → Extensions**. When third-party safe mode is on, external
-capabilities are blocked. Turning it off permits only explicitly enabled and
-granted capabilities; installation or discovery alone grants nothing.
+Open **Connections → Extensions**. Safe mode is one setting for the whole
+device, covering every user and workspace. When third-party safe mode is on,
+external capabilities are blocked, and every hosted MCP package and supervised
+plugin process is stopped. They stay stopped, including after Vault restarts,
+until the device owner turns safe mode off; Vault then starts the enabled ones
+again. Turning it off permits only explicitly enabled and granted capabilities;
+installation or discovery alone grants nothing.
 
 ## 17. Package operation
 

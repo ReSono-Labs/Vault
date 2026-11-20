@@ -48,6 +48,10 @@ class McpRuntimeError(RuntimeError):
     pass
 
 
+class McpRuntimeSafeModeError(McpRuntimeError):
+    """Device-wide safe mode is on, so no supervised process may start."""
+
+
 @dataclass(frozen=True, slots=True)
 class McpRuntimeStatus:
     state: str
@@ -105,6 +109,12 @@ class McpRuntimeSupervisor:
         if runtime is None:
             raise McpRuntimeError("This extension does not have a supervised runtime")
         with self._lock:
+            # The one gate for every start path: confirm, enable, boot restore and restart.
+            if self.safe_mode_active():
+                raise McpRuntimeSafeModeError(
+                    "Safe mode is on for this device. Supervised extensions stay stopped "
+                    "until the device owner turns it off."
+                )
             self.stop(record=record, actor_user_id=actor_user_id, workspace_id=workspace_id)
             install_root = self._install_root(record)
             if not install_root.is_dir():
@@ -186,7 +196,34 @@ class McpRuntimeSupervisor:
                     record=record, status=McpRuntimeStatus("stopped", None, None, None, None),
                 )
 
+    def safe_mode_active(self) -> bool:
+        """Device-wide safe mode, read from the durable setting on every call."""
+        read = getattr(self._repository, "device_safe_mode", None)
+        return bool(read()) if read is not None else False
+
+    def stop_all(self) -> int:
+        """Stop every supervised process group and unpublish its host port (safe mode)."""
+        with self._lock:
+            managed = tuple(self._processes.values())
+            for item in managed:
+                record = item.record
+                try:
+                    record = self._repository.by_id(
+                        actor_user_id=record.installed_by_user_id, workspace_id=record.workspace_id,
+                        extension_id=record.extension_id, owner=True,
+                    )
+                except Exception:
+                    # Still stop the process; only the stored status stays stale.
+                    self.stop(record=record)
+                    continue
+                self.stop(
+                    record=record, actor_user_id=record.installed_by_user_id,
+                    workspace_id=record.workspace_id,
+                )
+            return len(managed)
+
     def restore_on_boot(self) -> None:
+        """Start every enabled supervised runtime (at boot, and when safe mode is turned off)."""
         list_enabled = getattr(self._repository, "list_enabled_supervised_runtimes", None)
         if list_enabled is None:
             list_enabled = getattr(self._repository, "list_enabled_hosted_mcps", None)
@@ -407,8 +444,13 @@ class McpRuntimeSupervisor:
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
+            pass
+        # Children can outlive the leader or ignore SIGTERM; the whole group goes.
+        try:
             os.killpg(process.pid, signal.SIGKILL)
-            process.wait(timeout=5)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
 
 
 def supervised_runtime_configuration(record: ExtensionRecord) -> dict[str, Any] | None:
