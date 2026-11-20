@@ -234,6 +234,8 @@ _ROUTES: tuple[_Route, ...] = (
     _Route("_route_link_companion_tools", prefixes=("/link-companion/tools/",)),
     _Route("_route_link_companion_voice", prefixes=("/link-companion/voice/",)),
     _Route("_route_link_companion_chat", prefixes=("/link-companion/chat/",)),
+    _Route("_route_link_front_door", paths=("/v1/responses", "/link/v1/capabilities"),
+           prefixes=("/v1/responses/", "/link/v1/responses/", "/link/v1/drafts")),
     _Route("_route_link_companion_pairing", paths=("/link-companion/pairing/start", "/link-companion/pairing/status",
                                        "/link-companion/agent-network/apply", "/link-companion/release")),
     _Route("_route_link_companion", prefixes=("/link-companion",), needs_identity=True),

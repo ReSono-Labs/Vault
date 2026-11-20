@@ -64,6 +64,46 @@ class LinkCompanionRoutes:
             method=method.upper(), path=path, query=target_parts.query, headers=headers, body=body,
         )
 
+    def _route_link_front_door(
+        self, *, method: str, path: str, target_parts: SplitResult, headers: Mapping[str, str], body: bytes,
+    ) -> LocalApiResponse:
+        """Link Front Door v1 for the paired companion (link_companion/front_door.py)."""
+        from app.vault_runtime.conversation.contracts import ConflictError, InputError, NotFoundError
+        from app.vault_runtime.link_companion import front_door
+        from app.vault_runtime.link_companion.chat import ChatRejected
+        no_store = (("Cache-Control", "no-store"),)
+        def fail(status: int, code: str) -> LocalApiResponse:
+            return LocalApiResponse(status, front_door.error_body(code), no_store)
+        try:
+            principal = self._link_companion_principal(headers)   # before any body parsing
+        except Exception:
+            return fail(401, "unauthorized")
+        runtime = self._conversation_runtime
+        if runtime is None:
+            return fail(503, "unavailable")
+        method = method.upper()
+        if path == "/link/v1/capabilities":
+            if method != "GET":
+                return fail(405, "method_not_allowed")
+            return LocalApiResponse(200, front_door.capabilities(
+                images=getattr(runtime, "attachments", None) is not None), no_store)
+        try:
+            payload = _json_object(body, max_bytes=min(self._max_body_bytes, 9_000_000)) if body else {}
+            status, value = front_door.handle(runtime, principal, method=method, path=path, payload=payload,
+                                              idempotency_key=_header(headers, "idempotency-key"))
+            return LocalApiResponse(status, value, no_store)
+        except front_door.FrontDoorError as exc:
+            return fail(exc.status, exc.code)
+        except NotFoundError:
+            return fail(404, "not_found")
+        except ConflictError:
+            return fail(409, "busy")
+        except (ChatRejected, InputError, ValueError):
+            return fail(400, "invalid_request")
+        except Exception:
+            logging.getLogger(API_LOGGER).warning("link_front_door_failed")  # No message text or images.
+            return fail(503, "unavailable")
+
     def _route_link_companion_pairing(
         self, *, method: str, path: str, target_parts: SplitResult, headers: Mapping[str, str], body: bytes,
     ) -> LocalApiResponse:

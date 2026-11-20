@@ -315,6 +315,18 @@ same `invoke` path the agent uses.
 - **Link companion** (`link_companion/`): pairing, phone chat (answered by the
   coordinator by default, `RESONO_VAULT_LINK_CHAT_RESPONDER`), phone voice and
   approvals.
+- **Link Front Door v1** (`link_companion/front_door.py`): the agent contract Link's
+  engine uses for owner chat. `GET /link/v1/capabilities`, `POST /v1/responses`
+  (background turns with `Idempotency-Key`, images as `data:` URIs only), `GET` and
+  `POST .../cancel` on `/v1/responses/{id}`, `POST /link/v1/responses/{id}/approval`
+  and `/link/v1/drafts[/status|/clear]`. It authenticates with the paired companion
+  bearer and translates to the legacy companion chat handler (`link_companion/chat.py`),
+  so turns, live preparation, approvals and activity behave exactly as there. GenUI
+  cards are returned as Link Cards v1 (`link_cards`). Steer and streaming are reported
+  unsupported, and voice keeps the direct WebRTC companion routes. A Link conversation
+  maps to one Vault conversation (`link_conversation`, or the conversation id Link
+  sends back as `previous_response_id`). The legacy `/link-companion/chat/*` routes stay
+  until every Link install uses the Front Door.
 - **Vault Help** (`help_assistant.py`) answers from the help-source tree in the
   image (`/opt/resono-vault/help-source`): the seven user guides, `app/`,
   `docs/README.md` and `docs/development/`.

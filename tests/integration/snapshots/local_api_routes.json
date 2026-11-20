@@ -6921,6 +6921,438 @@
   },
   {
    "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "GET /link/v1/capabilities",
+   "target": "/link/v1/capabilities",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "POST /v1/responses",
+   "target": "/v1/responses",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "GET /v1/responses/{id}",
+   "target": "/v1/responses/<fake-id>",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "POST /v1/responses/{id}/cancel",
+   "target": "/v1/responses/<fake-id>/cancel",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "POST /link/v1/responses/{id}/approval",
+   "target": "/link/v1/responses/<fake-id>/approval",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "POST /link/v1/responses/{id}/steer",
+   "target": "/link/v1/responses/<fake-id>/steer",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "POST /link/v1/drafts",
+   "target": "/link/v1/drafts",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "POST /link/v1/drafts/status",
+   "target": "/link/v1/drafts/status",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "auth": "bearer",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   },
+   "route": "POST /link/v1/drafts/clear",
+   "target": "/link/v1/drafts/clear",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Cache-Control",
+      "no-store"
+     ]
+    ],
+    "payload": {
+     "error": {
+      "code": "unauthorized"
+     }
+    },
+    "status": 401
+   }
+  },
+  {
+   "anonymous": {
     "headers": [],
     "payload": {
      "error": {
