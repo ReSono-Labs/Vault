@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from app.vault_runtime.extensions.import_diagnostics import blocking_import_diagnostics
 from app.vault_runtime.extensions.package_review import review_plugin_package
-from app.vault_runtime.extensions.skills import parse_skill_document
+from app.vault_runtime.extensions.skills import SkillSpecificationError, parse_skill_document
 
 
 def test_blocking_import_diagnostics_ignores_review_and_partial_component_issues() -> None:
@@ -32,12 +34,14 @@ def test_package_review_skips_migration_tree(tmp_path: Path) -> None:
     assert "migration/workspace/ops/crm/run.sh" not in paths
 
 
-def test_skill_name_defaults_to_directory_when_frontmatter_omits_name(tmp_path: Path) -> None:
+def test_skill_name_falls_back_to_directory_only_for_legacy_installed_records(tmp_path: Path) -> None:
     skill = tmp_path / "crm-ops"
     skill.mkdir()
     (skill / "SKILL.md").write_text(
         "---\ndescription: CRM operations guidance.\n---\nUse CRM tools.\n",
         encoding="utf-8",
     )
-    document = parse_skill_document(skill / "SKILL.md", expected_directory="crm-ops")
-    assert document.name == "crm-ops"
+    with pytest.raises(SkillSpecificationError, match="requires a name"):
+        parse_skill_document(skill / "SKILL.md", expected_directory="crm-ops")
+    document = parse_skill_document(skill / "SKILL.md", expected_directory="crm-ops", allow_legacy=True)
+    assert (document.name, document.legacy) == ("crm-ops", True)

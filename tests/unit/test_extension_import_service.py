@@ -11,6 +11,7 @@ from app.vault_runtime.extensions.models import ExtensionAudience, ExtensionKind
 from app.vault_runtime.extensions.preflight import PreflightError
 from app.vault_runtime.extensions.repository import ExtensionRecord
 from app.vault_runtime.extensions.service import ExtensionImportService
+from app.vault_runtime.extensions.skills import SkillSpecificationError
 from app.vault_runtime.extensions.specification import MCP_SCHEMA_ID, PLUGIN_SCHEMA_ID
 from app.vault_runtime.system_agents.inventory import AgentKind
 
@@ -128,3 +129,33 @@ def test_mcp_document_issues_one_confirmation_per_connection_and_grants_nothing(
     )
     assert installed.kind is ExtensionKind.MCP
     assert not hasattr(repository, "grants")
+
+
+def test_standalone_skill_import_rejects_names_the_old_fallback_accepted(tmp_path: Path) -> None:
+    service, repository = _service(tmp_path)
+    audience = ExtensionAudience(frozenset({AgentKind.VOICE}))
+    for text, message in (
+        ("---\ndescription: No name.\n---\nBody\n", "requires a name"),
+        ("---\nname: Demo\ndescription: Upper case.\n---\nBody\n", "lowercase"),
+        ("---\nname: other\ndescription: Mismatch.\n---\nBody\n", "must match the Skill directory 'demo'"),
+    ):
+        with pytest.raises(SkillSpecificationError, match=message):
+            service.preflight_skill(_zip({"demo/SKILL.md": text}), "demo.zip",
+                actor_user_id="owner", workspace_id="workspace", audience=audience)
+    assert not repository.records
+    assert not any((tmp_path / "quarantine").iterdir())
+
+
+def test_plugin_import_skips_only_the_bad_skill_with_a_diagnostic(tmp_path: Path) -> None:
+    service, _repository = _service(tmp_path)
+    payload = _zip({
+        "local.demo/plugin.json": json.dumps({"$schema": PLUGIN_SCHEMA_ID, "name": "local.demo"}),
+        "local.demo/skills/healthy/SKILL.md": "---\nname: healthy\ndescription: Fine.\n---",
+        "local.demo/skills/unnamed/SKILL.md": "---\ndescription: The old fallback named me.\n---\n",
+        "local.demo/skills/twice/SKILL.md": "---\nname: twice\nname: twice\ndescription: Repeated.\n---\n",
+    })
+    preview = service.preflight_plugin(payload, "plugin.zip", actor_user_id="owner",
+        workspace_id="workspace", audience=ExtensionAudience(frozenset(AgentKind)))
+    assert [item[0] for item in preview.payload.skills] == ["healthy"]
+    assert any(item.startswith("skill:unnamed:") and "name" in item for item in preview.payload.diagnostics)
+    assert any(item.startswith("skill:twice:") and "repeats the key 'name'" in item for item in preview.payload.diagnostics)

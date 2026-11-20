@@ -18,6 +18,8 @@ class SkillSummary:
     extension_id: str
     name: str
     description: str
+    # Installed before the strict parser and only readable with the old directory-name fallback.
+    legacy: bool = False
 
 
 class SkillActivation:
@@ -35,16 +37,16 @@ class SkillActivation:
                 continue
             document = parse_skill_document(
                 self._direct_path(record.identity) / "SKILL.md",
-                expected_directory=record.identity,
+                expected_directory=record.identity, allow_legacy=True,
             )
-            result.append(SkillSummary(record.extension_id, document.name, document.description))
+            result.append(SkillSummary(record.extension_id, document.name, document.description, document.legacy))
         for record, capability, _effect in self._repository.granted_extensions(
             user_id=user_id, workspace_id=workspace_id, agent=agent,
             kind=ExtensionKind.PLUGIN, capability_prefix="skill:",
         ):
             name = capability.removeprefix("skill:")
-            document = parse_skill(self._plugin_path(record.identity, name))
-            result.append(SkillSummary(record.extension_id, document.name, document.description))
+            document = parse_skill(self._plugin_path(record.identity, name), allow_legacy=True)
+            result.append(SkillSummary(record.extension_id, document.name, document.description, document.legacy))
         return tuple(sorted(result, key=lambda item: (item.name, item.extension_id)))
 
     def load(self, *, user_id: str, workspace_id: str, agent: AgentKind, extension_id: str, name: str) -> str:
@@ -57,14 +59,14 @@ class SkillActivation:
         ):
             if record.extension_id == extension_id and record.identity == name and capability == "":
                 return parse_skill_document(
-                    self._direct_path(name) / "SKILL.md", expected_directory=name,
+                    self._direct_path(name) / "SKILL.md", expected_directory=name, allow_legacy=True,
                 ).instructions
         for record, capability, _effect in self._repository.granted_extensions(
             user_id=user_id, workspace_id=workspace_id, agent=agent,
             kind=ExtensionKind.PLUGIN, capability_prefix="skill:",
         ):
             if record.extension_id == extension_id and capability == f"skill:{name}":
-                return parse_skill(self._plugin_path(record.identity, name)).instructions
+                return parse_skill(self._plugin_path(record.identity, name), allow_legacy=True).instructions
         raise ExtensionNotFoundError("Agent Skill is not enabled in this local scope")
 
     def tool_definition(self) -> ToolDefinition:

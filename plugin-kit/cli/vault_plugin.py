@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -30,6 +31,55 @@ NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
 
 class KitError(ValueError):
     pass
+
+
+# The kit runs Vault's own parsers instead of a copy of their rules. In the repository it
+# loads them from app/; the kit download bundles the same files next to this one.
+_RUNTIME_SOURCES = {
+    "skills": ("vault_skills.py", "app/vault_runtime/extensions/skills.py"),
+}
+_RUNTIME_MODULES: dict[str, object] = {}
+
+
+def _runtime(name: str):
+    if name in _RUNTIME_MODULES:
+        return _RUNTIME_MODULES[name]
+    bundled, repository = _RUNTIME_SOURCES[name]
+    for path in (KIT_ROOT / "cli" / bundled, KIT_ROOT.parent / repository):
+        if not path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location(f"vault_plugin_kit_{name}", path)
+        if spec is None or spec.loader is None:
+            break
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module  # dataclasses resolve their module by name.
+        try:
+            spec.loader.exec_module(module)
+        except ImportError as exc:
+            del sys.modules[spec.name]
+            raise KitError(f"Install the Python package the validator needs: {exc.name}.") from exc
+        _RUNTIME_MODULES[name] = module
+        return module
+    raise KitError(f"The kit is missing Vault's {name} parser ({bundled}).")
+
+
+def _validate_skills(root: Path) -> list[str]:
+    """Run Vault's Skill parser on every immediate folder under skills/, as import does."""
+    skill_root = root / "skills"
+    if not skill_root.exists():
+        return []
+    if not skill_root.is_dir():
+        raise KitError("skills must be a directory.")
+    skills = _runtime("skills")
+    names = []
+    for child in sorted(skill_root.iterdir()):
+        if not child.is_dir():
+            raise KitError(f"skills/{child.name} must be a directory containing SKILL.md.")
+        try:
+            names.append(skills.parse_skill(child).name)
+        except skills.SkillSpecificationError as exc:
+            raise KitError(f"skills/{child.name}: {exc}") from exc
+    return names
 
 
 def _object(path: Path) -> dict[str, object]:
@@ -100,7 +150,8 @@ def validate(root: Path) -> dict[str, object]:
                 raise KitError(f"MCP server '{server_name}' must use streamable-http and provide a URL.")
             if "headers" in server:
                 raise KitError("Do not put credentials in mcp.json. Declare them in config.schema.json.")
-    return {"name": name, "files": len(files), "bytes": total, "vault": vault, "plugin": plugin}
+    skills = _validate_skills(root)
+    return {"name": name, "files": len(files), "bytes": total, "vault": vault, "plugin": plugin, "skills": skills}
 
 
 def create(name: str, destination: Path, language: str) -> Path:
