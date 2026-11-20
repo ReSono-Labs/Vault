@@ -482,9 +482,20 @@ class ExtensionRepository:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id=actor_user_id, workspace_id=workspace_id, owner=True)
                 self._require_scope(cursor, user_id=target_user_id, workspace_id=workspace_id)
-                cursor.execute("SELECT 1 FROM vault_private.vault_extensions WHERE extension_id=%s AND installed_in_workspace_id=%s AND state='enabled'", (extension_id,workspace_id))
-                if cursor.fetchone() is None:
+                cursor.execute("SELECT kind FROM vault_private.vault_extensions WHERE extension_id=%s AND installed_in_workspace_id=%s AND state='enabled'", (extension_id,workspace_id))
+                installed = cursor.fetchone()
+                if installed is None:
                     raise ExtensionNotFoundError("enabled extension is unavailable")
+                if enabled and capability_name.startswith("skill:"):
+                    # Only a Skill this plugin actually ships; the name becomes a storage path.
+                    # Turning a grant off stays possible after an upgrade dropped the Skill.
+                    cursor.execute(
+                        """SELECT 1 FROM vault_private.vault_extension_components
+                           WHERE extension_id=%s AND component_kind='skill' AND component_name=%s""",
+                        (extension_id, capability_name.removeprefix("skill:")),
+                    )
+                    if str(installed[0]) != ExtensionKind.PLUGIN.value or cursor.fetchone() is None:
+                        raise ValueError("capability is not a Skill of this extension")
                 cursor.execute(
                     """
                     INSERT INTO vault_private.vault_extension_grants

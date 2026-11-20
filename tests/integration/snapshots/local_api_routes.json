@@ -2843,9 +2843,20 @@
        ],
        "builtIn": true,
        "category": "Skills",
-       "description": "Load the instructions for one relevant enabled Agent Skill by name.",
+       "description": "Load the instructions for one relevant enabled Agent Skill by name. Add extension_id from the Skill catalog when two enabled Skills share a name.",
        "effectClass": "read",
        "name": "load_agent_skill"
+      },
+      {
+       "audiences": [
+        "background",
+        "voice"
+       ],
+       "builtIn": true,
+       "category": "Skills",
+       "description": "Read one text file inside an enabled Agent Skill, by path relative to that Skill's folder (for example references/REFERENCE.md). Read-only, at most 256 KiB, no scripts run.",
+       "effectClass": "read",
+       "name": "read_agent_skill_resource"
       },
       {
        "audiences": [
@@ -3429,9 +3440,20 @@
        ],
        "builtIn": true,
        "category": "Skills",
-       "description": "Load the instructions for one relevant enabled Agent Skill by name.",
+       "description": "Load the instructions for one relevant enabled Agent Skill by name. Add extension_id from the Skill catalog when two enabled Skills share a name.",
        "effectClass": "read",
        "name": "load_agent_skill"
+      },
+      {
+       "audiences": [
+        "background",
+        "voice"
+       ],
+       "builtIn": true,
+       "category": "Skills",
+       "description": "Read one text file inside an enabled Agent Skill, by path relative to that Skill's folder (for example references/REFERENCE.md). Read-only, at most 256 KiB, no scripts run.",
+       "effectClass": "read",
+       "name": "read_agent_skill_resource"
       },
       {
        "audiences": [

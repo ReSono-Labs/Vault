@@ -107,6 +107,8 @@ class ConversationRuntime:
         # Generative UI (removable): display-only present_ui cards, and an optional
         # Decisions presentation hint computed in parallel with turn preparation.
         self.genui_enabled = False
+        # SkillActivation (composition sets it): the caller's granted Skill catalog, as Voice gets it.
+        self.skills = None
         self.presentation_transport_factory = None
         self.presentation_timeout_seconds = 1.5
         self.genui_feedback = None
@@ -388,6 +390,14 @@ class ConversationRuntime:
             thread,started = pending
             thread.join(max(0.0,self.title_wait_seconds-(monotonic()-started)))
 
+    def _skill_catalog(self,principal,definitions):
+        """Granted Skill catalog for Chat (Voice audience), only when the loader is supplied."""
+        if self.skills is None or not any(d.name=="load_agent_skill" for d in definitions):
+            return ""
+        text = self.skills.catalog_instructions(user_id=principal.user_id,
+            workspace_id=principal.workspace_id,agent=AgentKind.VOICE)
+        return "\n\n"+text if text else ""
+
     def _genui_instructions(self,presentation):
         from app.vault_runtime.genui.catalog import prompt_section
         if presentation is None:
@@ -585,7 +595,8 @@ class ConversationRuntime:
                     "Use the appropriate live tool when the user asks about current state. "
                     "If context is still missing, choose a sensible default and say so, or ask one short question when no reasonable default exists. Never invent facts. "
                     +(previous_summary_context(previous_summary['text']) if previous_summary else "")
-                    +(" "+self._genui_instructions(presentation) if self.genui_enabled else "")),
+                    +(" "+self._genui_instructions(presentation) if self.genui_enabled else "")
+                    +self._skill_catalog(principal,supplied_definitions)),
                 input_text=model_input,
                 base_url=("https://generativelanguage.googleapis.com/v1beta/openai/" if provider=="gemini" else
                     "https://api.x.ai/v1" if provider=="xai" else

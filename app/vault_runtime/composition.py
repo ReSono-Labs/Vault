@@ -428,7 +428,10 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     register_command_tools(catalog=catalog, service=commands)
     extension_root = data_root / "extensions"
     skill_activation = SkillActivation(repository=extensions, extension_root=extension_root)
-    catalog.register(skill_activation.tool_definition())
+    for skill_tool in skill_activation.tool_definitions():
+        catalog.register(skill_tool)
+    if resumable_executor is not None:
+        resumable_executor.skills = skill_activation
     voice_modes = VoiceModeService()
     register_voice_mode_tool(catalog, voice_modes)
     coordinator = VoiceSessionCoordinator(
@@ -510,6 +513,7 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     conversation_runtime.link_chat_responder = config.link_chat_responder
     conversation_runtime.store.recover_orphans()
     conversation_runtime.genui_enabled = config.genui_enabled
+    conversation_runtime.skills = skill_activation
     conversation_runtime.background_coordinator = background_coordinator
     conversation_runtime.background_actions = background_actions
     if background_coordinator is not None:

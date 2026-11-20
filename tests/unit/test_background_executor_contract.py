@@ -623,3 +623,45 @@ def test_chatgpt_oauth_background_run_uses_sdk_stream():
     outcome = asyncio.run(executor.execute(scope, request, None, supply, lambda: False))
     assert outcome.state is WorkState.COMPLETED, outcome
     assert len(model.seen_inputs) == 1
+
+
+@pytest.mark.parametrize("supplied", [True, False])
+def test_background_instructions_carry_the_owners_skill_catalog_when_the_loader_is_supplied(supplied):
+    from app.vault_runtime.background_agent.executor import ResumableBackgroundExecutor
+
+    scope = _scope()
+    names = {"read_notes", "load_agent_skill"} if supplied else {"read_notes"}
+    authority = FakeAuthority(allowed=set(names))
+    catalog = ToolCatalog(authorizer=lambda _d, _c: True,
+                          background_authorizer=lambda d, _c, _a: d.name in authority.allowed)
+    for name in ("read_notes", "load_agent_skill"):
+        catalog.register(ToolDefinition(
+            tool_id=f"test.{name}.v1", name=name, description=name,
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+            handler=lambda _ctx, _args: ToolInvocationResult("{}"), effect_class="read",
+            audiences=frozenset({AgentKind.BACKGROUND}),
+        ))
+    supply = BackgroundToolSupply(
+        catalog=catalog, background_scope=scope, authority=authority,
+        grant=BackgroundToolGrant(autonomy=AutonomyProfile.EXPANDED, explicit_names=frozenset(names), max_calls=4),
+    )
+    asked = []
+
+    class Skills:
+        def catalog_instructions(self, *, user_id, workspace_id, agent):
+            asked.append((user_id, workspace_id, agent))
+            return 'Installed third-party Agent Skills granted to you follow.\n{"name":"notes"}'
+
+    class CapturingModel(ScriptedSDKModel):
+        async def get_response(self, system_instructions, input, *args, **kwargs):
+            self.system = system_instructions
+            return await super().get_response(system_instructions, input, *args, **kwargs)
+
+    model = CapturingModel(["complete"])
+    executor = ResumableBackgroundExecutor(credentials=FakeCredentials(), actions=FakeActionStore(),
+                                           authority=authority, model_factory=lambda *_: model)
+    executor.skills = Skills()
+    outcome = asyncio.run(executor.execute(scope, _request(), None, supply, lambda: False))
+    assert outcome.state is WorkState.COMPLETED
+    assert ('{"name":"notes"}' in model.system) is supplied
+    assert asked == ([(scope.user_id, scope.workspace_id, AgentKind.BACKGROUND)] if supplied else [])

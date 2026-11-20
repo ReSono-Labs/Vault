@@ -689,3 +689,100 @@ def test_seeded_hosted_collision_blocks_restore_projection_and_start(extension_s
     for record in records:
         with pytest.raises(McpRuntimeError, match="another workspace"):
             supervisor.start(actor_user_id=owner.principal.user_id, workspace_id=record.workspace_id, record=record)
+
+
+def test_plugin_skill_grants_accept_only_the_plugins_stored_skills(extension_state) -> None:
+    extensions, _identities, owner, _member = extension_state
+    plugin = _install(extensions, owner, identity="granted-plugin", component="helper")
+    standalone = extensions.install(
+        actor_user_id=owner.principal.user_id, workspace_id=owner.principal.workspace_id,
+        kind=ExtensionKind.SKILL, identity="solo", display_name="solo", version=None,
+        description="Skill", content_hash="hash-solo", configuration={},
+    )
+
+    def grant(extension_id, capability, enabled=True):
+        extensions.set_grant(
+            actor_user_id=owner.principal.user_id, target_user_id=owner.principal.user_id,
+            workspace_id=owner.principal.workspace_id, extension_id=extension_id,
+            agent=AgentKind.VOICE, capability_name=capability, enabled=enabled,
+        )
+
+    grant(plugin.extension_id, "skill:helper")
+    for capability in ("skill:../../../otherplugin/current/skills/secret", "skill:missing", "skill:"):
+        with pytest.raises(ValueError, match="not a Skill of this extension"):
+            grant(plugin.extension_id, capability)
+    with pytest.raises(ValueError, match="not a Skill of this extension"):
+        grant(standalone.extension_id, "skill:solo")
+    grant(plugin.extension_id, "skill:missing", enabled=False)  # Turning off never needs the component.
+    granted = {item["capabilityName"]: item["enabled"] for item in extensions.list_grants(
+        actor_user_id=owner.principal.user_id, target_user_id=owner.principal.user_id,
+        workspace_id=owner.principal.workspace_id, extension_id=plugin.extension_id,
+    )}
+    assert granted == {"skill:helper": True, "skill:missing": False}
+
+
+def test_chat_turn_gets_the_granted_skill_catalog_and_reads_a_resource(mounted) -> None:
+    from types import SimpleNamespace as NS
+
+    from threading import Event
+    from time import monotonic
+
+    from tests.support.mounted_conversation_runtime import create, submit
+
+    m = mounted
+    payload = _zip({
+        "chat-notes/SKILL.md": "---\nname: chat-notes\ndescription: Notes guidance\n---\nRead references/GUIDE.md first.\n",
+        "chat-notes/references/GUIDE.md": "GUIDE CONTENT",
+    })
+    preview = m.app._extension_imports.preflight_skill(
+        payload, "chat-notes.zip", actor_user_id=m.principal.user_id, workspace_id=m.principal.workspace_id,
+        audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
+    )
+    installed = m.app._extension_imports.confirm_skill(
+        preview.token, actor_user_id=m.principal.user_id, workspace_id=m.principal.workspace_id, replace=False,
+    )
+    extensions = m.app._extensions
+    extensions.set_safe_mode(actor_user_id=m.principal.user_id, workspace_id=m.principal.workspace_id, enabled=False)
+    extensions.set_grant(
+        actor_user_id=m.principal.user_id, target_user_id=m.principal.user_id,
+        workspace_id=m.principal.workspace_id, extension_id=installed.extension_id,
+        agent=AgentKind.VOICE, enabled=True,
+    )
+    runtime = m.app._conversation_runtime
+    runtime.authority.ensure_builtin_grants(user_id=m.principal.user_id, workspace_id=m.principal.workspace_id,
+        definitions=m.app._voice_tools.definitions(user_id=m.principal.user_id, workspace_id=m.principal.workspace_id))
+    seen = {}
+
+    async def runner(**kwargs):
+        seen["instructions"] = kwargs["instructions"]
+        tools = {tool.name: tool for tool in kwargs["function_tools"]}
+        calls = (("load", "load_agent_skill", json.dumps({"name": "chat-notes"})),
+                 ("read", "read_agent_skill_resource", json.dumps({"name": "chat-notes", "path": "references/GUIDE.md"})))
+        # The model's function calls are captured before Vault runs them, as in a real turn.
+        kwargs["model_response_sink"](NS(response_id="r0", output=[
+            NS(type="function_call", id=f"i-{key}", call_id=key, name=name, arguments=arguments)
+            for key, name, arguments in calls]))
+        for key, name, arguments in calls:
+            seen[key] = await tools[name].on_invoke_tool(NS(tool_call_id=key), arguments)
+        kwargs["model_response_sink"](NS(response_id="r", output=[NS(type="message", id="a", role="assistant",
+            content=[NS(type="output_text", text="Done")])]))
+        return "Done"
+
+    runtime.runner = runner
+    conversation = create(m)
+    turn = submit(m, conversation)
+    # Each Chat tool call re-enumerates the whole catalog (one connection per visibility check),
+    # so two calls can pass the shared 10 s helper on a loaded machine.
+    deadline = monotonic() + 30
+    while (state := m.app.handle(method="GET", target=f"/conversations/{conversation}/turns/{turn}",
+                                 headers=m.headers).payload["state"]) in {"submitted", "running"}:
+        assert monotonic() < deadline, "Bounded test turn did not finish"
+        Event().wait(.05)
+    assert state == "completed"
+    catalog = [line for line in seen["instructions"].split("\n") if line.startswith("{")]
+    entries = [json.loads(line) for line in catalog if '"extension_id"' in line]
+    assert [(item["name"], item["extension_id"], item["source"]) for item in entries] == [
+        ("chat-notes", installed.extension_id, "skill")]
+    assert "third parties" in seen["instructions"]
+    assert "Read references/GUIDE.md first." in str(seen["load"])
+    assert "GUIDE CONTENT" in str(seen["read"])

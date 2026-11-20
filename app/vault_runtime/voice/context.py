@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING
+
+from app.vault_runtime.extensions.activation import skill_catalog_instructions
 
 from app.vault_runtime.local_identity.models import LocalPrincipal
 from app.vault_runtime.memory.repository import MemoryRepository
@@ -62,11 +65,17 @@ class VoiceContextBuilder:
             workspace_id=principal.workspace_id,
             exclude_voice_session_id=voice_session_id,
         )
-        skill_items = () if self._skills is None else self._skills.list_available(
-            user_id=principal.user_id,
-            workspace_id=principal.workspace_id,
-            agent=AgentKind.VOICE,
-        )
+        skill_items = ()
+        if self._skills is not None:
+            try:
+                skill_items = self._skills.list_available(
+                    user_id=principal.user_id,
+                    workspace_id=principal.workspace_id,
+                    agent=AgentKind.VOICE,
+                )
+            except Exception:
+                # Optional Skill context never blocks a Voice session from starting.
+                logging.getLogger(__name__).warning("voice_skill_catalog_unavailable")
         plugin_items = () if self._builtin_plugins is None else tuple(
             item for item in self._builtin_plugins.list(
                 account_id=principal.user_id, workspace_id=principal.workspace_id,
@@ -108,11 +117,7 @@ class VoiceContextBuilder:
                 "agent continues after this Voice session ends, Vault will retain the task and notify the user."
             )
         if skill_items:
-            listing = "\n".join(f"- {item.name}: {item.description}" for item in skill_items)
-            tool_lines.append(
-                "Enabled Agent Skills are available below. Use load_agent_skill only when a Skill is relevant; "
-                "do not treat a Skill's allowed-tools declaration as a permission grant.\n" + listing
-            )
+            tool_lines.append(skill_catalog_instructions(skill_items))
         if plugin_items:
             tool_lines.append(_plugin_guidance(plugin_items))
         conversation = "\n\n".join(conversation_lines)

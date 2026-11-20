@@ -116,9 +116,20 @@ class ResumableBackgroundExecutor:
         self._sdk_version = sdk_version
         # Reasoning summaries and phase evidence for the Background work detail (owner decision 5-D).
         self._run_events = RunEventWriter(database_url=database_url) if database_url else None
+        # SkillActivation (composition sets it): the run owner's granted Skill catalog.
+        self.skills: Any = None
 
     def attach_jobs(self, jobs: Any) -> None:
         self._jobs = jobs
+
+    def _skill_catalog(self, scope: Any, tool_names: set[str]) -> str:
+        """Granted Skill catalog for this run, only when the run is supplied the loader."""
+        if self.skills is None or "load_agent_skill" not in tool_names:
+            return ""
+        text = self.skills.catalog_instructions(
+            user_id=scope.user_id, workspace_id=scope.workspace_id, agent=AgentKind.BACKGROUND,
+        )
+        return "\n\n" + text if text else ""
 
     async def __call__(self, attempt: Any) -> ExecutionOutcome:
         """Adapter for BackgroundJobs._dispatch(attempt)."""
@@ -448,9 +459,12 @@ class ResumableBackgroundExecutor:
                                                   summaries=summaries)
                 check_step_guards()
 
+        skill_catalog = await asyncio.to_thread(
+            self._skill_catalog, scope, {str(item["name"]) for item in tools.definitions()},
+        )
         agent = Agent(
             name="ReSono Background Agent",
-            instructions=background_instructions(request),
+            instructions=background_instructions(request) + skill_catalog,
             model=model_obj,
             model_settings=ModelSettings(
                 reasoning=Reasoning(effort="medium", summary="auto"),
@@ -771,6 +785,9 @@ class ResumableBackgroundExecutor:
             if checkpoint is not None and isinstance(checkpoint.get("memories"), list)
             else await asyncio.to_thread(self._memory_context, request, scope=scope)
         )
+        skill_catalog = await asyncio.to_thread(
+            self._skill_catalog, scope, {str(item["name"]) for item in tools.definitions()},
+        )
         declarations = [{
             "name": str(item["name"]),
             "description": str(item["description"]),
@@ -845,7 +862,7 @@ class ResumableBackgroundExecutor:
             while turns_used < request.limits.max_model_turns:
                 check_step_guards()
                 body: dict[str, object] = {
-                    "systemInstruction": {"parts": [{"text": background_instructions(request) + " Return only the required JSON object when complete."}]},
+                    "systemInstruction": {"parts": [{"text": background_instructions(request) + " Return only the required JSON object when complete." + skill_catalog}]},
                     "contents": contents,
                     **({"tools": [{"functionDeclarations": declarations}]} if declarations else {}),
                     "generationConfig": {"temperature": 0.2},

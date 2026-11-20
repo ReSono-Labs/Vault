@@ -333,6 +333,6 @@ def _tool_category(tool_id: str, name: str) -> str:
             return category
     if name == "web_search":
         return "Web"
-    if name == "load_agent_skill":
+    if name in {"load_agent_skill", "read_agent_skill_resource"}:
         return "Skills"
     return "Other"
