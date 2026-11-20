@@ -37,6 +37,14 @@ All notable changes to Vault are listed here. The version comes from
   own error is returned even when it declares an output schema, and images, audio and
   resources are described instead of dropped. Both starters now run a server that
   speaks both revisions, and both pass against the official MCP Python SDK client.
+- **MCP sign-in and personal accounts:** Vault implements the MCP authorization flow
+  (OAuth 2.1 with PKCE, protected resource and authorization server discovery, the
+  `resource` indicator, issuer checks, registration, refresh, revocation, scope
+  step-up), tested against the official MCP Python SDK's authorization server.
+  Credentials for remote MCP connections are now personal: a tool runs with the
+  caller's own account, a shared account exists only when the device owner shares one
+  and grants it, and nobody's call falls back to another person's account. Tokens
+  saved before this release become the personal token of whoever saved them.
 - **Docs:** hosted executable plugins are described as trusted code with Vault's
   access until OS confinement exists.
 

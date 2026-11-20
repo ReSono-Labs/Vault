@@ -16,6 +16,7 @@ from app.vault_runtime.email.runtime import LocalEmailRuntime
 from app.vault_runtime.personal_data import PersonalDataRepository
 from app.vault_runtime.calendar.runtime import LocalCalendarRuntime
 from app.vault_runtime.extensions.repository import ExtensionRepository
+from app.vault_runtime.extensions.mcp_accounts import McpAccounts
 from app.vault_runtime.extensions.secrets import ExtensionSecretStore
 from app.vault_runtime.extensions.service import ExtensionImportService
 from app.vault_runtime.extensions.mcp_lifecycle import McpLifecycle
@@ -88,6 +89,7 @@ class VaultLocalApiApp(
         extension_imports: ExtensionImportService | None = None,
         extensions: ExtensionRepository | None = None,
         extension_secrets: ExtensionSecretStore | None = None,
+        mcp_accounts: McpAccounts | None = None,
         mcp_lifecycle: McpLifecycle | None = None,
         voice_provider_credentials: VoiceProviderCredentialStore | None = None,
         provider_oauth: ProviderOAuthService | None = None,
@@ -127,6 +129,7 @@ class VaultLocalApiApp(
         self._extension_imports = extension_imports
         self._extensions = extensions
         self._extension_secrets = extension_secrets
+        self._mcp_accounts = mcp_accounts
         self._mcp_lifecycle = mcp_lifecycle
         self._voice_provider_credentials = voice_provider_credentials
         self._provider_oauth = provider_oauth

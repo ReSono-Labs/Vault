@@ -22,13 +22,17 @@ from app.vault_runtime.tools.definitions import ToolDefinition, ToolInvocationCo
 
 
 McpClientFactory = Callable[[ExtensionRecord, ToolInvocationContext], McpClient]
+# After a 401/403: a message for the person, or None when their sign-in was renewed (retry once).
+AuthRefused = Callable[[ExtensionRecord, ToolInvocationContext, McpAuthError], "str | None"]
 
 
 class McpLifecycle:
-    def __init__(self, *, repository: ExtensionRepository, catalog: ToolCatalog, client_factory: McpClientFactory) -> None:
+    def __init__(self, *, repository: ExtensionRepository, catalog: ToolCatalog, client_factory: McpClientFactory,
+                 auth_refused: AuthRefused | None = None) -> None:
         self._repository = repository
         self._catalog = catalog
         self._client_factory = client_factory
+        self._auth_refused = auth_refused
         self._sources_by_extension: dict[str, set[str]] = {}
 
     def client_for(self, connection: ExtensionRecord, context: ToolInvocationContext) -> McpClient:
@@ -134,17 +138,30 @@ class McpLifecycle:
                 return ToolInvocationResult("Tool grant was revoked.", is_error=True)
             if not connection_executable(connection.configuration):
                 return ToolInvocationResult("MCP connection uses an unsupported transport.", is_error=True)
-            try:
+            def call() -> dict[str, object]:
                 client = self._client_factory(connection, context)
                 client.initialize()
-                result = client.call_tool(remote_name, arguments, input_schema=input_schema)
+                return client.call_tool(remote_name, arguments, input_schema=input_schema)
+
+            try:
+                try:
+                    result = call()
+                except McpAuthError as refused:
+                    # The server refused before running anything, so one retry after a renewed
+                    # sign-in cannot repeat the action.
+                    message = (self._auth_refused(connection, context, refused) if self._auth_refused
+                               else "MCP server refused the credentials. Reconnect this connection's account.")
+                    if message is not None:
+                        return ToolInvocationResult(message, is_error=True)
+                    result = call()
             except McpTimeoutError:
                 return ToolInvocationResult(
                     "MCP server did not answer in time. The tool may still have run; check before retrying.",
                     is_error=True)
-            except McpAuthError:
+            except McpAuthError as refused:
+                message = self._auth_refused(connection, context, refused) if self._auth_refused else None
                 return ToolInvocationResult(
-                    "MCP server refused the credentials. Reconnect this connection's account.", is_error=True)
+                    message or "MCP server refused the credentials. Reconnect this connection's account.", is_error=True)
             except McpTransportError:
                 return ToolInvocationResult("MCP server could not be reached.", is_error=True)
             except McpProtocolError as exc:

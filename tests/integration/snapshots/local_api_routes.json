@@ -5156,6 +5156,84 @@
   },
   {
    "anonymous": {
+    "headers": [
+     [
+      "Location",
+      "/browser-voice.html?mcpSignIn=failed&reason=local_session_invalid"
+     ]
+    ],
+    "payload": {
+     "status": "redirect"
+    },
+    "status": 303
+   },
+   "auth": "none",
+   "csrf": false,
+   "owner": {
+    "headers": [
+     [
+      "Location",
+      "/browser-voice.html?mcpSignIn=failed&reason=sign_in_expired"
+     ]
+    ],
+    "payload": {
+     "status": "redirect"
+    },
+    "status": 303
+   },
+   "route": "GET /extensions/oauth/callback",
+   "target": "/extensions/oauth/callback?state=wrong&code=wrong",
+   "wrongCsrf": {
+    "headers": [
+     [
+      "Location",
+      "/browser-voice.html?mcpSignIn=failed&reason=sign_in_expired"
+     ]
+    ],
+    "payload": {
+     "status": "redirect"
+    },
+    "status": 303
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "Local session is required."
+     }
+    },
+    "status": 403
+   },
+   "auth": "session",
+   "csrf": false,
+   "owner": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "extension_not_found",
+      "message": "MCP connection is unavailable"
+     }
+    },
+    "status": 404
+   },
+   "route": "GET /extensions/{id}/account",
+   "target": "/extensions/<fake-id>/account",
+   "wrongCsrf": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "extension_not_found",
+      "message": "MCP connection is unavailable"
+     }
+    },
+    "status": 404
+   }
+  },
+  {
+   "anonymous": {
     "headers": [],
     "payload": {
      "error": {
@@ -5573,6 +5651,42 @@
    },
    "route": "POST /extensions/{id}/discover",
    "target": "/extensions/<fake-id>/discover",
+   "wrongCsrf": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "CSRF proof is invalid."
+     }
+    },
+    "status": 403
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "Local session is required."
+     }
+    },
+    "status": 403
+   },
+   "auth": "session",
+   "csrf": true,
+   "owner": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "extension_request_failed",
+      "message": "action is required."
+     }
+    },
+    "status": 400
+   },
+   "route": "POST /extensions/{id}/account",
+   "target": "/extensions/<fake-id>/account",
    "wrongCsrf": {
     "headers": [],
     "payload": {

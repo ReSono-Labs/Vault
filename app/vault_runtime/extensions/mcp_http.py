@@ -41,7 +41,12 @@ class McpTimeoutError(McpTransportError):
 
 
 class McpAuthError(McpProtocolError):
-    """The server refused the credentials (HTTP 401 or 403)."""
+    """The server refused the credentials (HTTP 401 or 403). ``challenge`` is its
+    ``WWW-Authenticate`` header, if any (sign-in discovery and scope step-up use it)."""
+
+    def __init__(self, message: str, *, status: int | None = None, challenge: str | None = None) -> None:
+        super().__init__(message, status=status)
+        self.challenge = challenge
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +137,8 @@ def post(endpoint: str, *, headers: dict[str, str], payload: dict[str, Any], req
                 message = _read_sse(response, request_id, max_bytes)
             else:
                 raw = _read_bounded(response, max_bytes)
-                message = _decode_message(raw, request_id) if raw.strip() else None
+                # A refusal (401/403) is about credentials whatever its body says.
+                message = _decode_message(raw, request_id) if raw.strip() and response.status_code not in (401, 403) else None
         finally:
             response.close()
     except httpx.TimeoutException as exc:
@@ -145,11 +151,66 @@ def post(endpoint: str, *, headers: dict[str, str], payload: dict[str, Any], req
     return HttpAnswer(response.status_code, answer_headers, message)
 
 
+@dataclass(frozen=True, slots=True)
+class FetchedDocument:
+    status: int
+    headers: dict[str, str]
+    body: bytes
+
+
+def fetch(url: str, *, method: str = "GET", headers: dict[str, str] | None = None,
+          form: dict[str, str] | None = None, json_body: Any = None, timeout_seconds: float = 15.0,
+          max_bytes: int = 1024 * 1024, require_https: bool = True, allow_local: bool = True) -> FetchedDocument:
+    """One request through the same destination check, DNS pinning, no-redirect rule and
+    byte limit as MCP traffic (used for sign-in discovery, registration and tokens).
+
+    ``require_https`` refuses plain HTTP except to this machine (OAuth 2.1 allows loopback).
+    ``allow_local=False`` also refuses this machine: addresses a remote server chose (its
+    sign-in server, say) must not reach Vault's own local services.
+    """
+    import httpx
+
+    parts = urlsplit(url)
+    if parts.scheme not in ("https", "http") or parts.fragment:
+        raise McpTransportError("URL is invalid")
+    if not allow_local and _is_extension_local_name(parts.hostname or ""):
+        raise McpTransportError("A remote server may not send Vault to this machine")
+    if require_https and parts.scheme != "https" and not _is_extension_local_name(parts.hostname or ""):
+        raise McpTransportError("Sign-in servers must use HTTPS")
+    target, host_header, server_name = _pinned_target(url)
+    send = dict(headers or {})
+    if host_header is not None:
+        send = merge_headers(send, {"Host": host_header})
+    extensions = {"sni_hostname": server_name} if server_name and target.startswith("https://") else {}
+    content: bytes | None = None
+    if form is not None:
+        from urllib.parse import urlencode
+        content = urlencode(form).encode()
+        send = merge_headers(send, {"Content-Type": "application/x-www-form-urlencoded"})
+    elif json_body is not None:
+        content = json.dumps(json_body, separators=(",", ":")).encode()
+        send = merge_headers(send, {"Content-Type": "application/json"})
+    try:
+        with httpx.Client(timeout=timeout_seconds, follow_redirects=False) as client:
+            request = client.build_request(method, target, headers=send, content=content, extensions=extensions)
+            response = client.send(request, stream=True)
+            try:
+                body = _read_bounded(response, max_bytes)
+            finally:
+                response.close()
+    except httpx.TimeoutException as exc:
+        raise McpTimeoutError("Server did not answer in time") from exc
+    except httpx.HTTPError as exc:
+        raise McpTransportError("Server is unreachable") from exc
+    return FetchedDocument(response.status_code, {k.lower(): v for k, v in response.headers.items()}, body)
+
+
 def result_of(answer: HttpAnswer) -> dict[str, Any]:
     """The JSON-RPC result, or the matching error: auth, protocol (with code) or HTTP."""
     message = answer.message
     if answer.status in (401, 403):
-        raise McpAuthError("MCP server refused the credentials", status=answer.status)
+        raise McpAuthError("MCP server refused the credentials", status=answer.status,
+                           challenge=answer.headers.get("www-authenticate"))
     if isinstance(message, dict) and isinstance(message.get("error"), dict):
         error = message["error"]
         code = error.get("code") if isinstance(error.get("code"), int) else None

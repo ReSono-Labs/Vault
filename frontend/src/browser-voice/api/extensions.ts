@@ -38,7 +38,32 @@ export type BuiltinPlugin = {
   updatedAt: string | null;
 };
 
+export type McpAccountStatus = {
+  account: "personal" | "shared" | "none";
+  kind: "headers" | "oauth" | null;
+  expiresAt: number | null;
+  scope: string | null;
+  renewable?: boolean;
+  updatedAt?: string | null;
+  isSharedAccount: boolean;
+  sharedAccountAvailable: boolean;
+  sharedWith?: string[];
+};
+
+type McpAccountAction =
+  | { action: "sign-in"; redirectUri: string }
+  | { action: "disconnect" }
+  | { action: "share"; shared: boolean }
+  | { action: "share-grant"; userId: string; granted: boolean }
+  | { action: "client"; clientId: string; clientSecret?: string };
+
 export const extensionsApi = {
+  mcpAccount: (extensionId: string) =>
+    request<McpAccountStatus>(`/extensions/${encodeURIComponent(extensionId)}/account`),
+  mcpAccountAction: <T = McpAccountStatus>(extensionId: string, body: McpAccountAction) =>
+    request<T>(`/extensions/${encodeURIComponent(extensionId)}/account`, {
+      method: "POST", body: JSON.stringify(body),
+    }),
   extensions: () => request<{ items: LocalExtension[] }>("/extensions"),
   pluginConnections: (extensionId: string) => request<{ items: LocalExtension[] }>(
     `/extensions/${encodeURIComponent(extensionId)}/connections`,

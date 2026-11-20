@@ -37,7 +37,7 @@ export function BrowserVoiceApp() {
   const [destination, setDestination] =
     useState<BrowserVoiceDestination>(() => {
       const query = new URLSearchParams(window.location.search);
-      return query.has("memoryPairing") ? "memory" : query.has("providerOAuth") ? "connections" : "home";
+      return query.has("memoryPairing") ? "memory" : query.has("providerOAuth") ? "connections" : query.has("mcpSignIn") ? "capabilities" : "home";
     });
   useEffect(() => { if (destination === "chat") setChatMounted(true); }, [destination]);
   const [error, setError] = useState<string | null>(null);

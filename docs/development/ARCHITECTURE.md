@@ -51,7 +51,7 @@ Hermes / OpenClaw    ── HTTPS :8765 ───────►│
 | `app/vault_runtime/tasks/`, `tasks_tools.py`, `notifications/` | Tasks and notifications |
 | `app/vault_runtime/folders/`, `workspace_files/`, `workspace_storage.py`, `workspace_paths.py` | Host folders shared with users, workspace files and per-workspace storage |
 | `app/vault_runtime/commands/` | Command-line tools for agents, confined with Landlock |
-| `app/vault_runtime/extensions/` | Plugin, Skill and MCP import, review, lifecycle, MCP client (`mcp_client` picks the era; `mcp_modern` 2026-07-28 and `mcp_legacy` 2025-11-25 share `mcp_http`) and supervisor, secrets |
+| `app/vault_runtime/extensions/` | Plugin, Skill and MCP import, review, lifecycle, MCP client (`mcp_client` picks the era; `mcp_modern` 2026-07-28 and `mcp_legacy` 2025-11-25 share `mcp_http`), MCP sign-in (`mcp_oauth` protocol, `mcp_accounts` personal and shared credentials), supervisor, secrets |
 | `app/vault_runtime/builtin_plugins.py`, `builtin_plugin_tools.py` | Built-in plugins |
 | `app/vault_runtime/agent_network/` | Agent2Agent (A2A) client, inbound server and collaboration tools |
 | `app/vault_runtime/external_memory/` | Scoped memory API for the Hermes and OpenClaw adapters |
@@ -271,8 +271,8 @@ same `invoke` path the agent uses.
   - `extensions/`: imported packages, with a `quarantine/` folder;
   - `keys/`, `config/` and `tls/`;
   - `runtime/commands/`: scratch space for command runs.
-- **Credentials** (provider keys, mail, calendar, A2A, extension secrets) are
-  encrypted with AES-GCM. `extensions/secrets.LocalMasterKey` keeps one key file
+- **Credentials** (provider keys, mail, calendar, A2A, extension secrets, MCP
+  accounts) are encrypted with AES-GCM. `extensions/secrets.LocalMasterKey` keeps one key file
   per domain in `keys/`. Provider keys are never returned to the browser.
 
 ## Extensions
@@ -392,6 +392,7 @@ when developing:
 | `RESONO_VAULT_LINK_CHAT_RESPONDER` | `coordinator` | Who answers Link chat |
 | `RESONO_VAULT_DEVICE_LOCATIONS` | empty | Host folders Vault can offer; empty hides Folders |
 | `RESONO_VAULT_GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | unset | Gemini sign-in |
+| `RESONO_VAULT_MCP_OAUTH_CLIENT_METADATA_URL` | unset | HTTPS Client ID Metadata Document for MCP sign-in |
 
 These switches are on in production (`from_env`) and can be turned off in an
 emergency: `RESONO_VAULT_DECISION_REVIEW_ENABLED`, `_INDEXED_MEMORY_ENABLED`,

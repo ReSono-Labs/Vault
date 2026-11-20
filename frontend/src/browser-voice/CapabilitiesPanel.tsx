@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { localApi, type BuiltinPlugin, type LocalExtension, type LocalTool } from "@/browser-voice/localApi";
 import { importMcpPackageFile, mcpPackageRemoveMessage, mcpPackageRowSubtitle } from "@/browser-voice/mcpPackageFlow";
 import { importPluginFile, pluginRemoveMessage } from "@/browser-voice/pluginPackageFlow";
@@ -6,6 +6,7 @@ import {
   registerPluginImportCompleteHandler,
   setPendingPluginImport,
 } from "@/browser-voice/pluginImportUi";
+import { McpAccountControl } from "@/browser-voice/McpAccountControl";
 import { McpPackageSetup } from "@/browser-voice/McpPackageSetup";
 import { ToolGrantTable } from "@/browser-voice/ToolGrantTable";
 import { BrowserVoiceAgentsIcon } from "@/browser-voice/presentation/BrowserVoiceIcons";
@@ -27,6 +28,18 @@ export function CapabilitiesPanel() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [isDeviceOwner, setIsDeviceOwner] = useState(false);
+  useEffect(() => { void localApi.me().then((me) => setIsDeviceOwner(me.user.isDeviceOwner)).catch(() => undefined); }, []);
+  useEffect(() => {
+    // Back from an MCP sign-in (see /extensions/oauth/callback).
+    const query = new URLSearchParams(window.location.search);
+    const outcome = query.get("mcpSignIn");
+    if (!outcome) return;
+    if (outcome === "connected") setMessage("Signed in. Tools on this connection now use your account.");
+    else setError(`Sign-in did not finish (${query.get("reason") ?? "unknown reason"}). Try again.`);
+    query.delete("mcpSignIn"); query.delete("reason"); query.delete("extension");
+    window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}`);
+  }, []);
 
   useEffect(() => {
     registerPluginImportCompleteHandler(async (result) => {
@@ -254,7 +267,8 @@ export function CapabilitiesPanel() {
           </details>
         )) : null}
         {kind !== "plugin" && kind !== "tool" ? kindItems.map((item) => (
-          <article className={`browser-voice-agent-row is-${item.state === "enabled" ? "on" : "off"}`} key={item.extensionId}>
+          <Fragment key={item.extensionId}>
+          <article className={`browser-voice-agent-row is-${item.state === "enabled" ? "on" : "off"}`}>
             {item.kind === "mcp" && item.configuration.packageType === "hosted" ? (
               <button className="browser-voice-agent-row-main browser-voice-plugin-open" onClick={() => setOpenMcp(item)} type="button">
                 <span className="browser-voice-agent-mark"><BrowserVoiceAgentsIcon /></span>
@@ -276,6 +290,9 @@ export function CapabilitiesPanel() {
             )}
             <span className="browser-voice-capability-actions"><button aria-label={`Turn ${item.displayName} ${item.state === "enabled" ? "off" : "on"}`} aria-pressed={item.state === "enabled"} className="browser-voice-agent-switch" disabled={working} onClick={() => void toggle(item)} role="switch" type="button"><span /></button><button className="browser-voice-pill browser-voice-pill-muted" disabled={working} onClick={() => void remove(item)} type="button">Remove</button></span>
           </article>
+          {item.kind === "mcp" && item.configuration.packageType !== "hosted" && item.state === "enabled"
+            ? <McpAccountControl extensionId={item.extensionId} isDeviceOwner={isDeviceOwner} /> : null}
+          </Fragment>
         )) : null}
         {showEmptyList ? (
           <p className="browser-voice-management-empty">
@@ -301,7 +318,8 @@ function ImportedPluginSetup({ item, onBack, onChanged }: { item: LocalExtension
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { void Promise.all([localApi.pluginConnections(item.extensionId), localApi.me()]).then(([result, me]) => { setConnections(result.items); setUserId(me.user.userId); }).catch((caught) => setError(caught instanceof Error ? caught.message : "Plugin details could not be loaded.")); }, [item.extensionId]);
+  const [isOwner, setIsOwner] = useState(false);
+  useEffect(() => { void Promise.all([localApi.pluginConnections(item.extensionId), localApi.me()]).then(([result, me]) => { setConnections(result.items); setUserId(me.user.userId); setIsOwner(me.user.isDeviceOwner); }).catch((caught) => setError(caught instanceof Error ? caught.message : "Plugin details could not be loaded.")); }, [item.extensionId]);
   const set = (key: string, value: unknown) => setValues((current) => ({ ...current, [key]: value }));
   async function save() { setWorking(true); setError(null); try { await localApi.savePluginSettings(item.extensionId, values); setMessage("Plugin settings saved."); await onChanged(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Settings could not be saved."); } finally { setWorking(false); } }
   async function discover(connection: LocalExtension) { setWorking(true); setError(null); try { const result = await localApi.discoverPluginTools(connection.extensionId); setTools((current) => ({ ...current, [connection.extensionId]: result.items })); setMessage(result.items.length ? "Tools are ready for you to choose." : "This connection did not report any tools."); } catch (caught) { setError(caught instanceof Error ? caught.message : "Vault could not reach this plugin service."); } finally { setWorking(false); } }
@@ -310,7 +328,7 @@ function ImportedPluginSetup({ item, onBack, onChanged }: { item: LocalExtension
     <div className="browser-voice-section-head"><div><span className="browser-voice-eyebrow-label">Added to this Vault</span><h3>{item.displayName}</h3><p>{item.description}</p></div><span className={`browser-voice-state ${item.state === "enabled" ? "is-ready" : ""}`}>{item.state === "enabled" ? "On" : "Off"}</span></div>
     {error ? <div className="browser-voice-management-error" role="alert">{error}</div> : null}{message ? <p className="browser-voice-management-message" role="status">{message}</p> : null}
     {(schema?.fields?.length ?? 0) > 0 ? <form className="browser-voice-form" onSubmit={(event) => { event.preventDefault(); void save(); }}><h4>Settings</h4>{schema!.fields!.map((field) => <PluginFieldControl field={field} key={field.key} set={set} value={values[field.key]} />)}<button className="browser-voice-submit" disabled={working} type="submit">{working ? "Saving…" : "Save settings"}</button></form> : null}
-    {connections.length ? <div className="browser-voice-form"><h4>Tools</h4><p className="browser-voice-form-note">Start the plugin service, then check tools. Mark Voice and Background, choose Read or Read &amp; write, then save.</p>{connections.map((connection) => <div className="browser-voice-plugin-connection" key={connection.extensionId}><div className="browser-voice-section-head"><div><strong>{connection.displayName}</strong><small>{connection.description}</small></div><button className="browser-voice-pill" disabled={working || item.state !== "enabled"} onClick={() => void discover(connection)} type="button">Check tools</button></div><ToolGrantTable extensionId={connection.extensionId} onError={setError} onMessage={setMessage} onWorking={setWorking} tools={tools[connection.extensionId] ?? []} userId={userId} working={working} /></div>)}</div> : <p className="browser-voice-management-empty">This plugin contains instructions only. It does not add a connected tool.</p>}
+    {connections.length ? <div className="browser-voice-form"><h4>Tools</h4><p className="browser-voice-form-note">Start the plugin service, then check tools. Mark Voice and Background, choose Read or Read &amp; write, then save.</p>{connections.map((connection) => <div className="browser-voice-plugin-connection" key={connection.extensionId}><div className="browser-voice-section-head"><div><strong>{connection.displayName}</strong><small>{connection.description}</small></div><button className="browser-voice-pill" disabled={working || item.state !== "enabled"} onClick={() => void discover(connection)} type="button">Check tools</button></div><McpAccountControl extensionId={connection.extensionId} isDeviceOwner={isOwner} /><ToolGrantTable extensionId={connection.extensionId} onError={setError} onMessage={setMessage} onWorking={setWorking} tools={tools[connection.extensionId] ?? []} userId={userId} working={working} /></div>)}</div> : <p className="browser-voice-management-empty">This plugin contains instructions only. It does not add a connected tool.</p>}
   </section>;
 }
 

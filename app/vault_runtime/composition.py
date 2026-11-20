@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from threading import Thread
 
@@ -11,6 +12,7 @@ import psycopg
 from app.vault_runtime.extensions.archives import ArchiveInspector
 from app.vault_runtime.extensions.activation import SkillActivation
 from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
+from app.vault_runtime.extensions.mcp_accounts import McpAccounts, is_hosted
 from app.vault_runtime.extensions.mcp_client import HttpMcpTransport, McpClient, McpProtocolError
 from app.vault_runtime.extensions.mcp_rules import connection_executable
 from app.vault_runtime.extensions.mcp_lifecycle import McpLifecycle
@@ -459,6 +461,15 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         repository=extensions,
         master_key=LocalMasterKey(data_root / "keys" / "extension-credentials.key"),
     )
+    mcp_accounts = McpAccounts(
+        repository=extensions,
+        master_key=LocalMasterKey(data_root / "keys" / "extension-credentials.key"),
+        # A Client ID Metadata Document URL, when this Vault has one published over HTTPS.
+        client_metadata_url=os.environ.get("RESONO_VAULT_MCP_OAUTH_CLIENT_METADATA_URL") or None,
+    )
+    migrated = mcp_accounts.migrate_connection_headers()
+    if migrated:
+        logging.getLogger(__name__).info("mcp_credentials_made_personal moved=%d", migrated)
     mcp_runtime = McpRuntimeSupervisor(
         repository=extensions, secrets=extension_secrets, extension_root=extension_root,
     )
@@ -480,9 +491,15 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         public_headers = configuration.get("headers", {})
         if not isinstance(endpoint, str) or not isinstance(public_headers, dict):
             raise ValueError("MCP connection configuration is invalid")
+        # Hosted packages: the package's own service secret. Remote connections: only the
+        # caller's personal credential or a shared account they were granted, never another
+        # person's (decision record 2026-11-20).
         credential_headers = extension_secrets.resolve_headers(
             user_id=context.user_id, workspace_id=context.workspace_id,
             extension_id=connection.extension_id,
+        ) if is_hosted(configuration) else mcp_accounts.headers_for(
+            user_id=context.user_id, workspace_id=context.workspace_id,
+            extension_id=connection.extension_id, endpoint=endpoint,
         )
         capability = plugin_services.issue_for_connection(
             connection=connection, user_id=context.user_id,
@@ -503,8 +520,18 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
             credential_headers=credential_headers, vault_headers=invocation_headers,
         ))
 
+    def mcp_auth_refused(connection, context, error):
+        if is_hosted(connection.configuration):
+            return "The hosted MCP package refused Vault's token. Check the package settings."
+        endpoint = connection.configuration.get("endpoint") or connection.configuration.get("url")
+        return mcp_accounts.explain_rejection(
+            user_id=context.user_id, workspace_id=context.workspace_id,
+            extension_id=connection.extension_id, endpoint=str(endpoint), error=error,
+        )
+
     mcp_lifecycle = McpLifecycle(
         repository=extensions, catalog=catalog, client_factory=mcp_client,
+        auth_refused=mcp_auth_refused,
     )
     if direct_runs is not None:
         direct_runs.attach_tool_restore(lambda user_id, workspace_id: mcp_lifecycle.restore_scope(
@@ -655,7 +682,7 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         voice_coordinator=coordinator, voice_sessions=voices,
         provider_credential_resolver=provider_credentials.resolve,
         extension_imports=extension_imports, extensions=extensions,
-        extension_secrets=extension_secrets, mcp_lifecycle=mcp_lifecycle,
+        extension_secrets=extension_secrets, mcp_accounts=mcp_accounts, mcp_lifecycle=mcp_lifecycle,
         voice_provider_credentials=provider_credentials,
         provider_oauth=provider_oauth,
         email_runtime=email_runtime,

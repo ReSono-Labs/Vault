@@ -161,6 +161,9 @@ ROUTES: tuple[Route, ...] = (
     R("GET", "/extensions"),
     R("GET", "/extensions/{id}/connections"),
     R("GET", "/extensions/{id}/grants"),
+    # MCP sign-in: the browser returns here; the state and the signed-in person must match.
+    R("GET", "/extensions/oauth/callback", "none", query="state=wrong&code=wrong"),
+    R("GET", "/extensions/{id}/account"),
     R("GET", "/extensions/runtime"),
     R("POST", "/extensions/skills/preflight"),
     R("POST", "/extensions/plugins/preflight"),
@@ -173,6 +176,7 @@ ROUTES: tuple[Route, ...] = (
     R("POST", "/extensions/{id}/credentials"),
     R("POST", "/extensions/{id}/settings"),
     R("POST", "/extensions/{id}/discover"),
+    R("POST", "/extensions/{id}/account"),
     R("DELETE", "/extensions/{id}/unknown"),
     # Built-in plugins.
     R("GET", "/builtin-plugins"),

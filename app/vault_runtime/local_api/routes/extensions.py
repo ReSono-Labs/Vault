@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 from typing import Any, Mapping
-from urllib.parse import SplitResult
+from urllib.parse import SplitResult, parse_qs, urlencode
 
 from app.vault_runtime.tools.strict_json import STRICT_JSON_MAX_BYTES
 from app.vault_runtime.system_agents.inventory import AgentKind
@@ -14,6 +14,8 @@ from app.vault_runtime.extensions.mcp_rules import merge_headers
 from app.vault_runtime.extensions.vault_manifest import validate_settings
 from app.vault_runtime.extensions.mcp_package_manifest import validate_mcp_package_settings
 from app.vault_runtime.extensions.mcp_runtime import McpRuntimeError
+from app.vault_runtime.extensions.mcp_accounts import CALLBACK_PATH, is_hosted
+from app.vault_runtime.extensions.mcp_oauth import McpSignInError
 from .common import (
     LocalApiResponse,
     _csrf_token,
@@ -32,6 +34,8 @@ class ExtensionRoutes:
         self, *, method: str, path: str, target_parts: SplitResult, headers: Mapping[str, str], body: bytes,
     ) -> LocalApiResponse:
         try:
+            if path == CALLBACK_PATH and method.upper() == "GET":
+                return self._mcp_sign_in_callback(query=target_parts.query, headers=headers)
             return self._handle_extensions(
                 method=method.upper(), path=path, headers=headers, body=body,
             )
@@ -41,11 +45,58 @@ class ExtensionRoutes:
                 status = 404
             elif code == "extension_conflict":
                 status = 409
-            elif isinstance(exc, ValueError):
+            elif isinstance(exc, (ValueError, McpSignInError)):
                 status = 400
             else:
                 status = 403
             return LocalApiResponse(status, {"error": {"code": code, "message": str(exc)}})
+
+    def _mcp_sign_in_callback(self, *, query: str, headers: Mapping[str, str]) -> LocalApiResponse:
+        """The browser returns here from the sign-in server. The session must be the person
+        who started the sign-in; the state ties the code to that start."""
+        values = parse_qs(query, keep_blank_values=True)
+        first = lambda name: (values.get(name) or [None])[0]  # noqa: E731
+        try:
+            if self._identity_service is None or self._mcp_accounts is None:
+                raise RuntimeError("MCP sign-in is unavailable.")
+            principal = self._identity_service.authenticate(session_token=_session_token(headers))
+            extension_id = self._mcp_accounts.complete_sign_in(
+                user_id=principal.user_id, state=first("state") or "", code=first("code"),
+                iss=first("iss"), error=first("error"),
+            )
+            target = "/browser-voice.html?" + urlencode({"mcpSignIn": "connected", "extension": extension_id})
+        except Exception as exc:
+            reason = getattr(exc, "code", "sign_in_failed")
+            target = "/browser-voice.html?" + urlencode({"mcpSignIn": "failed", "reason": str(reason)[:64]})
+        return LocalApiResponse(303, {"status": "redirect"}, (("Location", target),))
+
+    def _mcp_account(self, *, method: str, principal: Any, extension_id: str,
+                     payload: dict[str, Any] | None) -> LocalApiResponse:
+        accounts = self._mcp_accounts
+        if accounts is None:
+            raise RuntimeError("MCP sign-in is unavailable.")
+        scope = {"workspace_id": principal.workspace_id, "extension_id": extension_id}
+        if method == "GET":
+            return LocalApiResponse(200, accounts.status(user_id=principal.user_id, **scope))
+        assert payload is not None
+        action = _required_text(payload, "action")
+        if action == "sign-in":
+            return LocalApiResponse(200, accounts.start_sign_in(
+                user_id=principal.user_id, redirect_uri=_required_text(payload, "redirectUri"), **scope))
+        if action == "disconnect":
+            accounts.disconnect(user_id=principal.user_id, **scope)
+        elif action == "share":
+            accounts.set_shared(actor_user_id=principal.user_id, shared=_required_bool(payload, "shared"), **scope)
+        elif action == "share-grant":
+            accounts.set_shared_grant(actor_user_id=principal.user_id, target_user_id=_required_text(payload, "userId"),
+                                      granted=_required_bool(payload, "granted"), **scope)
+        elif action == "client":
+            return LocalApiResponse(200, accounts.set_manual_client(
+                actor_user_id=principal.user_id, client_id=_required_text(payload, "clientId"),
+                client_secret=_optional_text(payload, "clientSecret"), **scope))
+        else:
+            raise ValueError("Account action is invalid.")
+        return LocalApiResponse(200, accounts.status(user_id=principal.user_id, **scope))
 
     def _handle_extensions(
         self, *, method: str, path: str, headers: Mapping[str, str], body: bytes,
@@ -86,6 +137,9 @@ class ExtensionRoutes:
                 workspace_id=principal.workspace_id,
                 extension_id=extension_id,
             ))})
+        if method == "GET" and path.startswith("/extensions/") and path.endswith("/account"):
+            extension_id = path.removeprefix("/extensions/").removesuffix("/account").strip("/")
+            return self._mcp_account(method="GET", principal=principal, extension_id=extension_id, payload=None)
         if method == "GET" and path == "/extensions/runtime":
             # Owner-only (safe_mode checks device-owner scope): names blocked because
             # installs in different workspaces share name-keyed storage.
@@ -189,8 +243,10 @@ class ExtensionRoutes:
         if path.startswith("/extensions/"):
             suffix = path.removeprefix("/extensions/")
             extension_id, _, operation = suffix.partition("/")
-            if not extension_id or operation not in {"state", "grants", "credentials", "settings", "discover"}:
+            if not extension_id or operation not in {"state", "grants", "credentials", "settings", "discover", "account"}:
                 return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
+            if operation == "account":
+                return self._mcp_account(method="POST", principal=principal, extension_id=extension_id, payload=payload)
             if operation == "state":
                 current = repository.by_id(
                     actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
@@ -298,16 +354,7 @@ class ExtensionRoutes:
                     else:
                         secret_targets = (extension_id,)
                     for target_id in secret_targets:
-                        existing_headers = dict(self._extension_secrets.resolve_headers(
-                            user_id=principal.user_id, workspace_id=principal.workspace_id,
-                            extension_id=target_id,
-                        ))
-                        self._extension_secrets.set_headers(
-                            actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-                            extension_id=target_id,
-                            # Case-insensitive: a newer "Authorization" replaces "authorization".
-                            headers=merge_headers(existing_headers, secret_headers),
-                        )
+                        self._store_credential_headers(principal, target_id, secret_headers)
                 return LocalApiResponse(200, _extension_payload(record))
             if self._extension_secrets is None:
                 raise RuntimeError("Local extension credentials are unavailable.")
@@ -317,12 +364,35 @@ class ExtensionRoutes:
                 for key, value in secret_headers.items()
             ):
                 raise ValueError("headers must map strings to strings")
-            self._extension_secrets.set_headers(
-                actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-                extension_id=extension_id, headers=secret_headers,
-            )
+            self._store_credential_headers(principal, extension_id, secret_headers, replace=True)
             return LocalApiResponse(200, {"status": "credentials_updated"})
         return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
+
+    def _store_credential_headers(self, principal: Any, extension_id: str, secret_headers: dict[str, str],
+                                  *, replace: bool = False) -> None:
+        """A hosted package's service secret (device owner), or the caller's own credential
+        for a remote connection; other people never use it unless the owner shares it."""
+        record = self._extensions.by_id(
+            actor_user_id=principal.user_id, workspace_id=principal.workspace_id, extension_id=extension_id,
+        )
+        if is_hosted(record.configuration):
+            if self._extension_secrets is None:
+                raise RuntimeError("Local extension credentials are unavailable.")
+            existing = {} if replace else dict(self._extension_secrets.resolve_headers(
+                user_id=principal.user_id, workspace_id=principal.workspace_id, extension_id=extension_id,
+            ))
+            self._extension_secrets.set_headers(
+                actor_user_id=principal.user_id, workspace_id=principal.workspace_id, extension_id=extension_id,
+                # Case-insensitive: a newer "Authorization" replaces "authorization".
+                headers=merge_headers(existing, secret_headers),
+            )
+            return
+        if self._mcp_accounts is None:
+            raise RuntimeError("Local extension credentials are unavailable.")
+        self._mcp_accounts.set_personal_headers(
+            user_id=principal.user_id, workspace_id=principal.workspace_id, extension_id=extension_id,
+            headers=secret_headers,
+        )
 
     def _route_builtin_plugins(
         self, *, method: str, path: str, target_parts: SplitResult, headers: Mapping[str, str], body: bytes,

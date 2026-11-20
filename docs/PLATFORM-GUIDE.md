@@ -829,7 +829,40 @@ only Voice and/or Background; they do not register agents.
   Tool results may carry text, images, audio, resource links and embedded resources;
   non-text parts are described to the agent. A timed-out call is reported and never
   repeated, because the tool may already have run.
+- **MCP accounts:** a token pasted for a remote MCP connection, or a sign-in through
+  the MCP authorization flow, belongs to the person who added it, and only that
+  person's calls use it. See [MCP sign-in and accounts](#mcp-sign-in-and-accounts).
 - **A2A:** outbound Agent2Agent JSON-RPC protocol version 1.0 with Agent Cards.
+
+### MCP sign-in and accounts
+
+Some MCP servers need you to sign in to the service behind them (a CRM, a mailbox).
+Open the connection under **Library → MCP** (or the plugin that contains it) and
+choose **Sign in**. Vault follows the MCP authorization flow (OAuth 2.1): it reads the
+server's sign-in details, opens the service's sign-in page, and stores the token it
+gets back, encrypted, for you alone. It renews the token before it expires and revokes
+it when you choose **Disconnect**.
+
+- **Personal by default.** Each person signs in with their own account. A granted tool
+  runs with the caller's account and never with someone else's.
+- **Shared accounts on purpose.** The device owner can share their own sign-in for a
+  connection (**Share this account**) and pick who may use it. It is labelled
+  **Shared** for them. Your own sign-in always takes precedence over a shared one.
+- **No fallback.** If you have no sign-in, or it expired and cannot be renewed, the
+  tool answers "sign in" and does nothing.
+- **Tokens stay with their server.** A token is sent only to the server it was issued
+  for; if the connection's address changes, you are asked to sign in again. The
+  service's sign-in pages must use HTTPS, and a remote server cannot point Vault's
+  sign-in at this machine.
+- **More permissions.** When a tool needs more access, it says so; the next
+  **Sign in** asks for the earlier permissions plus the new ones.
+- **Registering Vault with a service.** Vault registers itself automatically where the
+  service allows it. Otherwise the device owner enters a client ID created at the
+  provider, using the return address `https://<your Vault address>/extensions/oauth/callback`.
+
+Tokens pasted before this release become the personal token of whoever saved them.
+Hosted MCP packages keep their package settings; their token is for the package's own
+process, not for anyone's account.
 
 ### Import a Skill
 

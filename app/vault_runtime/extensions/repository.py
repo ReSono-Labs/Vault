@@ -499,6 +499,8 @@ class ExtensionRepository:
                     cursor.execute("DELETE FROM vault_private.vault_extension_components WHERE extension_id=%s", (extension_id,))
                     cursor.execute("DELETE FROM vault_private.vault_mcp_tools WHERE extension_id=%s", (extension_id,))
                     cursor.execute("DELETE FROM vault_private.vault_extension_secrets WHERE extension_id=%s", (extension_id,))
+                    cursor.execute("DELETE FROM vault_private.vault_extension_credential_grants WHERE extension_id=%s", (extension_id,))
+                    cursor.execute("DELETE FROM vault_private.vault_extension_credentials WHERE extension_id=%s", (extension_id,))
                 elif state is not ExtensionState.ENABLED:
                     cursor.execute("UPDATE vault_private.vault_extension_grants SET enabled=false,updated_at=now() WHERE extension_id=%s", (extension_id,))
                 self._event(cursor, extension_id, workspace_id, actor_user_id, state.value, {})

@@ -14,6 +14,7 @@ from app.core.security.tokens import hash_token
 from app.vault_runtime.extensions.archives import ArchiveInspector
 from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
 from app.vault_runtime.extensions.repository import ExtensionRepository
+from app.vault_runtime.extensions.mcp_accounts import McpAccounts
 from app.vault_runtime.extensions.secrets import ExtensionSecretStore, LocalMasterKey
 from app.vault_runtime.extensions.service import ExtensionImportService
 from app.vault_runtime.local_api.app import VaultLocalApiApp
@@ -60,9 +61,11 @@ def extension_api(tmp_path: Path):
     secrets = ExtensionSecretStore(
         repository=repository, master_key=LocalMasterKey(tmp_path / "extension.key"),
     )
+    accounts = McpAccounts(repository=repository, master_key=LocalMasterKey(tmp_path / "extension.key"))
     app = VaultLocalApiApp(
         store=Health(), token="unused", identity_service=identities,
         extension_imports=imports, extensions=repository, extension_secrets=secrets,
+        mcp_accounts=accounts,
     )
     headers = {
         "Cookie": f"resono_refresh={tokens.session_token}; resono_csrf={tokens.csrf_token}",
@@ -131,6 +134,10 @@ def test_mcp_credentials_never_echo_and_invalid_agent_is_rejected(extension_api)
     assert updated.payload == {"status": "credentials_updated"}
     assert credential not in json.dumps(updated.payload)
     assert credential not in json.dumps(app.handle(method="GET", target="/extensions", headers=headers).payload)
+    # The stored credential is the caller's own, and its status never shows the secret.
+    account = app.handle(method="GET", target=f"/extensions/{extension_id}/account", headers=headers)
+    assert account.payload["account"] == "personal" and account.payload["kind"] == "headers"
+    assert credential not in json.dumps(account.payload)
     invalid = _post(app, f"/extensions/{extension_id}/grants", {
         "targetUserId": tokens.principal.user_id, "agentKind": "build",
         "capabilityName": "tool", "enabled": True, "effectClass": "read",
