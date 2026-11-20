@@ -243,7 +243,10 @@ class ChatPreparationRuntime:
                     choices = learned[2].choices + tuple(c for c in choices if c.value not in known)
                     generation_id = learned[2].generation_id
                 contextual = ()
-                request = SelectionRequest(str(uuid4()), candidate.scope, candidate.identity, "provisional",
+                # A final (submitted) candidate carries its turn id; the selector contract
+                # rejects a "provisional" request that claims a turn, so name the phase.
+                phase = "provisional" if candidate.identity.turn_id is None else "final"
+                request = SelectionRequest(str(uuid4()), candidate.scope, candidate.identity, phase,
                     candidate.text, contextual, candidate.context_fingerprint, choices,
                     candidate_set_fingerprint(choices), capability_fp, generation_id, 1, True)
                 selector = DecisionSelector(transport=self.transport_factory(

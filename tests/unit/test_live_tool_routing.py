@@ -60,3 +60,31 @@ def test_presentation_hint_skips_the_call_without_a_transport() -> None:
     from app.vault_runtime.conversation.runtime import ConversationRuntime
 
     assert "None if transport is None else predict(" in inspect.getsource(ConversationRuntime)
+
+
+def test_final_turn_selection_is_sent_as_the_final_phase() -> None:
+    """FLAKE-01: a researched final turn carries its turn id. A "provisional" request with a
+    turn id fails selector validation before any call, so the final route came back empty."""
+    import inspect
+    from hashlib import sha256
+
+    import pytest
+
+    from app.vault_runtime.decision_routing.contracts import (
+        CandidateChoice, InputError, InputIdentity, ScopedPrincipalRef, SelectionRequest,
+    )
+    from app.vault_runtime.decision_routing.selector import candidate_set_fingerprint, project_request
+    from app.vault_runtime.live_memory.chat_runtime import ChatPreparationRuntime
+
+    choices = (CandidateChoice("contacts_search", "tool-1", 1, "Search contacts"),)
+    identity = InputIdentity("c", "s", "u", 1, "turn-1", sha256(b"Find my contacts").hexdigest())
+
+    def request(phase):
+        return SelectionRequest("r", ScopedPrincipalRef("user", "ws", "session"), identity, phase,
+            "Find my contacts", (), "ctx", choices, candidate_set_fingerprint(choices), "cap", None, 1, True)
+
+    with pytest.raises(InputError):
+        project_request(request("provisional"))
+    assert project_request(request("final"))["questions"][0]["choices"][0]["value"] == "contacts_search"
+    source = inspect.getsource(ChatPreparationRuntime._update)
+    assert 'phase = "provisional" if candidate.identity.turn_id is None else "final"' in source
