@@ -28,8 +28,26 @@ A Vault plugin can provide:
 - tools for Voice, the Background Agent, or both; and
 - approved access to services such as memory search or memory proposals.
 
-A plugin cannot create another Vault agent, read Vault's database, see another
-person's private workspace, or run arbitrary code inside Vault.
+A plugin cannot create another Vault agent, and Vault never loads plugin code
+into its own process. Skills, settings and external MCP connections get only
+what Vault grants them.
+
+> **Trusted code.** A plugin that ships its own server (a supervised
+> `lifecycle` process or a hosted MCP package) runs as the same operating-system
+> user and in the same container as Vault. Until Vault confines these processes,
+> treat such a plugin as trusted code running with Vault's effective access,
+> including Vault's data. Before install, the user's connected agent reviews the
+> package and raises red flags, and the owner approves the exact package.
+
+### What Vault supports
+
+| Component | Support |
+|---|---|
+| `plugin.json` (Agent Plugins 1.0.0) | Yes. Unknown top-level fields and other clients' `extensions` namespaces are reported and ignored. |
+| `skills/<name>/SKILL.md` (Agent Skills) | Yes. The `name` must be valid and match its folder. Agents can read the skill's bundled files. Scripts are readable, never run by the skill loader. |
+| `mcp.json`, Streamable HTTP servers | Yes. |
+| `mcp.json`, stdio or SSE servers | Skipped with a message; the rest of the plugin still loads. |
+| Vault data | `extensions["com.resonolabs.vault"]` in `plugin.json` plus a `com.resonolabs.vault/` folder. A root `vault.json` still works for existing packages; if both exist, the namespace wins. |
 
 ### Package-owned data (plugins vs hosted MCP)
 

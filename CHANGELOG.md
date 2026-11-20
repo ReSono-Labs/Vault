@@ -12,6 +12,20 @@ All notable changes to Vault are listed here. The version comes from
   existing companion chat routes. Vault cards arrive as Link Cards v1. Steer, streaming and
   the voice tunnel are reported unsupported; phone voice keeps working as before.
 
+### Extensions
+
+- **Agent Skills:** new skills need a valid `name` matching their folder (the
+  upstream reference validator's rules); existing installs keep loading as
+  legacy. Agents can read a skill's bundled files, choose between skills with the
+  same name, and see the same skill list in Voice, Chat and Background.
+- **Agent Plugins:** Vault package data can live under the `com.resonolabs.vault`
+  namespace (root `vault.json` still works); other clients' namespaces no longer
+  reject a plugin; stdio and SSE servers are skipped with a message; header and
+  server names are checked; the kit validates packages the same way Vault does.
+- **Link tools:** discovery reads every page and backs off when nothing changes.
+- **Docs:** hosted executable plugins are described as trusted code with Vault's
+  access until OS confinement exists.
+
 ### Security
 
 - **MCP tool schemas are checked offline.** A schema from an MCP server or

@@ -277,7 +277,7 @@ same `invoke` path the agent uses.
 
 ## Extensions
 
-- **Import.** Plugins (`vault.json`), Skills, hosted MCP packages
+- **Import.** Plugins (Agent Plugins 1.0.0 `plugin.json`), Skills, hosted MCP packages
   (`mcp.package.json`) and external MCP connections (`mcp.json`) are unpacked
   into quarantine and reviewed without running their code
   (`extensions/service.py`, `archives.py`, `package_review.py`, `preflight.py`).
@@ -300,7 +300,22 @@ same `invoke` path the agent uses.
   supervised process group and unpublishes its host port.
 - **Remote MCP endpoints** are checked before every connection and cannot target
   private, link-local, metadata or reserved networks (`app/core/security/outbound.py`).
-- **Skills** become available through the `SkillActivation` tool.
+- **Plugin data.** Vault-specific package data lives under the
+  `com.resonolabs.vault` key in `plugin.json` `extensions` and a top-level
+  `com.resonolabs.vault/` folder. A root `vault.json` is still read for older
+  packages; if both exist the namespace wins and `vault.json` is ignored with a
+  diagnostic. Other clients' namespaces are ignored.
+- **MCP in plugins.** Only Streamable HTTP servers become connections; stdio and
+  SSE entries are skipped with a per-server diagnostic, and a connection Vault
+  cannot execute never receives a request. Header names and values are checked,
+  merged case-insensitively, and Vault's own headers always win.
+- **Skills** (`extensions/skills.py`, `activation.py`): new imports must have a
+  valid `name` matching their folder (rules of the pinned `skills-ref`
+  validator); installs from before that rule load as `legacy`. Agents get a
+  catalog (name, description, id, source) in Voice, Chat and Background, load a
+  skill by name or id (an ambiguous name is an error, never a guess) and read
+  bundled files with a bounded, read-only tool confined to that skill's folder.
+  A damaged skill is left out without hiding its siblings.
 - **Built-in plugins** (`builtin_plugins.py`): weather, markets, news, local
   events, agent mail, tasks, Agent2Agent and A2A collaboration.
 
@@ -407,9 +422,14 @@ marked `@pytest.mark.flags_off("reason")`.
 
 These are current limits, not designs to build on:
 
-- **No OS sandbox for hosted MCP packages yet.** They run as separate processes
-  with a minimal environment. The Linux installer checks for bubblewrap, but
-  Vault does not use it yet. Only agent commands are confined (Landlock).
+- **No OS sandbox for hosted executable plugins yet.** Hosted MCP packages and
+  supervised plugins run as separate processes with a minimal environment, but
+  as the same OS user and in the same container as Vault, so they can read
+  Vault's data volume. Until they are confined, treat them as trusted code
+  running with the Vault process's effective access; the user's connected agent
+  reviews the package and the owner approves before install. The Linux installer
+  checks for bubblewrap, but Vault does not use it yet. Only agent commands are
+  confined (Landlock).
 - **No Origin checks.** CSRF protection relies on the double-submit token, not
   on Origin or `Sec-Fetch-*` headers.
 - **Unused settings.** The local API token in `config/local-api-token` is

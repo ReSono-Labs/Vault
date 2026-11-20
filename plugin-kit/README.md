@@ -24,6 +24,11 @@ ready for Vault's **Plugins** page. Installation never grants a tool
 automatically; the user chooses whether Voice, the Background Agent, or both
 may use it.
 
+Vault-specific data goes under `extensions["com.resonolabs.vault"]` in
+`plugin.json` and a `com.resonolabs.vault/` folder; a root `vault.json` is still
+accepted for existing packages. `validate` checks `plugin.json`, every skill and
+`mcp.json` with the same rules Vault uses at import.
+
 The SDK folders are optional helpers. Any conforming Streamable HTTP MCP server
 can be used. Vault does not load plugin Python or JavaScript into its own
 process.
