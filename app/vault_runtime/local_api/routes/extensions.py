@@ -16,6 +16,8 @@ from app.vault_runtime.extensions.mcp_package_manifest import validate_mcp_packa
 from app.vault_runtime.extensions.mcp_runtime import McpRuntimeError
 from app.vault_runtime.extensions.mcp_accounts import CALLBACK_PATH, is_hosted
 from app.vault_runtime.extensions.mcp_oauth import McpSignInError
+from app.vault_runtime.extensions.mcp_http import McpAuthError, McpTransportError
+from app.vault_runtime.extensions.component_status import component_status
 from .common import (
     LocalApiResponse,
     _csrf_token,
@@ -137,6 +139,11 @@ class ExtensionRoutes:
                 workspace_id=principal.workspace_id,
                 extension_id=extension_id,
             ))})
+        if method == "GET" and path.startswith("/extensions/") and path.endswith("/components"):
+            extension_id = path.removeprefix("/extensions/").removesuffix("/components").strip("/")
+            return LocalApiResponse(200, {"items": component_status(
+                repository=repository, accounts=self._mcp_accounts, user_id=principal.user_id,
+                workspace_id=principal.workspace_id, extension_id=extension_id)})
         if method == "GET" and path.startswith("/extensions/") and path.endswith("/account"):
             extension_id = path.removeprefix("/extensions/").removesuffix("/account").strip("/")
             return self._mcp_account(method="GET", principal=principal, extension_id=extension_id, payload=None)
@@ -321,10 +328,29 @@ class ExtensionRoutes:
                     agent=AgentKind.VOICE, tool_call_id=f"discover:{extension_id}",
                     local_session_id=principal.session_id,
                 )
-                names = self._mcp_lifecycle.discover(
-                    actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-                    connection=extension, client=self._mcp_lifecycle.client_for(extension, context),
-                )
+                failure: dict[str, str] | None = None
+                try:
+                    names = self._mcp_lifecycle.discover(
+                        actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
+                        connection=extension, client=self._mcp_lifecycle.client_for(extension, context),
+                    )
+                except McpAuthError as exc:
+                    failure = {"status": "auth_failed", "reason": str(exc)[:300]}
+                    raise
+                except McpTransportError as exc:
+                    failure = {"status": "connection_failed", "reason": str(exc)[:300]}
+                    raise
+                finally:
+                    # Remember the last tool check so the component status can say why.
+                    previous = extension.configuration.get("lastDiscoveryError")
+                    if failure != previous and (failure or previous):
+                        configuration = {key: value for key, value in extension.configuration.items()
+                                         if key != "lastDiscoveryError"}
+                        if failure:
+                            configuration["lastDiscoveryError"] = failure
+                        repository.update_configuration(
+                            actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
+                            extension_id=extension_id, configuration=configuration)
                 return LocalApiResponse(200, {"items": list(names)})
             if operation == "settings":
                 extension = repository.by_id(

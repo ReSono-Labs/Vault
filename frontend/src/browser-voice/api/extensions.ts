@@ -57,7 +57,16 @@ type McpAccountAction =
   | { action: "share-grant"; userId: string; granted: boolean }
   | { action: "client"; clientId: string; clientSecret?: string };
 
+export type ComponentStatus = {
+  component: string;
+  status: "unsupported" | "invalid" | "connection_failed" | "auth_failed" | "not_checked" | "not_granted" | "ready";
+  reason?: string;
+  account?: string;
+};
+
 export const extensionsApi = {
+  extensionComponents: (extensionId: string) =>
+    request<{ items: ComponentStatus[] }>(`/extensions/${encodeURIComponent(extensionId)}/components`),
   mcpAccount: (extensionId: string) =>
     request<McpAccountStatus>(`/extensions/${encodeURIComponent(extensionId)}/account`),
   mcpAccountAction: <T = McpAccountStatus>(extensionId: string, body: McpAccountAction) =>

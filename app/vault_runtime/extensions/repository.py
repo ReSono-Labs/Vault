@@ -306,12 +306,34 @@ class ExtensionRepository:
                 )
                 return tuple(_record(row) for row in cursor.fetchall())
 
+    def components(self, *, user_id: str, workspace_id: str, extension_id: str) -> tuple[tuple[str, str], ...]:
+        """(kind, name) of an install's stored components, for anyone in the workspace."""
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._require_scope(cursor, user_id=user_id, workspace_id=workspace_id)
+                cursor.execute(
+                    """SELECT c.component_kind, c.component_name FROM vault_private.vault_extension_components c
+                       JOIN vault_private.vault_extensions e ON e.extension_id=c.extension_id
+                       WHERE c.extension_id=%s AND e.installed_in_workspace_id=%s
+                       ORDER BY c.component_kind, c.component_name""", (extension_id, workspace_id))
+                return tuple((str(row[0]), str(row[1])) for row in cursor.fetchall())
+
+    def discovered_tool_count(self, *, user_id: str, workspace_id: str, extension_id: str) -> int:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._require_scope(cursor, user_id=user_id, workspace_id=workspace_id)
+                cursor.execute(
+                    """SELECT count(*) FROM vault_private.vault_mcp_tools t
+                       JOIN vault_private.vault_extensions e ON e.extension_id=t.extension_id
+                       WHERE t.extension_id=%s AND e.installed_in_workspace_id=%s""", (extension_id, workspace_id))
+                return int(cursor.fetchone()[0])
+
     def managed_children(
-        self, *, actor_user_id: str, workspace_id: str, plugin_id: str,
+        self, *, actor_user_id: str, workspace_id: str, plugin_id: str, owner: bool = True,
     ) -> tuple[ExtensionRecord, ...]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                self._require_scope(cursor, user_id=actor_user_id, workspace_id=workspace_id, owner=True)
+                self._require_scope(cursor, user_id=actor_user_id, workspace_id=workspace_id, owner=owner)
                 cursor.execute(
                     """SELECT extension_id,kind,identity,display_name,version,description,content_hash,
                               state,installed_by_user_id,installed_in_workspace_id,previous_content_hash,

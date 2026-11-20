@@ -5248,6 +5248,42 @@
    "owner": {
     "headers": [],
     "payload": {
+     "error": {
+      "code": "extension_not_found",
+      "message": "extension is unavailable"
+     }
+    },
+    "status": 404
+   },
+   "route": "GET /extensions/{id}/components",
+   "target": "/extensions/<fake-id>/components",
+   "wrongCsrf": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "extension_not_found",
+      "message": "extension is unavailable"
+     }
+    },
+    "status": 404
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "Local session is required."
+     }
+    },
+    "status": 403
+   },
+   "auth": "session",
+   "csrf": false,
+   "owner": {
+    "headers": [],
+    "payload": {
      "safeMode": true,
      "scope": "device",
      "storageConflicts": []

@@ -52,6 +52,9 @@ All notable changes to Vault are listed here. The version comes from
 - **Support table:** `docs/SUPPORT-MATRIX.md` lists what Vault supports for Agent
   Plugins, Agent Skills and MCP, and what it skips. Installing a hosted package now
   asks you to confirm that it runs as trusted code with Vault's access.
+- **Status per part:** a plugin's page lists each Skill and MCP server with its status
+  for you (skipped as unsupported or invalid, unreachable, needs sign-in, not checked,
+  not granted, ready).
 - **Docs:** hosted executable plugins are described as trusted code with Vault's
   access until OS confinement exists.
 

@@ -164,6 +164,7 @@ ROUTES: tuple[Route, ...] = (
     # MCP sign-in: the browser returns here; the state and the signed-in person must match.
     R("GET", "/extensions/oauth/callback", "none", query="state=wrong&code=wrong"),
     R("GET", "/extensions/{id}/account"),
+    R("GET", "/extensions/{id}/components"),
     R("GET", "/extensions/runtime"),
     R("POST", "/extensions/skills/preflight"),
     R("POST", "/extensions/plugins/preflight"),

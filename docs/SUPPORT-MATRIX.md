@@ -2,7 +2,9 @@
 
 This table covers the extension standards in this release. Anything not listed here is
 not supported. Import reports skipped or invalid parts one by one, and the healthy
-parts still install.
+parts still install. After install, each part of a plugin shows one status for you:
+skipped as unsupported, skipped as invalid, could not reach the server, needs a sign-in,
+tools not checked yet, available but not granted to you, or ready.
 
 ## Agent Plugins 1.0.0
 

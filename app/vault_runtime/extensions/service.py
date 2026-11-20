@@ -392,6 +392,9 @@ class ExtensionImportService:
                 "configurationSchema": candidate.configuration_schema,
                 "settings": {},
             }
+            if candidate.diagnostics:
+                # Kept so the installed status shows what was skipped and why.
+                configuration["importDiagnostics"] = list(candidate.diagnostics)[:100]
             if migration is not None:
                 configuration["packageData"] = True
             if migration_status is not None:

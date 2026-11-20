@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { localApi, type BuiltinPlugin, type LocalExtension, type LocalTool } from "@/browser-voice/localApi";
+import type { ComponentStatus } from "@/browser-voice/api/extensions";
 import { FolderPicker, type PickedFolder } from "@/browser-voice/folders/FolderPicker";
 import { importMcpPackageFile, importMcpPackageFolder, mcpPackageRemoveMessage, mcpPackageRowSubtitle } from "@/browser-voice/mcpPackageFlow";
 import { importPluginFile, importPluginFolder, pluginRemoveMessage } from "@/browser-voice/pluginPackageFlow";
@@ -12,6 +13,16 @@ import { McpPackageSetup } from "@/browser-voice/McpPackageSetup";
 import { ToolGrantTable } from "@/browser-voice/ToolGrantTable";
 import { BrowserVoiceAgentsIcon } from "@/browser-voice/presentation/BrowserVoiceIcons";
 import { PageHeader, TabPanel, Tabs, type TabItem } from "@/browser-voice/presentation/ManagementLayout";
+
+const COMPONENT_STATUS: Record<ComponentStatus["status"], string> = {
+  unsupported: "Skipped: Vault does not support this.",
+  invalid: "Skipped: it breaks the standard.",
+  connection_failed: "Could not reach the server on the last check.",
+  auth_failed: "The server needs a sign-in.",
+  not_checked: "Tools not checked yet.",
+  not_granted: "Available, not granted to you.",
+  ready: "Ready.",
+};
 
 const LIBRARY_TABS: TabItem<"skill" | "plugin" | "mcp" | "tool">[] = [
   { id: "skill", label: "Skill" }, { id: "plugin", label: "Plugin" }, { id: "mcp", label: "MCP" }, { id: "tool", label: "Tools" },
@@ -371,6 +382,8 @@ function ImportedPluginSetup({ item, onBack, onChanged }: { item: LocalExtension
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [components, setComponents] = useState<ComponentStatus[]>([]);
+  useEffect(() => { void localApi.extensionComponents(item.extensionId).then((result) => setComponents(result.items)).catch(() => setComponents([])); }, [item.extensionId]);
   useEffect(() => { void Promise.all([localApi.pluginConnections(item.extensionId), localApi.me()]).then(([result, me]) => { setConnections(result.items); setUserId(me.user.userId); setIsOwner(me.user.isDeviceOwner); }).catch((caught) => setError(caught instanceof Error ? caught.message : "Plugin details could not be loaded.")); }, [item.extensionId]);
   const set = (key: string, value: unknown) => setValues((current) => ({ ...current, [key]: value }));
   async function save() { setWorking(true); setError(null); try { await localApi.savePluginSettings(item.extensionId, values); setMessage("Plugin settings saved."); await onChanged(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Settings could not be saved."); } finally { setWorking(false); } }
@@ -380,6 +393,7 @@ function ImportedPluginSetup({ item, onBack, onChanged }: { item: LocalExtension
     <div className="browser-voice-section-head"><div><span className="browser-voice-eyebrow-label">Added to this Vault</span><h3>{item.displayName}</h3><p>{item.description}</p></div><span className={`browser-voice-state ${item.state === "enabled" ? "is-ready" : ""}`}>{item.state === "enabled" ? "On" : "Off"}</span></div>
     {error ? <div className="browser-voice-management-error" role="alert">{error}</div> : null}{message ? <p className="browser-voice-management-message" role="status">{message}</p> : null}
     {(schema?.fields?.length ?? 0) > 0 ? <form className="browser-voice-form" onSubmit={(event) => { event.preventDefault(); void save(); }}><h4>Settings</h4>{schema!.fields!.map((field) => <PluginFieldControl field={field} key={field.key} set={set} value={values[field.key]} />)}<button className="browser-voice-submit" disabled={working} type="submit">{working ? "Saving…" : "Save settings"}</button></form> : null}
+    {components.length ? <div className="browser-voice-form"><h4>Parts</h4><ul className="browser-voice-form-note">{components.map((part) => <li key={part.component}><strong>{part.component.replace(/^(skill|mcp):/, "")}</strong> ({part.component.startsWith("skill:") ? "Skill" : "MCP server"}): {COMPONENT_STATUS[part.status]}{part.reason ? ` ${part.reason}` : ""}</li>)}</ul></div> : null}
     {connections.length ? <div className="browser-voice-form"><h4>Tools</h4><p className="browser-voice-form-note">Start the plugin service, then check tools. Mark Voice and Background, choose Read or Read &amp; write, then save.</p>{connections.map((connection) => <div className="browser-voice-plugin-connection" key={connection.extensionId}><div className="browser-voice-section-head"><div><strong>{connection.displayName}</strong><small>{connection.description}</small></div><button className="browser-voice-pill" disabled={working || item.state !== "enabled"} onClick={() => void discover(connection)} type="button">Check tools</button></div><McpAccountControl extensionId={connection.extensionId} isDeviceOwner={isOwner} /><ToolGrantTable extensionId={connection.extensionId} onError={setError} onMessage={setMessage} onWorking={setWorking} tools={tools[connection.extensionId] ?? []} userId={userId} working={working} /></div>)}</div> : <p className="browser-voice-management-empty">This plugin contains instructions only. It does not add a connected tool.</p>}
   </section>;
 }

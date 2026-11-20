@@ -162,3 +162,45 @@ def test_same_name_installs_in_private_and_shared_workspaces_stay_independent(wo
     _remove(imports, people.owner, installs[shared])
     assert read(private) == "Notes for private.\n" and read(shared) is None
     assert _ws(root, "skills", private, "notes").exists() and not _ws(root, "skills", shared, "notes").exists()
+
+
+def test_each_component_reports_its_own_status_to_each_person(world) -> None:
+    import json as _json
+
+    from app.vault_runtime.extensions.component_status import component_status
+    from app.vault_runtime.extensions.specification import MCP_SCHEMA_ID, PLUGIN_SCHEMA_ID
+    from tests.integration.test_extensions_postgres import _confirm_plugin
+    from tests.unit.test_extension_import_service import _zip
+
+    people, extensions, imports, _root, accounts, _activation = world
+    shared = people.shared_workspace
+    skill = "---\nname: {0}\ndescription: Does a thing.\n---\nBody.\n"
+    plugin = _confirm_plugin(imports, people.owner, _zip({
+        "mixed.demo/plugin.json": _json.dumps({"$schema": PLUGIN_SCHEMA_ID, "name": "mixed.demo"}),
+        "mixed.demo/skills/good-skill/SKILL.md": skill.format("good-skill"),
+        "mixed.demo/skills/Bad_Skill/SKILL.md": skill.format("Bad_Skill"),
+        "mixed.demo/mcp.json": _json.dumps({"$schema": MCP_SCHEMA_ID, "mcpServers": {
+            "remote": {"type": "streamable-http", "url": "https://crm.example/mcp"},
+            "cli": {"type": "stdio", "command": "server"}}}),
+    }), workspace_id=shared)
+
+    def status(name):
+        items = component_status(repository=extensions, accounts=accounts, user_id=people[name].user_id,
+                                 workspace_id=shared, extension_id=plugin.extension_id)
+        return {item["component"]: item["status"] for item in items}
+
+    assert status("ada") == {"skill:Bad_Skill": "invalid", "mcp:cli": "unsupported",
+                             "skill:good-skill": "not_granted", "mcp:remote": "not_checked"}
+    extensions.set_grant(actor_user_id=people.owner.user_id, target_user_id=people["ada"].user_id,
+                         workspace_id=shared, extension_id=plugin.extension_id, agent=AgentKind.VOICE,
+                         capability_name="skill:good-skill", enabled=True)
+    assert status("ada")["skill:good-skill"] == "ready" and status("ben")["skill:good-skill"] == "not_granted"
+    remote = extensions.managed_children(actor_user_id=people.owner.user_id, workspace_id=shared,
+                                         plugin_id=plugin.extension_id)[0]
+    extensions.update_configuration(actor_user_id=people.owner.user_id, workspace_id=shared,
+                                    extension_id=remote.extension_id, configuration={
+                                        **remote.configuration,
+                                        "lastDiscoveryError": {"status": "auth_failed", "reason": "sign in"}})
+    assert status("ada")["mcp:remote"] == "auth_failed"
+    with pytest.raises(Exception):
+        status("cy")                                               # not a member: no status either
