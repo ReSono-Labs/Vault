@@ -140,6 +140,12 @@ export const extensionsApi = {
         body: JSON.stringify({ state }),
       },
     ),
+  /** Import from a folder the person was given (Settings -> Folders), same checks as a file. */
+  folderPreflight: (kind: "plugin" | "skill" | "mcp-package", grantId: string, path: string) =>
+    request<{ token: string; identity: string; replacement: boolean; diagnostics?: string[] } & Record<string, unknown>>(
+      "/extensions/folder-preflight",
+      { method: "POST", body: JSON.stringify({ kind, grantId, path, audience: ["voice", "background"] }) },
+    ),
   preflight: async (kind: "plugin" | "skill" | "mcp", file: File) => {
     const encoded = await fileBase64(file);
     const path =

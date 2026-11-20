@@ -169,6 +169,7 @@ ROUTES: tuple[Route, ...] = (
     R("POST", "/extensions/plugins/preflight"),
     R("POST", "/extensions/mcp/preflight"),
     R("POST", "/extensions/mcp-packages/preflight"),
+    R("POST", "/extensions/folder-preflight"),
     R("POST", "/extensions/confirm"),
     R("POST", "/extensions/safe-mode"),
     R("POST", "/extensions/{id}/state"),

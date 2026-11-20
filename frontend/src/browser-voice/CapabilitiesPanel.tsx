@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { localApi, type BuiltinPlugin, type LocalExtension, type LocalTool } from "@/browser-voice/localApi";
-import { importMcpPackageFile, mcpPackageRemoveMessage, mcpPackageRowSubtitle } from "@/browser-voice/mcpPackageFlow";
-import { importPluginFile, pluginRemoveMessage } from "@/browser-voice/pluginPackageFlow";
+import { FolderPicker, type PickedFolder } from "@/browser-voice/folders/FolderPicker";
+import { importMcpPackageFile, importMcpPackageFolder, mcpPackageRemoveMessage, mcpPackageRowSubtitle } from "@/browser-voice/mcpPackageFlow";
+import { importPluginFile, importPluginFolder, pluginRemoveMessage } from "@/browser-voice/pluginPackageFlow";
 import {
   registerPluginImportCompleteHandler,
   setPendingPluginImport,
@@ -28,6 +29,7 @@ export function CapabilitiesPanel() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [pickingFolder, setPickingFolder] = useState(false);
   const [isDeviceOwner, setIsDeviceOwner] = useState(false);
   useEffect(() => { void localApi.me().then((me) => setIsDeviceOwner(me.user.isDeviceOwner)).catch(() => undefined); }, []);
   useEffect(() => {
@@ -111,22 +113,7 @@ export function CapabilitiesPanel() {
     setWorking(true); setError(null); setMessage(null); clearPendingPluginImport();
     try {
       if (kind === "plugin") {
-        const result = await importPluginFile(file);
-        if (result.kind === "cancelled") return;
-        if (result.kind === "needs_local_share") {
-          setPendingPluginImport(result.pending);
-          return;
-        }
-        setKind("plugin");
-        setOpenMcp(null);
-        setMessage(result.message);
-        const extensions = await localApi.extensions();
-        setItems(extensions.items);
-        const imported = extensions.items.find(
-          (item) => item.kind === "plugin" && item.identity === result.identity,
-        );
-        if (imported) setOpenImported(imported);
-        await refresh();
+        await finishPluginImport(await importPluginFile(file));
         return;
       }
       const preview = await localApi.preflight(kind, file);
@@ -144,6 +131,54 @@ export function CapabilitiesPanel() {
       setError(caught instanceof Error ? caught.message : "Import failed.");
     } finally {
       event.target.value = ""; setWorking(false);
+    }
+  }
+
+  async function finishPluginImport(result: Awaited<ReturnType<typeof importPluginFile>>) {
+    if (result.kind === "cancelled") return;
+    if (result.kind === "needs_local_share") {
+      setPendingPluginImport(result.pending);
+      return;
+    }
+    setKind("plugin");
+    setOpenMcp(null);
+    setMessage(result.message);
+    const extensions = await localApi.extensions();
+    setItems(extensions.items);
+    const imported = extensions.items.find(
+      (item) => item.kind === "plugin" && item.identity === result.identity,
+    );
+    if (imported) setOpenImported(imported);
+    await refresh();
+  }
+
+  /** Same checks and confirmations as a file; Vault copies the folder when it checks it,
+   *  so later edits to the folder do not change what is installed. */
+  async function importFromFolder(picked: PickedFolder) {
+    setPickingFolder(false);
+    if (kind === "tool") return;
+    setWorking(true); setError(null); setMessage(null); clearPendingPluginImport();
+    try {
+      if (kind === "plugin") {
+        await finishPluginImport(await importPluginFolder(picked.scopeId, picked.path));
+      } else if (kind === "mcp") {
+        const result = await importMcpPackageFolder(picked.scopeId, picked.path);
+        if (result.identity) { setMessage(result.message); await refresh(); }
+      } else {
+        const preview = await localApi.folderPreflight("skill", picked.scopeId, picked.path);
+        const replacement = preview.replacement
+          ? window.confirm(`${preview.identity} is installed. Replace it with this validated version?`)
+          : true;
+        if (replacement) {
+          await localApi.confirmExtension("skill", preview.token, preview.replacement);
+          setMessage("Skill import complete. Capabilities remain off until explicitly enabled and granted.");
+          await refresh();
+        }
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Import failed.");
+    } finally {
+      setWorking(false);
     }
   }
 
@@ -240,6 +275,23 @@ export function CapabilitiesPanel() {
             >
               {working ? "Checking…" : kind === "mcp" ? "Import package" : `Import ${kind}`}
             </button>
+            <button
+              className="browser-voice-pill browser-voice-section-action"
+              disabled={working}
+              onClick={() => setPickingFolder(true)}
+              type="button"
+            >
+              Import from folder
+            </button>
+            {pickingFolder ? (
+              <FolderPicker
+                chooseLabel="Import this folder"
+                onChoose={(picked) => void importFromFolder(picked)}
+                onClose={() => setPickingFolder(false)}
+                source="user"
+                title={`Choose the ${kind === "mcp" ? "MCP package" : kind} folder`}
+              />
+            ) : null}
           </>
         ) : null}
       </div>

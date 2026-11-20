@@ -24,6 +24,10 @@ MAX_ENTRIES = 512
 MAX_COMPRESSION_RATIO = 100
 
 
+_SKIPPED_FOLDERS = frozenset({".git", "__pycache__"})
+_SKIPPED_FILES = frozenset({".DS_Store"})
+
+
 class ArchiveRejected(ValueError):
     pass
 
@@ -56,7 +60,58 @@ class ArchiveInspector:
         if required_root_file not in {"plugin.json", "SKILL.md", "mcp.package.json"}:
             raise ValueError("unsupported archive contract")
         entries = _read_entries(payload, filename)
-        root_name = _one_root(entries, required_root_file)
+        return self._quarantine(entries, _one_root(entries, required_root_file))
+
+    def inspect_directory(
+        self, source: Path, *, required_root_file: str, max_upload_bytes: int = MAX_UPLOAD_BYTES,
+    ) -> QuarantinedArchive:
+        """Snapshot a package folder into quarantine through the archive rules.
+
+        The folder is read once, here: what confirm installs is this copy, so editing the
+        folder afterwards changes nothing. Links and special files are refused, so nothing
+        outside the folder can be read. ``.git``, ``__pycache__`` and ``.DS_Store`` are
+        skipped; everything else counts toward the same entry, size and path limits.
+        """
+        if required_root_file not in {"plugin.json", "SKILL.md", "mcp.package.json"}:
+            raise ValueError("unsupported archive contract")
+        if source.is_symlink() or not source.is_dir():
+            raise ArchiveRejected("package folder is not a directory")
+        root_name = source.name
+        _safe_path(root_name)
+        entries: list[tuple[PurePosixPath, bytes]] = []
+        total = 0
+        for directory, folders, files in os.walk(source, followlinks=False):
+            here = Path(directory)
+            for name in list(folders):
+                if name in _SKIPPED_FOLDERS:
+                    folders.remove(name)
+                elif (here / name).is_symlink():
+                    raise ArchiveRejected("package folder contains a link")
+            for name in sorted(files):
+                if name in _SKIPPED_FILES:
+                    continue
+                path = here / name
+                info = os.lstat(path)
+                if not stat.S_ISREG(info.st_mode):
+                    raise ArchiveRejected("package folder contains a link or special file")
+                _entry_count(entries)
+                if info.st_size > MAX_ENTRY_BYTES:
+                    raise ArchiveRejected("extension entry exceeds the size limit")
+                total += info.st_size
+                _expanded_size(total)
+                if total > max_upload_bytes:
+                    raise ArchiveRejected("package folder exceeds the size limit")
+                descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+                with os.fdopen(descriptor, "rb") as handle:
+                    content = handle.read(MAX_ENTRY_BYTES + 1)
+                if len(content) != info.st_size:
+                    raise ArchiveRejected("package file changed while reading")
+                relative = PurePosixPath(root_name, *path.relative_to(source).parts)
+                entries.append((_safe_path(relative.as_posix()), content))
+        finished = _finish_entries(entries)
+        return self._quarantine(finished, _one_root(finished, required_root_file))
+
+    def _quarantine(self, entries: tuple[tuple[PurePosixPath, bytes], ...], root_name: str) -> QuarantinedArchive:
         self._root.mkdir(parents=True, exist_ok=True, mode=0o700)
         candidate_root = (self._root / uuid4().hex).resolve()
         if not candidate_root.is_relative_to(self._root):

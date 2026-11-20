@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from threading import Thread
+from typing import Any
 
 from app.vault_runtime.extensions.archives import ArchiveInspector, MAX_MCP_PACKAGE_UPLOAD_BYTES, QuarantinedArchive
 from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
@@ -134,7 +135,13 @@ class ExtensionImportService:
         self, payload: bytes, filename: str, *, actor_user_id: str,
         workspace_id: str, audience: ExtensionAudience,
     ) -> Preflight[SkillCandidate]:
-        archive = self._inspector.inspect(payload, filename, required_root_file="SKILL.md")
+        return self._preflight_skill_archive(
+            self._inspector.inspect(payload, filename, required_root_file="SKILL.md"),
+            actor_user_id=actor_user_id, workspace_id=workspace_id, audience=audience)
+
+    def _preflight_skill_archive(
+        self, archive: QuarantinedArchive, *, actor_user_id: str, workspace_id: str, audience: ExtensionAudience,
+    ) -> Preflight[SkillCandidate]:
         try:
             document = parse_skill(archive.content_root)
             current = self._active_install(
@@ -183,7 +190,13 @@ class ExtensionImportService:
         self, payload: bytes, filename: str, *, actor_user_id: str,
         workspace_id: str, audience: ExtensionAudience,
     ) -> Preflight[PluginCandidate]:
-        archive = self._inspector.inspect(payload, filename, required_root_file="plugin.json")
+        return self._preflight_plugin_archive(
+            self._inspector.inspect(payload, filename, required_root_file="plugin.json"),
+            actor_user_id=actor_user_id, workspace_id=workspace_id, audience=audience)
+
+    def _preflight_plugin_archive(
+        self, archive: QuarantinedArchive, *, actor_user_id: str, workspace_id: str, audience: ExtensionAudience,
+    ) -> Preflight[PluginCandidate]:
         try:
             manifest = parse_plugin_manifest(archive.content_root / "plugin.json")
             vault_manifest, configuration_schema = parse_vault_manifest(
@@ -528,10 +541,34 @@ class ExtensionImportService:
         self, payload: bytes, filename: str, *, actor_user_id: str,
         workspace_id: str, audience: ExtensionAudience,
     ) -> Preflight[McpPackageCandidate]:
-        archive = self._inspector.inspect(
-            payload, filename, required_root_file="mcp.package.json",
-            max_upload_bytes=MAX_MCP_PACKAGE_UPLOAD_BYTES,
-        )
+        return self._preflight_mcp_package_archive(
+            self._inspector.inspect(payload, filename, required_root_file="mcp.package.json",
+                                    max_upload_bytes=MAX_MCP_PACKAGE_UPLOAD_BYTES),
+            actor_user_id=actor_user_id, workspace_id=workspace_id, audience=audience)
+
+    def preflight_folder(
+        self, source: Path, *, kind: str, actor_user_id: str, workspace_id: str, audience: ExtensionAudience,
+    ) -> Preflight[Any]:
+        """Import from a folder: snapshot it into quarantine, then the same preflight as an
+        archive. The caller resolves ``source`` inside a folder the person was given."""
+        if kind == "skill":
+            archive = self._inspector.inspect_directory(source, required_root_file="SKILL.md")
+            return self._preflight_skill_archive(archive, actor_user_id=actor_user_id,
+                                                 workspace_id=workspace_id, audience=audience)
+        if kind == "plugin":
+            archive = self._inspector.inspect_directory(source, required_root_file="plugin.json")
+            return self._preflight_plugin_archive(archive, actor_user_id=actor_user_id,
+                                                  workspace_id=workspace_id, audience=audience)
+        if kind == "mcp-package":
+            archive = self._inspector.inspect_directory(source, required_root_file="mcp.package.json",
+                                                        max_upload_bytes=MAX_MCP_PACKAGE_UPLOAD_BYTES)
+            return self._preflight_mcp_package_archive(archive, actor_user_id=actor_user_id,
+                                                       workspace_id=workspace_id, audience=audience)
+        raise ValueError("Folder import supports skills, plugins and MCP packages.")
+
+    def _preflight_mcp_package_archive(
+        self, archive: QuarantinedArchive, *, actor_user_id: str, workspace_id: str, audience: ExtensionAudience,
+    ) -> Preflight[McpPackageCandidate]:
         try:
             manifest, configuration_schema = parse_mcp_package_manifest(archive.content_root)
             diagnostics: list[str] = []

@@ -379,6 +379,15 @@ class FolderService:
                            show_hidden=grant.include_hidden),
         }
 
+    def resolve_access_path(self, *, principal: LocalPrincipal, grant_id: str, path: str | None) -> Path:
+        """A directory inside folder access the device owner gave this person (what the folder
+        picker shows), refusing anything outside it."""
+        grant = self._user_grant(principal, grant_id)
+        location, grant_root = self._grant_root(grant)
+        target = resolve_inside(grant_root, path, allow_hidden=grant.include_hidden)
+        self._check_directory(location, target)
+        return target
+
     def add_folder(
         self,
         *,

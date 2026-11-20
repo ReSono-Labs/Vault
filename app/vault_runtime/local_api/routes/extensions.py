@@ -191,6 +191,20 @@ class ExtensionRoutes:
                 workspace_id=principal.workspace_id, audience=audience,
             )
             return LocalApiResponse(200, {"items": [_preflight_payload(item) for item in previews]})
+        if path == "/extensions/folder-preflight":
+            # Import from a folder the person was given under Settings -> Folders (not a host
+            # file browser): resolved inside that folder, then snapshotted into quarantine.
+            if imports is None or self._folders is None:
+                raise RuntimeError("Folder import is unavailable.")
+            source = self._folders.resolve_access_path(
+                principal=principal, grant_id=_required_text(payload, "grantId"),
+                path=_optional_text(payload, "path"),
+            )
+            preview = imports.preflight_folder(
+                source, kind=_required_text(payload, "kind"), actor_user_id=principal.user_id,
+                workspace_id=principal.workspace_id, audience=ExtensionAudience.parse(payload.get("audience")),
+            )
+            return LocalApiResponse(200, _preflight_payload(preview))
         if path == "/extensions/confirm":
             if imports is None:
                 raise RuntimeError("Local extension imports are unavailable.")

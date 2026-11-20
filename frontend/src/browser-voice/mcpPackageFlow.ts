@@ -16,8 +16,18 @@ export function mcpPackageRowSubtitle(item: LocalExtension): string {
   return item.state === "enabled" ? "On" : "Off";
 }
 
+type McpPackagePreflight = Awaited<ReturnType<typeof localApi.preflightMcpPackage>>;
+
 export async function importMcpPackageFile(file: File): Promise<{ identity: string; message: string }> {
-  const preview = await localApi.preflightMcpPackage(file);
+  return importMcpPackagePreview(await localApi.preflightMcpPackage(file));
+}
+
+export async function importMcpPackageFolder(grantId: string, path: string): Promise<{ identity: string; message: string }> {
+  return importMcpPackagePreview(
+    (await localApi.folderPreflight("mcp-package", grantId, path)) as McpPackagePreflight);
+}
+
+async function importMcpPackagePreview(preview: McpPackagePreflight): Promise<{ identity: string; message: string }> {
   const blocked = blockingExtensionDiagnostics(preview.diagnostics);
   if (blocked.length) {
     throw new Error(blocked.join(" "));

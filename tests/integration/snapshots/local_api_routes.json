@@ -5428,6 +5428,42 @@
     "payload": {
      "error": {
       "code": "extension_request_failed",
+      "message": "grantId is required."
+     }
+    },
+    "status": 400
+   },
+   "route": "POST /extensions/folder-preflight",
+   "target": "/extensions/folder-preflight",
+   "wrongCsrf": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "CSRF proof is invalid."
+     }
+    },
+    "status": 403
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "Local session is required."
+     }
+    },
+    "status": 403
+   },
+   "auth": "session",
+   "csrf": true,
+   "owner": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "extension_request_failed",
       "message": "kind is required."
      }
     },

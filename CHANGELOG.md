@@ -45,6 +45,10 @@ All notable changes to Vault are listed here. The version comes from
   caller's own account, a shared account exists only when the device owner shares one
   and grants it, and nobody's call falls back to another person's account. Tokens
   saved before this release become the personal token of whoever saved them.
+- **Import from a folder:** Skills, plugins and MCP packages can be imported from a
+  folder you were given under Settings → Folders. The folder goes through the same
+  loader and checks as an archive; Vault installs the copy it checked, so later edits
+  to the folder change nothing. Links and special files are refused.
 - **Docs:** hosted executable plugins are described as trusted code with Vault's
   access until OS confinement exists.
 

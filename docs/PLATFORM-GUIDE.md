@@ -864,6 +864,19 @@ Tokens pasted before this release become the personal token of whoever saved the
 Hosted MCP packages keep their package settings; their token is for the package's own
 process, not for anyone's account.
 
+### Import from a folder
+
+Skills, plugins and MCP packages can also be imported straight from a folder:
+**Library →** the Skill, Plugin or MCP tab **→ Import from folder**, then pick the
+package's root folder (the one holding `SKILL.md`, `plugin.json` or
+`mcp.package.json`). The picker shows only folders the device owner gave you under
+**Settings → Folders**; it is not a view of the whole computer.
+
+A folder goes through exactly the same checks as a ZIP or TAR file. Vault copies it
+when it checks it, and confirming installs that copy, so editing the folder afterwards
+changes nothing until you import again. Links, devices and other special files are
+refused; `.git`, `__pycache__` and `.DS_Store` are left out.
+
 ### Import a Skill
 
 Create one root directory whose name matches the Skill `name`. Add `SKILL.md`

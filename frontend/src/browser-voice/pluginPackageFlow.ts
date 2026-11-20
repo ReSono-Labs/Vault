@@ -65,7 +65,14 @@ async function confirmPluginImport(
 }
 
 export async function importPluginFile(file: File): Promise<PluginImportOutcome> {
-  const preview = (await localApi.preflight("plugin", file)) as PluginPreflight;
+  return importPluginPreview((await localApi.preflight("plugin", file)) as PluginPreflight);
+}
+
+export async function importPluginFolder(grantId: string, path: string): Promise<PluginImportOutcome> {
+  return importPluginPreview((await localApi.folderPreflight("plugin", grantId, path)) as PluginPreflight);
+}
+
+async function importPluginPreview(preview: PluginPreflight): Promise<PluginImportOutcome> {
   const blocked = blockingExtensionDiagnostics(preview.diagnostics);
   if (blocked.length) {
     throw new Error(blocked.join(" "));
