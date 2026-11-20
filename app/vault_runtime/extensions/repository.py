@@ -7,7 +7,7 @@ import json
 from typing import Any
 from uuid import uuid4
 
-from app.vault_runtime.extensions.filesystem import managed_mcp_identity
+from app.vault_runtime.extensions.filesystem import managed_mcp_identity, workspace_storage_identity
 from app.vault_runtime.extensions.mcp_rules import connection_executable
 from app.vault_runtime.extensions.models import ExtensionKind, ExtensionState
 from app.vault_runtime.extensions.schema import ensure_extension_schema
@@ -34,6 +34,10 @@ class ExtensionNotFoundError(ExtensionRepositoryError):
 # for every workspace (filesystem.py). Until storage is scoped per installation,
 # two workspaces must never share a name-keyed tree or data folder.
 STORAGE_CONFLICT_KEY = "storageConflict"
+# Set on every install whose files use the workspace layout (filesystem.workspace_storage_identity).
+# Installs without it still use the old name-keyed paths until startup adopts them.
+STORAGE_SCOPE_KEY = "storageScope"
+STORAGE_SCOPE = "workspace"
 
 
 def _uses_data(alias: str) -> str:
@@ -45,11 +49,13 @@ def _uses_data(alias: str) -> str:
 
 
 def _storage_shared(alias: str) -> str:
-    """SQL: a non-removed install in another workspace uses the same tree or data folder."""
+    """SQL: a non-removed legacy install in another workspace uses the same name-keyed tree
+    or data folder (only installs still on the old layout can collide)."""
     return (
         "EXISTS (SELECT 1 FROM vault_private.vault_extensions o "
         f"WHERE o.state<>'removed' AND o.identity={alias}.identity "
         f"AND o.installed_in_workspace_id<>{alias}.installed_in_workspace_id "
+        f"AND NOT (o.configuration_json ? '{STORAGE_SCOPE_KEY}') "
         f"AND (o.kind={alias}.kind OR ({_uses_data('o')} AND {_uses_data(alias)})))"
     )
 
@@ -60,7 +66,7 @@ def _storage_blocked(alias: str) -> str:
     The durable flag keeps the remaining install blocked after the other one is
     removed, because the shared bytes may be the other workspace's.
     """
-    return f"(({alias}.configuration_json ? '{STORAGE_CONFLICT_KEY}') OR {_storage_shared(alias)})"
+    return f"({alias}.configuration_json ? '{STORAGE_CONFLICT_KEY}')"
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +83,14 @@ class ExtensionRecord:
     workspace_id: str
     previous_content_hash: str | None
     configuration: dict[str, object]
+
+
+def record_storage_identity(record: ExtensionRecord, identity: str | None = None) -> str:
+    """The relative storage path of a record's files: always its workspace's folder.
+
+    Installs still on the old name-keyed layout are either adopted at startup or blocked
+    as a storage conflict, so nothing reads the old paths."""
+    return workspace_storage_identity(record.workspace_id, identity if identity is not None else record.identity)
 
 
 class ExtensionRepository:
@@ -152,40 +166,21 @@ class ExtensionRepository:
                 return cursor.rowcount > 0
 
     def identity_still_installed(
-        self, *, identity: str, excluding_extension_id: str | None = None,
+        self, *, workspace_id: str, identity: str, excluding_extension_id: str | None = None,
     ) -> bool:
-        """Whether any non-removed install of any kind, in any workspace, has this identity.
+        """Whether another non-removed install of any kind in this workspace has this identity.
 
-        Extension data folders are keyed by identity alone, so this is the check
-        before deleting one.
+        A workspace's data folder is keyed by identity (a plugin and its hosted MCP package
+        share it), so this is the check before deleting one.
         """
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """SELECT 1 FROM vault_private.vault_extensions
-                       WHERE identity=%s AND state <> 'removed'
+                       WHERE identity=%s AND installed_in_workspace_id=%s AND state <> 'removed'
                          AND (%s::text IS NULL OR extension_id <> %s::text)
                        LIMIT 1""",
-                    (identity, excluding_extension_id, excluding_extension_id),
-                )
-                return cursor.fetchone() is not None
-
-    def storage_used_elsewhere(
-        self, *, workspace_id: str, kind: ExtensionKind, identity: str, uses_data: bool,
-    ) -> bool:
-        """Whether another workspace has a non-removed install with the same name-keyed storage.
-
-        Same kind means the same install tree; with ``uses_data`` any install that
-        has a data folder (plugin or hosted MCP package) counts as well.
-        """
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    f"""SELECT 1 FROM vault_private.vault_extensions o
-                       WHERE o.state <> 'removed' AND o.identity=%s AND o.installed_in_workspace_id <> %s
-                         AND (o.kind=%s OR (%s AND {_uses_data('o')}))
-                       LIMIT 1""",
-                    (identity, workspace_id, kind.value, uses_data),
+                    (identity, workspace_id, excluding_extension_id, excluding_extension_id),
                 )
                 return cursor.fetchone() is not None
 
@@ -202,11 +197,45 @@ class ExtensionRepository:
                     f"""UPDATE vault_private.vault_extensions e
                        SET configuration_json = e.configuration_json || %s::jsonb, updated_at=now()
                        WHERE e.state <> 'removed' AND NOT (e.configuration_json ? '{STORAGE_CONFLICT_KEY}')
-                         AND {_storage_shared('e')}""",
+                         AND NOT (e.configuration_json ? '{STORAGE_SCOPE_KEY}') AND {_storage_shared('e')}""",
                     (json.dumps({STORAGE_CONFLICT_KEY: True}),),
                 )
             connection.commit()
         return self.storage_conflicts()
+
+    def legacy_storage_owners(self) -> dict[tuple[str, str], set[str]]:
+        """Old name-keyed paths still in use: (category or "data", identity) -> workspaces."""
+        owners: dict[tuple[str, str], set[str]] = {}
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""SELECT kind, identity, installed_in_workspace_id,
+                              configuration_json->>'packageType', configuration_json ? 'managedByPluginId'
+                       FROM vault_private.vault_extensions
+                       WHERE state <> 'removed' AND NOT (configuration_json ? '{STORAGE_SCOPE_KEY}')""",
+                )
+                for kind, identity, workspace_id, package_type, managed in cursor.fetchall():
+                    category = {"skill": "skills", "plugin": "plugins", "mcp": "mcps"}[str(kind)]
+                    if not (kind == "mcp" and managed):
+                        owners.setdefault((category, str(identity)), set()).add(str(workspace_id))
+                    if kind == "plugin" or package_type == "hosted":
+                        owners.setdefault(("data", str(identity)), set()).add(str(workspace_id))
+        return owners
+
+    def mark_workspace_storage(self) -> int:
+        """After adoption: every legacy install not blocked by a conflict uses the workspace layout."""
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""UPDATE vault_private.vault_extensions
+                       SET configuration_json = configuration_json || %s::jsonb, updated_at=now()
+                       WHERE state <> 'removed' AND NOT (configuration_json ? '{STORAGE_SCOPE_KEY}')
+                         AND NOT (configuration_json ? '{STORAGE_CONFLICT_KEY}')""",
+                    (json.dumps({STORAGE_SCOPE_KEY: STORAGE_SCOPE}),),
+                )
+                count = cursor.rowcount
+            connection.commit()
+        return count
 
     def storage_conflicts(self) -> tuple[str, ...]:
         """Names whose installs are blocked by a storage conflict, for the device owner."""
@@ -400,6 +429,9 @@ class ExtensionRepository:
         components: tuple[tuple[str, str, str], ...] = (),
     ) -> ExtensionRecord:
         extension_id = str(uuid4())
+        # Every install and reinstall writes its files in the workspace layout.
+        configuration = {key: value for key, value in configuration.items() if key != STORAGE_CONFLICT_KEY}
+        configuration[STORAGE_SCOPE_KEY] = STORAGE_SCOPE
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id=actor_user_id, workspace_id=workspace_id, owner=True)

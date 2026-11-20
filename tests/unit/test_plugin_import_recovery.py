@@ -121,4 +121,4 @@ def test_failed_confirm_removes_orphan_plugin_tree_without_previous(tmp_path: Pa
         service.confirm_plugin(
             preview.token, actor_user_id="owner", workspace_id="workspace-a", replace=False,
         )
-    assert not (tmp_path / "extensions" / "plugins" / "demo.plugin").exists()
+    assert not (tmp_path / "extensions" / "plugins" / ".ws" / "workspace-a" / "demo.plugin").exists()

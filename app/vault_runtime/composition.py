@@ -449,6 +449,12 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     storage_conflicts = extensions.flag_storage_conflicts()
     if storage_conflicts:
         logging.getLogger(__name__).warning("extension_storage_conflicts blocked=%d", len(storage_conflicts))
+    # Installs from before per-workspace storage: move each old name-keyed tree or data folder
+    # into its workspace's folder when exactly one workspace uses it, then record the layout.
+    adopted = extension_files.adopt_legacy(extensions.legacy_storage_owners())
+    extensions.mark_workspace_storage()
+    if adopted:
+        logging.getLogger(__name__).info("extension_storage_adopted moved=%d", len(adopted))
     extension_secrets = ExtensionSecretStore(
         repository=extensions,
         master_key=LocalMasterKey(data_root / "keys" / "extension-credentials.key"),

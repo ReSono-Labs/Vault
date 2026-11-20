@@ -126,7 +126,7 @@ def test_mcp_package_preflight_confirm_stages_files_and_links(tmp_path: Path) ->
     assert installed.kind is ExtensionKind.MCP
     assert installed.configuration["packageType"] == "hosted"
     assert installed.state is ExtensionState.DISABLED
-    assert (tmp_path / "extensions/mcps/starter.example/current/server.py").is_file()
+    assert (tmp_path / "extensions/mcps/.ws/workspace/starter.example/current/server.py").is_file()
     companion_id = installed.configuration["companionPluginId"]
     assert isinstance(companion_id, str)
     plugin = service._repository.by_id(

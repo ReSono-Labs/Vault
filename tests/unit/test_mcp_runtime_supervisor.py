@@ -63,7 +63,7 @@ def _install_starter(tmp_path: Path) -> ExtensionRecord:
     extension_root = tmp_path / "extensions"
     filesystem = ExtensionFilesystem(extension_root)
     filesystem.replace(
-        category="mcps", identity="starter.example", candidate_root=starter_root,
+        category="mcps", identity=".ws/workspace/starter.example", candidate_root=starter_root,
     )
     record = ExtensionRecord(
         "mcp-starter", ExtensionKind.MCP, "starter.example", "starter.example", "0.1.0",
@@ -118,7 +118,7 @@ def test_supervisor_starts_starter_and_discovers_tools(tmp_path: Path) -> None:
 
 
 def test_supervisor_installs_requirements_into_data_dir(tmp_path: Path) -> None:
-    install_root = tmp_path / "extensions" / "mcps" / "deps.example" / "current"
+    install_root = tmp_path / "extensions" / "mcps" / ".ws" / "workspace" / "deps.example" / "current"
     install_root.mkdir(parents=True)
     (install_root / "requirements.txt").write_text("# no third-party deps\n", encoding="utf-8")
     (install_root / "server.py").write_text("print('ok')\n", encoding="utf-8")
@@ -144,7 +144,7 @@ def test_supervisor_installs_requirements_into_data_dir(tmp_path: Path) -> None:
         secrets=_FakeSecrets(),  # type: ignore[arg-type]
         extension_root=tmp_path / "extensions",
     )
-    data_dir = tmp_path / "extensions" / "data" / "deps.example"
+    data_dir = tmp_path / "extensions" / "data" / ".ws" / "workspace" / "deps.example"
     venv_python = supervisor._ensure_python_environment(install_root=install_root, data_dir=data_dir)
     assert venv_python is not None
     assert (data_dir / ".venv" / "bin" / "python3").is_file()
@@ -216,7 +216,7 @@ def test_safe_mode_stops_supervised_processes_and_keeps_them_stopped(tmp_path: P
     running = supervisor()
     status = running.start(actor_user_id="owner", workspace_id="workspace", record=record)
     assert status.state == "running" and status.pid is not None and status.port is not None
-    child = int((extension_root / "data/starter.example/child.pid").read_text(encoding="utf-8"))
+    child = int((extension_root / "data/.ws/workspace/starter.example/child.pid").read_text(encoding="utf-8"))
     assert _accepts(status.port)
 
     repository.safe_mode = True

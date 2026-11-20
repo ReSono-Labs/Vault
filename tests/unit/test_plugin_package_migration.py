@@ -95,9 +95,9 @@ def test_plugin_import_hydrates_migration_and_removes_data(tmp_path: Path) -> No
     assert installed.kind is ExtensionKind.PLUGIN
     assert installed.configuration.get("packageData") is True
     assert installed.configuration.get("migrationStatus") == {"workspace": "imported"}
-    assert (root / "plugins/demo.plugin/current/plugin.json").is_file()
-    assert not (root / "plugins/demo.plugin/current/migration").exists()
-    assert (root / "data/demo.plugin/workspace/SKILLS.md").is_file()
+    assert (root / "plugins/.ws/workspace/demo.plugin/current/plugin.json").is_file()
+    assert not (root / "plugins/.ws/workspace/demo.plugin/current/migration").exists()
+    assert (root / "data/.ws/workspace/demo.plugin/workspace/SKILLS.md").is_file()
 
     removed = service.set_state(
         actor_user_id="owner", workspace_id="workspace",
@@ -105,4 +105,4 @@ def test_plugin_import_hydrates_migration_and_removes_data(tmp_path: Path) -> No
     )
     assert removed.state is ExtensionState.REMOVED
     assert not (root / "plugins/demo.plugin").exists()
-    assert not (root / "data/demo.plugin").exists()
+    assert not (root / "data/.ws/workspace/demo.plugin").exists()

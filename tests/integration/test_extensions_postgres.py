@@ -116,20 +116,22 @@ def test_plugin_managed_mcp_children_follow_parent_lifecycle(extension_state) ->
 
 def test_identity_still_installed_accepts_null_exclusion(extension_state) -> None:
     extensions, identities, owner, _member = extension_state
+    first = owner.principal.workspace_id
     assert extensions.identity_still_installed(
-        identity="missing.plugin",
-        excluding_extension_id=None,
+        workspace_id=first, identity="missing.plugin", excluding_extension_id=None,
     ) is False
-    # Data folders are keyed by identity alone: any kind, any workspace counts.
+    # A workspace's data folder is keyed by identity: any kind in that workspace counts,
+    # another workspace's install with the same name does not (it has its own folder).
     second = identities.create_workspace(principal=owner.principal, display_name="Second")
     hosted = extensions.install(
         actor_user_id=owner.principal.user_id, workspace_id=second,
         kind=ExtensionKind.MCP, identity="shared.name", display_name="shared.name", version=None,
         description="MCP", content_hash="hash", configuration={"packageType": "hosted"},
     )
-    assert extensions.identity_still_installed(identity="shared.name") is True
+    assert extensions.identity_still_installed(workspace_id=second, identity="shared.name") is True
+    assert extensions.identity_still_installed(workspace_id=first, identity="shared.name") is False
     assert extensions.identity_still_installed(
-        identity="shared.name", excluding_extension_id=hosted.extension_id,
+        workspace_id=second, identity="shared.name", excluding_extension_id=hosted.extension_id,
     ) is False
 
 
@@ -447,7 +449,8 @@ def test_failed_hosted_package_upgrade_keeps_previous_data_byte_for_byte(extensi
     extensions, _identities, owner, _member = extension_state
     imports, root = _imports(extensions, tmp_path)
     _confirm_hosted(imports, owner, _hosted_package("resono.business", version="0.1.0", marker="v1"))
-    data, tree = root / "data/resono.business", root / "mcps/resono.business/current"
+    ws = owner.principal.workspace_id
+    data, tree = _ws(root, "data", ws, "resono.business"), _ws(root, "mcps", ws, "resono.business") / "current"
     (data / "runtime-state.json").write_text('{"written":"by the running package"}', encoding="utf-8")
     before = (_tree_hash(data), _tree_hash(tree))
     assert (data / "workspace/NOTES.md").read_text(encoding="utf-8") == "package v1\n"
@@ -471,7 +474,8 @@ def test_failed_plugin_upgrade_keeps_previous_data_byte_for_byte(extension_state
     extensions, _identities, owner, _member = extension_state
     imports, root = _imports(extensions, tmp_path)
     _confirm_plugin(imports, owner, _data_plugin("demo.data", version="0.1.0", marker="v1"))
-    data, tree = root / "data/demo.data", root / "plugins/demo.data/current"
+    ws = owner.principal.workspace_id
+    data, tree = _ws(root, "data", ws, "demo.data"), _ws(root, "plugins", ws, "demo.data") / "current"
     (data / "user-notes.txt").write_text("kept", encoding="utf-8")
     before = (_tree_hash(data), _tree_hash(tree))
 
@@ -494,14 +498,15 @@ def test_hosted_package_removal_keeps_data_a_same_identity_plugin_uses(extension
     hosted = _confirm_hosted(imports, owner, _hosted_package(
         "resono.business", version="0.1.0", marker="hosted", on_conflict=None,
     ))
-    data = root / "data/resono.business"
+    ws = owner.principal.workspace_id
+    data = _ws(root, "data", ws, "resono.business")
     (data / "business.db").write_bytes(b"customer records")
     before = _tree_hash(data)
 
     _remove(imports, owner, hosted)
     assert _tree_hash(data) == before
-    assert not (root / "mcps/resono.business").exists()
-    assert (root / "plugins/resono.business/current/plugin.json").is_file()
+    assert not _ws(root, "mcps", ws, "resono.business").exists()
+    assert (_ws(root, "plugins", ws, "resono.business") / "current/plugin.json").is_file()
 
     _remove(imports, owner, plugin)
     assert not data.exists()
@@ -514,14 +519,30 @@ def test_hosted_package_removal_deletes_its_current_and_previous_trees(extension
     upgraded = _confirm_hosted(
         imports, owner, _hosted_package("demo.hosted", version="0.2.0", marker="v2"), replace=True,
     )
-    base = root / "mcps/demo.hosted"
+    ws = owner.principal.workspace_id
+    base = _ws(root, "mcps", ws, "demo.hosted")
     assert (base / "current/server.py").read_text(encoding="utf-8") == "print('v2')\n"
     assert (base / "previous/server.py").read_text(encoding="utf-8") == "print('v1')\n"
 
     _remove(imports, owner, upgraded)
     assert not (base / "current").exists() and not (base / "previous").exists()
     assert not base.exists()
-    assert not (root / "data/demo.hosted").exists()
+    assert not _ws(root, "data", ws, "demo.hosted").exists()
+
+
+def _ws(root, category, workspace_id, identity):
+    """Where an install's files live: <category>/.ws/<workspace>/<identity>."""
+    return root / category / ".ws" / workspace_id / identity
+
+
+def _make_legacy(extensions, *records):
+    """Seed installs from before per-workspace storage (no storageScope marker)."""
+    with extensions._connect() as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE vault_private.vault_extensions SET configuration_json = configuration_json - 'storageScope' "
+            "WHERE extension_id = ANY(%s)", ([record.extension_id for record in records],),
+        )
+        connection.commit()
 
 
 def _second_workspace(identities, owner, member):
@@ -546,47 +567,96 @@ def _confirm_skill(imports, owner, payload, *, workspace_id, replace=False):
     )
 
 
-def test_same_name_in_a_second_workspace_is_refused(extension_state, tmp_path) -> None:
+def test_same_name_in_two_workspaces_is_two_independent_installs(extension_state, tmp_path) -> None:
     extensions, identities, owner, member = extension_state
     imports, root = _imports(extensions, tmp_path)
     first = owner.principal.workspace_id
     second, member_in_second = _second_workspace(identities, owner, member)
-    _confirm_skill(imports, owner, _skill_zip("shared-skill", "First workspace only."), workspace_id=first)
-    tree = root / "skills/shared-skill/current"
-    before = _tree_hash(tree)
-
-    with pytest.raises(ExtensionConflictError, match="already installed in another workspace") as refused:
-        _confirm_skill(imports, owner, _skill_zip("shared-skill", "Second workspace."), workspace_id=second)
-    assert first not in str(refused.value) and second not in str(refused.value)
-    # An ordinary member never reaches the conflict message: installing is owner-only.
-    with pytest.raises(ExtensionAuthorizationError):
-        imports.preflight_skill(
-            _skill_zip("shared-skill", "Member."), "skill.zip", actor_user_id=member_in_second.user_id,
-            workspace_id=second, audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
+    readers = {first: owner.principal.user_id, second: member_in_second.user_id}
+    markers = {first: "Owner workspace private marker.", second: "Second workspace private marker."}
+    installs = {ws: _confirm_skill(imports, owner, _skill_zip("shared-skill", markers[ws]), workspace_id=ws)
+                for ws in (first, second)}
+    extensions.set_safe_mode(actor_user_id=owner.principal.user_id, workspace_id=first, enabled=False)
+    for ws, record in installs.items():
+        extensions.set_grant(
+            actor_user_id=owner.principal.user_id, target_user_id=readers[ws], workspace_id=ws,
+            extension_id=record.extension_id, agent=AgentKind.VOICE, enabled=True,
         )
+    activation = SkillActivation(repository=extensions, extension_root=root)
 
-    # Both previews issued before either confirm: the second confirm is refused too.
-    payload = _data_plugin("shared.plugin", version="0.1.0", marker="first")
-    previews = [imports.preflight_plugin(
-        payload, "plugin.zip", actor_user_id=owner.principal.user_id, workspace_id=workspace_id,
-        audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
-    ) for workspace_id in (first, second)]
-    imports.confirm_plugin(previews[0].token, actor_user_id=owner.principal.user_id, workspace_id=first, replace=False)
-    plugin_data = _tree_hash(root / "data/shared.plugin")
-    with pytest.raises(ExtensionConflictError, match="another workspace"):
-        imports.confirm_plugin(previews[1].token, actor_user_id=owner.principal.user_id, workspace_id=second, replace=False)
-    # A hosted package's data folder has the same name-keyed path as the plugin's.
-    with pytest.raises(ExtensionConflictError, match="another workspace"):
-        _confirm_hosted(imports, owner, _hosted_package(
-            "shared.plugin", version="0.1.0", marker="hosted", on_conflict=None,
-        ), workspace_id=second)
-    assert _tree_hash(tree) == before
-    assert _tree_hash(root / "data/shared.plugin") == plugin_data
-    assert not (root / "mcps/shared.plugin").exists()
-    assert extensions.get(
-        user_id=owner.principal.user_id, workspace_id=second, kind=ExtensionKind.PLUGIN,
-        identity="shared.plugin", owner=True,
-    ) is None
+    def read(ws):
+        try:
+            return activation.load(user_id=readers[ws], workspace_id=ws, agent=AgentKind.VOICE,
+                                   extension_id=installs[ws].extension_id, name="shared-skill")
+        except ExtensionNotFoundError:
+            return None
+
+    # Each workspace reads exactly its own bytes, before and after the other is removed.
+    assert read(first) == f"{markers[first]}\n" and read(second) == f"{markers[second]}\n"
+    first_tree = _ws(root, "skills", first, "shared-skill")
+    before = _tree_hash(first_tree)
+    _remove(imports, owner, installs[second])
+    assert read(first) == f"{markers[first]}\n" and read(second) is None
+    assert _tree_hash(first_tree) == before
+    assert not _ws(root, "skills", second, "shared-skill").exists()
+    assert extensions.storage_conflicts() == ()
+
+    # Plugins with data, and a hosted package of the same name, are independent too.
+    data = {}
+    for ws in (first, second):
+        _confirm_plugin(imports, owner, _data_plugin("shared.plugin", version="0.1.0", marker=ws), workspace_id=ws)
+        data[ws] = _tree_hash(_ws(root, "data", ws, "shared.plugin"))
+    assert data[first] != data[second]
+    hosted = _confirm_hosted(imports, owner, _hosted_package(
+        "other.hosted", version="0.1.0", marker="hosted", on_conflict=None), workspace_id=second)
+    _remove(imports, owner, hosted)
+    assert _tree_hash(_ws(root, "data", first, "shared.plugin")) == data[first]
+    assert _tree_hash(_ws(root, "data", second, "shared.plugin")) == data[second]
+
+
+def test_startup_adopts_single_workspace_legacy_installs_and_keeps_shared_data(extension_state, tmp_path) -> None:
+    from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
+
+    extensions, _identities, owner, _member = extension_state
+    ws = owner.principal.workspace_id
+    root = tmp_path / "extensions"
+    skill = extensions.install(
+        actor_user_id=owner.principal.user_id, workspace_id=ws, kind=ExtensionKind.SKILL, identity="old-skill",
+        display_name="old-skill", version=None, description="Old.", content_hash="h", configuration={},
+    )
+    plugin = extensions.install(
+        actor_user_id=owner.principal.user_id, workspace_id=ws, kind=ExtensionKind.PLUGIN, identity="resono.business",
+        display_name="resono.business", version="1", description="Plugin", content_hash="h",
+        configuration={"packageData": True},
+    )
+    hosted = extensions.install(
+        actor_user_id=owner.principal.user_id, workspace_id=ws, kind=ExtensionKind.MCP, identity="resono.business",
+        display_name="resono.business", version="1", description="Hosted", content_hash="h",
+        configuration={"packageType": "hosted"},
+    )
+    _make_legacy(extensions, skill, plugin, hosted)
+    legacy = {"skills/old-skill/current/SKILL.md": "---\nname: old-skill\ndescription: Old.\n---\nOld body.\n",
+              "plugins/resono.business/current/plugin.json": "{}",
+              "mcps/resono.business/current/server.py": "print('hosted')\n",
+              "data/resono.business/resono.db": "customer records"}
+    for relative, text in legacy.items():
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+        (root / relative).write_text(text, encoding="utf-8")
+    data_before = _tree_hash(root / "data/resono.business")
+
+    assert extensions.flag_storage_conflicts() == ()
+    files = ExtensionFilesystem(root)
+    moved = files.adopt_legacy(extensions.legacy_storage_owners())
+    assert extensions.mark_workspace_storage() == 3
+    assert {(category, identity) for category, identity, _ in moved} == {
+        ("skills", "old-skill"), ("plugins", "resono.business"), ("mcps", "resono.business"), ("data", "resono.business")}
+    assert (_ws(root, "skills", ws, "old-skill") / "current/SKILL.md").is_file()
+    # The plugin and its hosted package keep sharing one data folder, byte for byte.
+    assert _tree_hash(_ws(root, "data", ws, "resono.business")) == data_before
+    assert not (root / "data/resono.business").exists() and not (root / "skills/old-skill").exists()
+    # A second start finds nothing left to move.
+    assert files.adopt_legacy(extensions.legacy_storage_owners()) == ()
+    assert extensions.mark_workspace_storage() == 0
 
 
 @pytest.mark.parametrize("removed_first", ["first", "second"])
@@ -604,7 +674,9 @@ def test_seeded_storage_collision_blocks_both_installs_and_keeps_bytes(extension
         identity="shared-skill", display_name="shared-skill", version=None, description="Shared name.",
         content_hash="seeded", configuration={"audience": ["voice"]},
     )
-    tree = root / "skills/shared-skill/current"
+    _make_legacy(extensions, *installs.values())
+    tree = root / "skills/shared-skill/current"   # the old shared, name-keyed tree
+    tree.mkdir(parents=True, exist_ok=True)
     (tree / "SKILL.md").write_text(
         f"---\nname: shared-skill\ndescription: Shared name.\n---\n{markers[second]}\n", encoding="utf-8",
     )
@@ -669,6 +741,8 @@ def test_seeded_hosted_collision_blocks_restore_projection_and_start(extension_s
         identity="shared.hosted", display_name="shared.hosted", version="0.1.0", description="Hosted",
         content_hash=f"hash-{workspace_id}", configuration=configuration,
     ) for workspace_id in (owner.principal.workspace_id, second)]
+    _make_legacy(extensions, *records)
+    assert extensions.flag_storage_conflicts() == ("shared.hosted",)
     extensions.set_safe_mode(actor_user_id=owner.principal.user_id, workspace_id=second, enabled=False)
     for record in records:
         extensions.set_grant(

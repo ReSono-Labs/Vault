@@ -65,7 +65,7 @@ def test_skill_preflight_confirm_and_explicit_replacement(tmp_path: Path) -> Non
     preview = service.preflight_skill(updated, "demo.zip", actor_user_id="owner", workspace_id="workspace", audience=audience)
     replaced = service.confirm_skill(preview.token, actor_user_id="owner", workspace_id="workspace", replace=True)
     assert replaced.previous_content_hash == installed.content_hash
-    assert (tmp_path / "extensions/skills/demo/current/SKILL.md").read_text() .endswith("Second.\n")
+    assert (tmp_path / "extensions/skills/.ws/workspace/demo/current/SKILL.md").read_text() .endswith("Second.\n")
 
 
 def test_plugin_preserves_valid_components_and_reports_invalid_components(tmp_path: Path) -> None:

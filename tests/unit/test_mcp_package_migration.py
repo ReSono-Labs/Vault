@@ -139,10 +139,10 @@ def test_mcp_package_migration_hydrates_data_and_excludes_from_code(tmp_path: Pa
         preview.token, actor_user_id="owner", workspace_id="workspace",
         replace=False, replace_migration=False,
     )
-    data_dir = tmp_path / "extensions/data/resono.business"
+    data_dir = tmp_path / "extensions/data/.ws/workspace/resono.business"
     assert (data_dir / "resono.db").is_file()
     assert (data_dir / "workspace/SKILLS.md").is_file()
-    assert not (tmp_path / "extensions/mcps/resono.business/current/migration").exists()
+    assert not (tmp_path / "extensions/mcps/.ws/workspace/resono.business/current/migration").exists()
     assert installed.configuration["migrationStatus"] == {
         "database": "imported",
         "workspace": "imported",
@@ -155,7 +155,7 @@ def test_mcp_package_migration_conflict_requires_confirmation(tmp_path: Path) ->
         inspector=ArchiveInspector(tmp_path / "quarantine"),
         filesystem=ExtensionFilesystem(tmp_path / "extensions"),
     )
-    data_dir = tmp_path / "extensions/data/resono.business"
+    data_dir = tmp_path / "extensions/data/.ws/workspace/resono.business"
     data_dir.mkdir(parents=True)
     (data_dir / "resono.db").write_bytes(_sqlite_bytes())
     files = {

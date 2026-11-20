@@ -22,6 +22,11 @@ All notable changes to Vault are listed here. The version comes from
   namespace (root `vault.json` still works); other clients' namespaces no longer
   reject a plugin; stdio and SSE servers are skipped with a message; header and
   server names are checked; the kit validates packages the same way Vault does.
+- **Per-workspace storage:** the same extension name can be installed in several
+  workspaces as independent installs (files, data, versions and removal are per
+  workspace). Existing installs are moved into the new layout at startup; an old
+  folder two workspaces shared stays in place and stays blocked until the owner
+  reinstalls one.
 - **Link tools:** discovery reads every page and backs off when nothing changes.
 - **Docs:** hosted executable plugins are described as trusted code with Vault's
   access until OS confinement exists.

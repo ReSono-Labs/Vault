@@ -19,7 +19,7 @@ from urllib.request import Request, urlopen
 
 from app.vault_runtime.extensions.filesystem import extension_category_path, extension_data_path
 from app.vault_runtime.extensions.models import ExtensionKind, ExtensionState
-from app.vault_runtime.extensions.repository import ExtensionRecord, ExtensionRepository
+from app.vault_runtime.extensions.repository import ExtensionRecord, ExtensionRepository, record_storage_identity
 from app.vault_runtime.extensions.runtime_port_forwarder import (
     RuntimePortForwarder,
     RuntimePortForwarderError,
@@ -130,7 +130,7 @@ class McpRuntimeSupervisor:
                 actor_user_id=actor_user_id, workspace_id=workspace_id,
                 record=record, install_root=install_root, port=port,
             )
-            data_dir = self._data_dir(record.identity)
+            data_dir = self._data_dir(record)
             cwd = install_root / str(runtime.get("cwd", "."))
             if not cwd.is_dir():
                 raise McpRuntimeError("Hosted MCP working directory is unavailable")
@@ -263,11 +263,11 @@ class McpRuntimeSupervisor:
     def _install_root(self, record: ExtensionRecord) -> Path:
         category = "plugins" if record.kind is ExtensionKind.PLUGIN else "mcps"
         return (extension_category_path(
-            root=self._root, category=category, identity=record.identity,
+            root=self._root, category=category, identity=record_storage_identity(record),
         ) / "current").resolve()
 
-    def _data_dir(self, identity: str) -> Path:
-        path = extension_data_path(root=self._root, identity=identity)
+    def _data_dir(self, record: ExtensionRecord) -> Path:
+        path = extension_data_path(root=self._root, identity=record_storage_identity(record))
         path.mkdir(parents=True, exist_ok=True, mode=0o700)
         return path
 
@@ -283,10 +283,10 @@ class McpRuntimeSupervisor:
         bind_host = "0.0.0.0" if runtime_port_publish_enabled() else "127.0.0.1"
         env["VAULT_MCP_BIND"] = bind_host
         env["VAULT_PLUGIN_ROOT"] = str(install_root)
-        env["VAULT_PLUGIN_DATA"] = str(self._data_dir(record.identity))
-        workspace_root = self._data_dir(record.identity) / "workspace"
+        env["VAULT_PLUGIN_DATA"] = str(self._data_dir(record))
+        workspace_root = self._data_dir(record) / "workspace"
         env["RESONO_WORKSPACE"] = str(workspace_root)
-        database_path = self._data_dir(record.identity) / "resono.db"
+        database_path = self._data_dir(record) / "resono.db"
         if database_path.is_file():
             env["RESONO_DB"] = str(database_path)
         settings = record.configuration.get("settings", {})
@@ -362,7 +362,7 @@ class McpRuntimeSupervisor:
             return venv_python
         try:
             subprocess.run(
-                [sys.executable, "-m", "venv", str(venv_dir)],
+                [sys.executable, "-m", "venv", "--clear", str(venv_dir)],
                 check=True, capture_output=True, text=True,
             )
             subprocess.run(

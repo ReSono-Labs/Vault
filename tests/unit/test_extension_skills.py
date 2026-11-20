@@ -178,7 +178,9 @@ def _record(extension_id: str, kind: ExtensionKind, identity: str, content_hash:
 
 
 def _install(root: Path, relative: str, name: str | None, description: str = "Use when asked.", body: str = "Body.\n") -> Path:
-    folder = root / relative
+    # Installs live in their workspace's folder: <category>/.ws/<workspace>/<identity>/...
+    category, rest = relative.split("/", 1)
+    folder = root / category / ".ws" / "w1" / rest
     folder.mkdir(parents=True)
     head = f"name: {name}\n" if name else ""
     (folder / "SKILL.md").write_text(f"---\n{head}description: {description}\n---\n{body}", encoding="utf-8")

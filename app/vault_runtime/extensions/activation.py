@@ -12,6 +12,7 @@ from threading import Lock
 
 from app.vault_runtime.extensions.filesystem import extension_category_path
 from app.vault_runtime.extensions.models import ExtensionKind
+from app.vault_runtime.extensions.repository import record_storage_identity
 from app.vault_runtime.extensions.repository import ExtensionNotFoundError, ExtensionRecord, ExtensionRepository
 from app.vault_runtime.extensions.skills import (
     SkillSpecificationError, confined_skill_resource, parse_skill_document,
@@ -240,9 +241,9 @@ class SkillActivation:
 
     def _entry(self, record: ExtensionRecord, component: str | None) -> _GrantedSkill:
         if component is None:
-            root, expected, source = self._direct_path(record.identity), record.identity, "skill"
+            root, expected, source = self._direct_path(record_storage_identity(record)), record.identity, "skill"
         else:
-            root = self._plugin_path(record.identity, component)
+            root = self._plugin_path(record_storage_identity(record), component)
             expected, source = root.name, f"plugin:{record.identity}"
         key = (record.extension_id, record.content_hash, component or "")
         with self._lock:

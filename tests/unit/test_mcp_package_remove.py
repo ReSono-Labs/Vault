@@ -124,7 +124,7 @@ def test_mcp_package_remove_cleans_hosted_files_and_companion(tmp_path: Path) ->
     )
     companion_id = installed.configuration["companionPluginId"]
     assert isinstance(companion_id, str)
-    data_dir = root / "data" / installed.identity
+    data_dir = root / "data" / ".ws" / "workspace" / installed.identity
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "demo.sqlite").write_text("demo", encoding="utf-8")
 
@@ -133,11 +133,11 @@ def test_mcp_package_remove_cleans_hosted_files_and_companion(tmp_path: Path) ->
         extension_id=installed.extension_id, state=ExtensionState.REMOVED,
     )
     assert removed.state is ExtensionState.REMOVED
-    assert not (root / "mcps" / installed.identity).exists()
-    assert not (root / "data" / installed.identity).exists()
+    assert not (root / "mcps" / ".ws" / "workspace" / installed.identity).exists()
+    assert not (root / "data" / ".ws" / "workspace" / installed.identity).exists()
 
     companion = service._repository.by_id(
         actor_user_id="owner", workspace_id="workspace", extension_id=companion_id,
     )
     assert companion.state is ExtensionState.REMOVED
-    assert not (root / "plugins" / companion.identity).exists()
+    assert not (root / "plugins" / ".ws" / "workspace" / companion.identity).exists()
