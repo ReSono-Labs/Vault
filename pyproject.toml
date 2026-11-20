@@ -1,0 +1,47 @@
+[project]
+name = "resono-labs-vault"
+version = "0.1.0"
+description = "Local-first standalone ReSono Labs Vault"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "ReSono Labs"}]
+requires-python = ">=3.11"
+dependencies = [
+  "cryptography==50.0.2",
+  "httpx==0.28.1",
+  "jsonschema==4.23.0",
+  "openai-agents==0.18.3",
+  "pillow==13.0.0",
+  "psycopg[binary]==3.2.3",
+  "procrastinate==3.11.0",
+  "croniter==6.1.0",
+  "pypdf==6.21.4",
+  "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.4",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.vault_runtime.extensions" = ["standards/*.json"]
+"app.vault_runtime.live_memory" = ["VOICE_MEM_LICENSE.txt"]
+"app.vault_runtime.migrations" = ["*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -rs lists every skipped test and its reason at the end of the run.
+addopts = ["--import-mode=importlib", "-rs", "--strict-markers"]
+markers = [
+  "integration: needs the isolated test database (set automatically for tests/integration)",
+  "flags_off(reason): build the mounted app without coordination and owner approvals (say why)",
+]

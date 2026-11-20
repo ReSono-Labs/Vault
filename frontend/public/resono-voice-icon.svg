@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="wave" x1="170" y1="280" x2="854" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#20C7FF"/>
+      <stop offset="0.45" stop-color="#2878FF"/>
+      <stop offset="1" stop-color="#7CE37D"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-80%" width="140%" height="260%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.10 0 0 0 0 0.70 0 0 0 0 1.00 0 0 0 0.55 0" result="blueGlow"/>
+      <feMerge>
+        <feMergeNode in="blueGlow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" rx="190" fill="#07101f"/>
+  <rect x="38" y="38" width="948" height="948" rx="160" fill="#0b1424" stroke="#1f3148" stroke-width="12"/>
+  <path
+    d="M166 320 C244 320 262 278 315 278 C372 278 364 396 421 396 C482 396 468 208 538 208 C618 208 585 430 666 430 C724 430 720 304 781 304 C824 304 838 345 858 346"
+    fill="none"
+    stroke="url(#wave)"
+    stroke-width="52"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#glow)"
+  />
+  <path
+    d="M166 320 C244 320 262 278 315 278 C372 278 364 396 421 396 C482 396 468 208 538 208 C618 208 585 430 666 430 C724 430 720 304 781 304 C824 304 838 345 858 346"
+    fill="none"
+    stroke="#b9f6ff"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.42"
+  />
+  <text x="512" y="640" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="154" font-weight="800" fill="#ffffff">ReSono</text>
+  <text x="512" y="744" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="62" font-weight="700" letter-spacing="34" fill="#f1f6ff">LABS</text>
+</svg>

@@ -1,0 +1,14 @@
+ReSono Labs Vault
+Copyright 2026 ReSono Labs
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+ReSono Labs Vault is an independent community project and is not affiliated with,
+endorsed by, or sponsored by rabbit inc.
+
+This product includes software adapted from VoiceMem (https://github.com/xzf-thu/VoiceMem),
+Apache License 2.0; see app/vault_runtime/live_memory/VOICE_MEM_LICENSE.txt.
+
+This product includes background coordination, scratchpad ledger, private helper assignment,
+and notification delivery logic adapted from Rakazo (https://github.com/elie222/rakazo,
+commit 83db73c2e5fe5002487f4dc1cf488fe601a34c25), licensed under the Apache License, Version 2.0.

@@ -1,0 +1,234 @@
+
+.browser-voice-shell.is-b0r .browser-voice-future-nav.is-desktop button.is-active svg { color:var(--b0r-cyan); }
+.browser-voice-shell.is-b0r .browser-voice-header.is-management { min-height:92px; padding-bottom:12px; }
+.browser-voice-management-page>section { display:grid; gap:0; }
+.browser-voice-management-section+.browser-voice-management-section { padding-top:48px; }
+.browser-voice-a2a { padding:0 0 18px; }
+.browser-voice-a2a-dialog { display:grid; gap:22px; padding:30px; }
+.browser-voice-a2a-facts>div.is-wide { grid-column:1/-1; }
+.browser-voice-a2a-skills { margin-top:22px; }
+.browser-voice-a2a-skills>div { display:flex; flex-wrap:wrap; gap:8px; }
+.browser-voice-a2a-skills span { padding:6px 9px; border:1px solid var(--b0r-line); border-radius:999px; font-size:.8rem; }
+.browser-voice-connection-tabs button:focus-visible { outline:2px solid var(--b0r-cyan); outline-offset:2px; }
+.browser-voice-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:22px; }
+.browser-voice-section-head h3 { margin:0 0 8px; font-size:1.45rem; font-weight:500; }
+.browser-voice-eyebrow-label { display:block; margin:0 0 12px; color:var(--b0r-cyan); font-size:.75rem; font-weight:700; letter-spacing:.13em; text-transform:uppercase; }
+.browser-voice-state { display:inline-flex; align-items:center; gap:9px; color:var(--b0r-muted); font-size:.88rem; white-space:nowrap; }
+.browser-voice-state:before { width:9px; height:9px; border-radius:50%; background:#ffd166; content:""; }
+.browser-voice-state.is-error:before { background:#ff6b6b; }
+.browser-voice-form.is-two-column>button,
+.browser-voice-form.is-two-column>p,
+.browser-voice-form.is-two-column>.browser-voice-inline-actions { grid-column:1/-1; }
+.browser-voice-submit,.browser-voice-pill { display:inline-flex; align-items:center; justify-content:center; width:fit-content; min-height:44px; padding:0 18px; border:1px solid var(--b0r-cyan); border-radius:8px; background:transparent; color:var(--b0r-cyan); font-weight:500; box-shadow:none; }
+.browser-voice-agent-list.is-empty .browser-voice-management-empty {
+  margin: 0;
+  padding: 20px 0 32px;
+}
+.browser-voice-agent-list.is-empty { border-top:0; }
+.browser-voice-management-empty { margin:0; padding:38px 0; border-bottom:1px solid var(--b0r-line); color:var(--b0r-muted); }
+.browser-voice-connection-row:hover { background:transparent; border-color:var(--b0r-line); }
+.browser-voice-a2a-activity-row { width:100%; text-align:left; cursor:pointer; }
+.browser-voice-a2a-review { margin-top:22px; padding-top:20px; border-top:1px solid var(--b0r-line); }
+.browser-voice-a2a-review h5 { margin:0 0 10px; color:var(--b0r-muted); font-size:.78rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+.browser-voice-connection-actions { display:flex; gap:10px; flex-wrap:wrap; }
+.browser-voice-form-note { margin:4px 0; color:var(--b0r-muted); line-height:1.55; }
+.browser-voice-account-facts>div { min-width:0; padding:20px 18px; }
+.browser-voice-account-facts dt { margin:0 0 6px; color:var(--b0r-muted); font-size:.82rem; }
+.browser-voice-account-facts dd { margin:0; color:var(--b0r-text); font-size:1rem; overflow-wrap:anywhere; }
+.browser-voice-account-field { display:grid; gap:8px; width:100%; max-width:620px; color:var(--b0r-muted); font-size:.86rem; }
+.browser-voice-account .browser-voice-form { max-width:620px; }
+.browser-voice-account-logout { width:fit-content; margin-top:52px; }
+.browser-voice-account-directory { display:grid; border-top:1px solid var(--b0r-line); }
+.browser-voice-account-directory b { color:var(--b0r-muted); font-size:1.6rem; font-weight:300; }
+.browser-voice-account-detail .browser-voice-section-head { margin-bottom:20px; }
+.browser-voice-management-error,.browser-voice-management-message { max-width:780px; overflow-wrap:anywhere; }
+.browser-voice-card.is-login-page .browser-voice-login-panel { width:100%; }
+.browser-voice-card.is-login-page .browser-voice-login-panel h1 { font-weight:400; }
+.browser-voice-onboarding-actions { grid-column:1/-1; }
+.browser-voice-onboarding-choice .browser-voice-choice-actions .browser-voice-submit:hover,
+.browser-voice-onboarding-choice .browser-voice-onboarding-actions .browser-voice-submit:hover { background:linear-gradient(135deg,rgba(24,102,122,.88),rgba(25,75,110,.82)); color:#fff; transform:translateY(-1px); }
+.browser-voice-onboarding-choice .browser-voice-choice-actions .browser-voice-pill,
+.browser-voice-onboarding-choice .browser-voice-onboarding-actions .browser-voice-pill { min-width:132px; }
+.browser-voice-onboarding-step>.browser-voice-submit { justify-self:center; min-width:176px; margin-top:8px; border-color:rgba(121,242,221,.85); background:linear-gradient(135deg,rgba(19,84,105,.78),rgba(19,61,94,.72)); color:#efffff; box-shadow:0 12px 34px rgba(0,0,0,.22),0 0 24px rgba(121,242,221,.08); }
+.browser-voice-onboarding-step>.browser-voice-submit:disabled { opacity:.42; transform:none; }
+.browser-voice-onboarding-prompt { margin:0 0 4px; color:var(--b0r-muted); font-size:1.02rem; line-height:1.55; }
+.browser-voice-onboarding-hello p { margin:0; color:var(--b0r-muted); font-size:1.05rem; }
+.browser-voice-onboarding-hello .browser-voice-text-action { min-width:150px; padding:11px 22px; border:1px solid rgba(121,242,221,.72); border-radius:9px; color:var(--b0r-cyan); }
+.browser-voice-onboarding-orbit { position:relative; display:block; width:92px; height:92px; border:1px solid rgba(121,242,221,.72); border-radius:50%; box-shadow:0 0 60px rgba(64,203,231,.18),inset 0 0 34px rgba(121,242,221,.08); }
+.browser-voice-onboarding-orbit:before { width:13px; height:13px; background:var(--b0r-cyan); box-shadow:0 0 22px rgba(121,242,221,.8); }
+.browser-voice-experience-grid strong { font-size:1rem; font-weight:550; }
+@keyframes vault-step-in { from { opacity:0; transform:translateX(36px); } to { opacity:1; transform:translateX(0); } }
+@keyframes vault-hello-in { from { opacity:0; transform:scale(.96) translateY(12px); } to { opacity:1; transform:scale(1) translateY(0); } }
+@keyframes vault-orbit { to { transform:translate(-50%,-50%) rotate(360deg); } }
+.browser-voice-modal::backdrop { background:rgba(1,8,15,.82); backdrop-filter:blur(5px); }
+.browser-voice-modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+.browser-voice-modal-close { display:grid; place-items:center; flex:0 0 44px; width:44px; height:44px; padding:0; border:0; background:transparent; color:var(--b0r-text); font-size:1.7rem; line-height:1; }
+.browser-voice-modal-error { margin:0; padding:12px 0; border-top:1px solid rgba(255,107,107,.5); border-bottom:1px solid rgba(255,107,107,.5); color:#ff9a9a; }
+@media(prefers-reduced-motion:reduce){
+  .browser-voice-onboarding-step,.browser-voice-onboarding-hello,.browser-voice-onboarding-orbit:after { animation:none; }
+}
+
+/*
+ * Shared layout for management pages (presentation/ManagementLayout.tsx) and the app header menu.
+ * Spacing only: colours come from the existing classes, so Aurora needs no regeneration.
+ * Rhythm: 4px heading to description, 12px description to controls, 24px tabs to panel,
+ * 32px between sections (24px on phones).
+ */
+
+/* Page header and tabs */
+.vault-page.is-readable > :is(.vault-page-header, .vault-tabs, .vault-tab-panel) { max-width: 44rem; }
+.browser-voice-management-heading.vault-page-header { margin: 0 0 24px; }
+.vault-page-header h2 { margin: 0; }
+.vault-page-header p { margin: 8px 0 0; }
+.vault-page-header-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.vault-tabs { margin: 0 0 24px; }
+.vault-tabs .browser-voice-connection-tabs.vault-tabs-strip { margin: 0; }
+.vault-tabs .vault-tabs-strip button[aria-selected="true"] { font-weight: 650; }
+.vault-tabs-select { display: none; }
+
+/* Sections inside a tab panel */
+.vault-tab-panel { display: block; min-width: 0; }
+.vault-tab-panel .browser-voice-section-head { margin: 32px 0 12px; gap: 16px; }
+.vault-tab-panel .browser-voice-section-head:first-child { margin-top: 0; }
+.vault-tab-panel .browser-voice-section-head h3 { margin: 0 0 4px; }
+.vault-tab-panel .browser-voice-section-head p { margin: 0; }
+.vault-tab-panel > section + section, .vault-section + .vault-section { margin-top: 32px; }
+.vault-section > .vault-section-head { margin: 0 0 12px; }
+.vault-section > .vault-section-head h3 { margin: 0 0 4px; }
+.vault-section > .vault-section-head p { margin: 0; }
+.vault-section-actions { display: flex; flex-wrap: wrap; gap: 10px; flex-shrink: 0; }
+.vault-section-note { margin: 0 0 12px; color: var(--b0r-muted); font-size: .88rem; }
+.vault-section .browser-voice-theme-picker { margin: 0; }
+.vault-tab-panel .browser-voice-background-settings > .browser-voice-section-head:not(:first-child) { margin-top: 16px; }
+.vault-tab-panel .browser-voice-background-settings > .browser-voice-section-head p { margin-top: 4px; }
+/* The Folders heading carried a divider and top padding from the old single-page Settings. */
+.vault-tab-panel .browser-voice-settings-linked-head { align-items: flex-start; justify-content: flex-start; padding-top: 0; border-top: 0; }
+.vault-tab-panel .browser-voice-settings-linked-head:first-child { margin-top: 0; }
+
+/* List rows: a row without an icon gives its text the whole width (runs, routines, specialists). */
+.browser-voice-agent-row-main:not(:has(> .browser-voice-agent-mark)) { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 800px) {
+  /* Button groups drop under the name instead of squeezing it; single switches stay beside it. */
+  .browser-voice-agent-row:has(> :is(.browser-voice-folder-row-actions, .browser-voice-run-actions, .browser-voice-folder-confirm)) {
+    grid-template-columns: minmax(0, 1fr); row-gap: 12px; }
+  .browser-voice-agent-row > :is(.browser-voice-folder-row-actions, .browser-voice-run-actions, .browser-voice-folder-confirm) {
+    grid-column: 1 / -1; justify-self: start; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+  .browser-voice-agent-row > .browser-voice-folder-confirm small { text-align: left; }
+  .browser-voice-agent-row:has(> .browser-voice-agent-row-main > .browser-voice-agent-mark) > :is(.browser-voice-folder-row-actions, .browser-voice-run-actions, .browser-voice-folder-confirm) {
+    padding-left: calc(3rem + .8rem); }
+}
+
+/* Desktop rail: grouped destinations that fit a 900px-tall window */
+.browser-voice-shell.is-b0r .browser-voice-desktop-rail { overflow-x: hidden; overflow-y: auto; }
+.browser-voice-shell.is-b0r .browser-voice-future-nav.is-desktop { gap: 14px; margin-top: 40px; }
+.browser-voice-shell.is-b0r .browser-voice-future-nav.is-desktop .browser-voice-nav-group { display: grid; gap: 4px; }
+.browser-voice-shell.is-b0r .browser-voice-future-nav.is-desktop .browser-voice-nav-group + .browser-voice-nav-group { padding-top: 14px; border-top: 1px solid var(--b0r-line); }
+.browser-voice-shell.is-b0r .browser-voice-future-nav.is-desktop button { gap: 14px; min-height: 52px; padding: 0 14px; white-space: nowrap; }
+
+@media (max-width: 800px) {
+  /* The menu lives in the header beside notifications and the account button. */
+  .browser-voice-shell.is-b0r .browser-voice-header-action-row > .browser-voice-mobile-menu { order: 4; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-menu-trigger { position: static; display: inline-flex; align-items: center; justify-content: center;
+    width: 46px; height: 46px; min-height: 0; padding: 0; border: 1px solid var(--b0r-line); border-radius: 50%; background: rgba(9, 26, 45, .78); color: #f1f7fd; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-menu-trigger:focus-visible { outline: 2px solid var(--b0r-cyan); outline-offset: 2px; }
+  .browser-voice-shell.is-b0r .browser-voice-app-frame { padding-bottom: 24px; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-menu .browser-voice-mobile-menu-drawer .browser-voice-future-nav.is-mobile { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-menu-drawer .browser-voice-nav-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-menu-drawer .browser-voice-nav-group + .browser-voice-nav-group { padding-top: 12px; border-top: 1px solid var(--b0r-line); }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-menu-drawer .browser-voice-future-nav.is-mobile button { text-align: center; }
+
+  .vault-tab-panel .browser-voice-section-head { margin-top: 24px; }
+  .vault-tab-panel > section + section, .vault-section + .vault-section { margin-top: 24px; }
+  .vault-tab-panel .browser-voice-background-settings > .browser-voice-section-head:not(:first-child) { margin-top: 8px; }
+}
+
+@media (max-width: 560px) {
+  /* Four long tab names don't fit: the same choice becomes a labeled select. */
+  .vault-tabs .vault-tabs-strip { display: none; }
+  .vault-tabs-select { display: grid; gap: 6px; max-width: none; }
+  .vault-tabs-select > span { font-size: .82rem; }
+}
+
+@media (max-width: 560px) {
+  .browser-voice-shell.is-b0r .browser-voice-header-action-row { gap: 8px; }
+  .browser-voice-shell.is-b0r .browser-voice-header-action-row :is(.browser-voice-icon-button, .browser-voice-account-menu > summary, .browser-voice-mobile-menu-trigger),
+  .browser-voice-shell.is-b0r .browser-voice-header-action-row .vault-chat-history-button { width: 40px; height: 40px; }
+}
+
+/* Workspace on phones: search gets its own full row, actions go on the next row. */
+@media (max-width: 560px) {
+  .browser-voice-shell.is-b0r .browser-voice-app-frame.is-workspace-page .browser-voice-files-head { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .browser-voice-shell.is-b0r .browser-voice-app-frame.is-workspace-page .browser-voice-files-search { width: 100%; }
+  .browser-voice-shell.is-b0r .browser-voice-app-frame.is-workspace-page .browser-voice-files-actions { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+}
+
+/* Rows that open a detail view (Background work, routines, earlier runs). Theme colours only. */
+.vault-work-list { display: grid; border-top: 1px solid var(--b0r-line); }
+.vault-work-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0; border-bottom: 1px solid var(--b0r-line); }
+.vault-work-open { flex: 1; min-width: 0; display: grid; gap: 6px; padding: 14px 4px; border: 0; background: transparent; color: var(--b0r-text);
+  font: inherit; text-align: left; cursor: pointer; }
+.vault-work-open:hover { background: color-mix(in srgb, var(--b0r-line) 35%, transparent); }
+.vault-work-open:focus-visible, .vault-back:focus-visible, .vault-link-button:focus-visible { outline: 2px solid var(--b0r-cyan); outline-offset: 2px; }
+.vault-work-open > strong, .vault-work-open > summary > strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 1rem; font-weight: 550; line-height: 1.35; }
+.vault-work-open small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--b0r-muted); font-size: .84rem; }
+.vault-work-open details > summary, details.vault-work-open > summary { display: grid; gap: 6px; cursor: pointer; list-style: none; }
+details.vault-work-open > summary::-webkit-details-marker { display: none; }
+details.vault-work-open[open] > summary { margin-bottom: 8px; }
+.vault-work-row > .browser-voice-pill { flex-shrink: 0; }
+.vault-work-more { margin-top: 12px; }
+.browser-voice-state.is-active:before { background: var(--b0r-cyan); }
+.browser-voice-state.is-muted:before { background: var(--b0r-muted); }
+.browser-voice-state.is-error:before { background: var(--b0r-red, #ff6b6b); }
+
+/* Detail views slide in from the right; Back returns to the list. */
+.vault-work-detail, .vault-routine-detail { display: grid; gap: 16px; animation: vault-detail-in 200ms ease-out; }
+@keyframes vault-detail-in { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .vault-work-detail, .vault-routine-detail { animation: none; } }
+.vault-back { justify-self: start; }
+.vault-work-detail-head { display: grid; gap: 8px; }
+.vault-work-detail-head h2 { margin: 0; font-size: 1.6rem; font-weight: 450; line-height: 1.2; }
+.vault-work-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--b0r-line); }
+.vault-work-facts > div { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--b0r-line); min-width: 0; }
+.vault-work-facts dt { margin: 0 0 4px; color: var(--b0r-muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; }
+.vault-work-facts dd { margin: 0; overflow-wrap: anywhere; }
+.vault-work-text { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vault-work-note { margin: 8px 0 0; color: var(--b0r-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.vault-work-code { margin: 0; color: var(--b0r-muted); font-size: .78rem; }
+.vault-work-reason { margin: 0; }
+.vault-work-reason p { margin: 6px 0 0; }
+.vault-work-detail .vault-section + .vault-section, .vault-work-page > .vault-section + .vault-section { margin-top: 8px; }
+.vault-work-page > .vault-section { margin-top: 24px; }
+.vault-work-page > .vault-section:first-of-type { margin-top: 0; }
+
+/* Collapsed sections: one summary line that opens the full list. */
+.vault-collapsible { margin-top: 32px; border-bottom: 1px solid var(--b0r-line); }
+.vault-collapsible > summary { display: grid; gap: 4px; padding: 16px 0; cursor: pointer; }
+.vault-collapsible-title { font-size: 1.25rem; font-weight: 500; }
+.vault-collapsible > summary small { color: var(--b0r-muted); }
+.vault-a2a-agent-group { border-top: 1px solid var(--b0r-line); }
+.vault-a2a-agent-group > summary { display: flex; align-items: baseline; gap: 12px; padding: 12px 0; cursor: pointer; }
+.vault-a2a-agent-group > summary small { color: var(--b0r-muted); }
+.vault-a2a-agent-group .browser-voice-a2a-activity-row { min-height: 0; padding: 10px 0 10px 18px; grid-template-columns: minmax(0, 1fr) auto; }
+.vault-work-earlier { margin-top: 32px; }
+.vault-work-earlier > summary { padding: 14px 0; color: var(--b0r-muted); cursor: pointer; }
+
+/* External agents: sections without their own bottom borders (rows already draw one), setup sub-blocks. */
+.browser-voice-a2a.vault-page .vault-section + .vault-section, .browser-voice-a2a.vault-page .vault-collapsible + .vault-section { margin-top: 32px; }
+.vault-subsection { display: grid; gap: 10px; padding: 16px 0; border-top: 1px solid var(--b0r-line); }
+.vault-subsection:first-of-type { border-top: 0; padding-top: 0; }
+.vault-subsection h4 { margin: 0; font-size: 1.05rem; font-weight: 550; }
+.vault-subsection p { margin: 0; color: var(--b0r-muted); line-height: 1.5; }
+.vault-subsection .browser-voice-a2a-facts { margin-top: 4px; }
+
+/* Settings link to Background work, and Chat drawer preferences. */
+.vault-settings-link { margin-top: 32px; }
+.vault-link-button { padding: 0; border: 0; background: none; color: var(--b0r-cyan); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.vault-chat-preferences { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--b0r-line); }
+.vault-chat-preferences > summary { min-height: 40px; color: var(--b0r-muted); cursor: pointer; }
+@media (max-width: 560px) {
+  .vault-work-row { align-items: flex-start; flex-wrap: wrap; }
+  .vault-work-row > .browser-voice-pill { margin: 0 0 12px 4px; }
+  .vault-work-detail-head h2 { font-size: 1.35rem; }
+}
+.vault-memory-access > form { margin-bottom: 16px; }

@@ -1,0 +1,42 @@
+.browser-voice-handoff-shell {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--browser-voice-line);
+  border-radius: 24px;
+  background: rgba(10, 22, 40, 0.44);
+}
+
+@media (max-width: 560px) {
+
+  .browser-voice-handoff-shell {
+    padding: 14px;
+    border-radius: 18px;
+  }
+}
+
+.browser-voice-handoff-input {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(219, 236, 255, 0.16);
+  border-radius: 18px;
+  background: rgba(8, 16, 34, 0.42);
+  color: var(--browser-voice-text);
+}
+
+.browser-voice-handoff-input:focus {
+  outline: 2px solid rgba(123, 191, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.browser-voice-hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}

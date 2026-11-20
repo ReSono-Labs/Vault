@@ -1,0 +1,101 @@
+.browser-voice-background-settings {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.browser-voice-background-settings .browser-voice-section-head {
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0;
+}
+
+.browser-voice-background-settings .browser-voice-agent-switch {
+  flex-shrink: 0;
+}
+
+.browser-voice-background-settings .browser-voice-section-head :is(h3, h4, p) {
+  margin: 0;
+}
+
+.browser-voice-background-settings .browser-voice-section-head p {
+  margin-top: .35rem;
+}
+
+.browser-voice-background-quiet-hours {
+  display: grid;
+  gap: .875rem;
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--b0r-border, rgba(137, 165, 194, .28));
+  border-radius: .75rem;
+}
+
+.browser-voice-background-quiet-hours legend {
+  padding-inline: .4rem;
+  font-weight: 600;
+}
+
+.browser-voice-background-time-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: .75rem;
+}
+
+.browser-voice-background-time-fields label {
+  display: grid;
+  gap: .375rem;
+  min-width: 0;
+  color: var(--b0r-muted, #aebfd2);
+}
+
+.browser-voice-background-time-fields input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: .625rem .75rem;
+  border: 1px solid var(--b0r-border, rgba(137, 165, 194, .36));
+  border-radius: .5rem;
+  color: var(--b0r-text, #edf6ff);
+  background: var(--b0r-surface, rgba(127, 149, 176, .1));
+  font: inherit;
+}
+
+.browser-voice-background-quiet-hours > button {
+  justify-self: start;
+}
+
+.browser-voice-background-settings .browser-voice-agent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-height: 0;
+}
+
+.browser-voice-background-row-details {
+  display: grid;
+  flex: 1 1 15rem;
+  min-width: 0;
+  gap: .25rem;
+  overflow-wrap: anywhere;
+}
+
+.browser-voice-background-row-details p,
+.browser-voice-background-empty {
+  margin: 0;
+}
+
+.browser-voice-background-empty {
+  padding: .75rem;
+  border-radius: .5rem;
+  background: rgba(127, 149, 176, .1);
+  color: var(--b0r-muted, #aebfd2);
+}
+
+.browser-voice-background-settings .browser-voice-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}

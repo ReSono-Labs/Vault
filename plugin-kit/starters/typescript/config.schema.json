@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schemas.resonolabs.com/vault/plugin-config/v1.json",
+  "fields": [
+    {
+      "key": "greeting",
+      "type": "text",
+      "label": "Greeting",
+      "help": "The short greeting this plugin should use.",
+      "placeholder": "Hello",
+      "default": "Hello",
+      "maxLength": 40
+    }
+  ]
+}

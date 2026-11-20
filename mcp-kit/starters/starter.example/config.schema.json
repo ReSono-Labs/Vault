@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schemas.resonolabs.com/vault/plugin-config/v1.json",
+  "fields": [
+    {
+      "key": "greeting",
+      "type": "text",
+      "label": "Greeting prefix",
+      "help": "The short greeting this MCP uses in starter_greeting.",
+      "placeholder": "Hello",
+      "default": "Hello",
+      "maxLength": 40
+    },
+    {
+      "key": "auth_token",
+      "type": "secret",
+      "label": "Access token",
+      "help": "Required bearer token for /mcp requests. Vault stores this encrypted.",
+      "secretHeader": "Authorization",
+      "required": true
+    }
+  ]
+}

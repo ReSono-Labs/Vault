@@ -1,0 +1,253 @@
+.browser-voice-account { gap:24px; min-width:0; display:block; }
+.browser-voice-account-section { display:grid; gap:28px; max-width:980px; }
+.browser-voice-account-section > p { max-width:680px; color:var(--b0r-muted); line-height:1.55; }
+.browser-voice-account-section > a { justify-self:start; margin-top:18px; color:#50d8f7; }
+
+/* Notifications retain their existing behavior but use the same quiet, flat management language. */
+
+/* The SVG contains the full ReSono Labs mark; give the brand enough physical size to read. */
+.browser-voice-shell.is-b0r .browser-voice-app-frame { padding-left:304px; }
+.browser-voice-shell.is-b0r .browser-voice-desktop-rail { padding-inline:24px; width:216px; padding:36px 10px 28px; background:rgba(3,20,38,.76); border-color:var(--b0r-line); }
+@media (max-width: 800px) {
+  .browser-voice-shell.is-b0r .browser-voice-desktop-rail { display:none; } }
+.browser-voice-shell.is-b0r .browser-voice-desktop-rail > img {
+  width:210px;
+  max-width:none;
+  transform:scale(2);
+  transform-origin:left center;
+}
+
+@media (max-width: 800px) {
+  .browser-voice-shell.is-b0r .browser-voice-app-frame { padding-left:16px; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-brand { flex-basis:46%; min-width:150px; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-brand img {
+    width:190px;
+    max-width:none;
+    transform:scale(2);
+    transform-origin:left center;
+  }
+  .browser-voice-management-heading { align-items:flex-start; flex-direction:column; }
+}
+.browser-voice-management-heading { align-items:flex-start; margin:0 0 44px; }
+@media (max-width: 800px) {
+  .browser-voice-management-heading { margin-bottom:32px; } }
+.browser-voice-shell.is-b0r .browser-voice-app-frame { padding:0 42px 72px 216px; }
+@media (max-width: 800px) {
+  .browser-voice-shell.is-b0r .browser-voice-app-frame { height:100%; min-height:0; overflow-x:hidden; overflow-y:auto; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; padding:0 18px 92px; } }
+@media (max-width: 560px) {
+  .browser-voice-shell.is-b0r .browser-voice-app-frame { padding-inline:14px; } }
+
+@media (max-width: 560px) {
+  .browser-voice-shell.is-b0r .browser-voice-mobile-brand { flex-basis:42%; min-width:126px; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-brand img { width:150px; max-width:none; }
+}
+
+@media (max-width: 800px) {
+  .browser-voice-shell.is-b0r .browser-voice-mobile-brand { display:block; min-width:0; } }.browser-voice-shell:not(.is-b0r) {
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+
+.browser-voice-card.is-login-page {
+  width: min(390px, 100%);
+  padding: 28px 20px 20px;
+  border-radius: 22px;
+  background: rgba(10, 25, 48, 0.8);
+  box-shadow: 0 24px 64px rgba(3, 10, 24, 0.32);
+}
+
+.browser-voice-card.is-login-page .browser-voice-header {
+  display: block;
+}
+
+.browser-voice-login-brand {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.browser-voice-login-brand img {
+  width: 190px;
+  height: auto;
+}
+
+.browser-voice-login-brand p {
+  margin: 0;
+  color: rgba(226, 238, 250, 0.78);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.browser-voice-card.is-login-page .browser-voice-login-panel {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.browser-voice-card.is-login-page .browser-voice-login-panel h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.85rem;
+  line-height: 1.1;
+}
+
+.browser-voice-card.is-login-page .browser-voice-form {
+  gap: 12px;
+}
+
+.browser-voice-card.is-login-page .browser-voice-form label {
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.browser-voice-card.is-login-page .browser-voice-form input {
+  padding: 13px 14px;
+  border-radius: 14px;
+  background: rgba(5, 15, 32, 0.56);
+}
+
+.browser-voice-card.is-login-page .browser-voice-submit {
+  margin-top: 2px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.browser-voice-card.is-login-page .browser-voice-feedback {
+  margin-top: 14px;
+}
+
+@media (max-width: 560px) {
+  .browser-voice-shell:not(.is-b0r) {
+    padding: 20px 12px;
+  }
+
+  .browser-voice-card.is-login-page {
+    padding: 24px 16px 16px;
+  }
+
+  .browser-voice-login-brand img {
+    width: 170px;
+  }
+}.browser-voice-shell.is-b0r * { box-sizing:border-box; min-width:0; }
+.browser-voice-shell.is-b0r .browser-voice-desktop-rail>img { width:154px; margin:0 20px; }
+.browser-voice-shell.is-b0r .browser-voice-future-nav.is-desktop button { gap:18px; min-height:70px; padding:0 28px; border-radius:10px; color:var(--b0r-text); font-size:1rem; opacity:1; }
+.browser-voice-shell.is-b0r .browser-voice-content-surface { max-width:980px; margin:0 auto; }
+.browser-voice-management-heading h3 { margin:0; font-size:1.45rem; font-weight:500; }
+.browser-voice-management-heading p { color:var(--b0r-muted); font-size:1.02rem; }
+.browser-voice-management-section { padding:0 0 52px; border-bottom:1px solid var(--b0r-line); }
+.browser-voice-a2a h2 { margin:0 0 8px; font-size:1.65rem; font-weight:450; }
+.browser-voice-a2a-standard-row { width:100%; color:var(--b0r-text); font:inherit; text-align:left; cursor:pointer; }
+.browser-voice-a2a-standard-row:hover { background:rgba(29,67,104,.16); }
+.browser-voice-a2a-dialog>p { margin:0; color:var(--b0r-muted); line-height:1.5; }
+.browser-voice-a2a-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; margin:26px 0 0; border-top:1px solid var(--b0r-line); }
+.browser-voice-a2a-facts>div { padding:14px 12px 14px 0; border-bottom:1px solid var(--b0r-line); }
+.browser-voice-a2a-facts dt { margin-bottom:5px; color:var(--b0r-muted); font-size:.75rem; text-transform:uppercase; }
+.browser-voice-a2a-facts dd { margin:0; overflow-wrap:anywhere; }
+.browser-voice-a2a-skills h5 { margin:0 0 10px; font-size:.82rem; color:var(--b0r-muted); text-transform:uppercase; }
+.browser-voice-connection-tabs { display:flex; gap:6px; margin:-18px 0 36px; padding:5px; overflow-x:auto; border:1px solid var(--b0r-line); border-radius:11px; background:rgba(4,22,39,.42); }
+.browser-voice-connection-tabs button { flex:1 0 auto; min-height:42px; padding:0 18px; border:0; border-radius:7px; background:transparent; color:var(--b0r-muted); font:inherit; font-weight:550; white-space:nowrap; cursor:pointer; }
+.browser-voice-connection-tabs button:hover { color:var(--b0r-text); background:rgba(29,67,104,.28); }
+.browser-voice-connection-tabs button.is-active { background:rgba(29,67,104,.72); color:var(--b0r-cyan); box-shadow:0 0 0 1px rgba(121,242,221,.2); }
+.browser-voice-connection-tab-panel { min-height:310px; border-bottom:0; }
+.browser-voice-section-head p { margin:0; color:var(--b0r-muted); }
+.browser-voice-state.is-ready:before { background:#79eccb; box-shadow:0 0 14px rgba(121,236,203,.3); }
+.browser-voice-form.is-two-column { grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px 36px; }
+.browser-voice-form label { min-width:0; color:var(--b0r-muted); font-size:.86rem; font-weight:500; }
+.browser-voice-form input,.browser-voice-form select,.browser-voice-form textarea,.browser-voice-account-field select { width:100%; min-width:0; min-height:46px; padding:11px 14px; border:1px solid rgba(151,178,207,.48); border-radius:9px; background:rgba(4,22,39,.58); color:var(--b0r-text); }
+.browser-voice-submit:hover,.browser-voice-pill:hover { background:transparent; color:var(--b0r-cyan); }
+.browser-voice-section-head .browser-voice-section-action {
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+.browser-voice-connection-row { min-height:96px; padding:12px 0; border:0; border-bottom:1px solid var(--b0r-line); border-radius:0; background:transparent; cursor:default; }
+.browser-voice-a2a-activity-row small { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.browser-voice-a2a-review p { margin:0; white-space:pre-wrap; }
+.browser-voice-inline-actions { display:flex; gap:10px; flex-wrap:wrap; }
+.browser-voice-account>.browser-voice-management-heading:not(:first-child) { margin-top:52px; padding-top:46px; border-top:1px solid var(--b0r-line); }
+.browser-voice-account-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:0; border-top:1px solid var(--b0r-line); border-bottom:1px solid var(--b0r-line); }
+.browser-voice-account-facts>div+div { border-left:1px solid var(--b0r-line); }
+.browser-voice-account-danger { min-height:40px; padding:0 14px; border:1px solid rgba(255,107,107,.62); border-radius:8px; background:transparent; color:#ff9292; }
+.browser-voice-account-directory>button { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:18px; width:100%; min-height:76px; padding:14px 8px; border:0; border-bottom:1px solid var(--b0r-line); background:transparent; color:var(--b0r-text); text-align:left; }
+.browser-voice-account-directory>button:hover,.browser-voice-account-directory>button.is-selected { background:rgba(29,67,104,.34); }
+.browser-voice-account-directory span { display:grid; gap:5px; }
+.browser-voice-account-directory strong { font-size:1rem; font-weight:550; }
+.browser-voice-account-directory small { color:var(--b0r-muted); }
+.browser-voice-account-detail { margin-top:28px; padding:28px; border:1px solid var(--b0r-line); border-radius:12px; background:rgba(7,24,42,.52); }
+.browser-voice-login-panel,.browser-voice-card.is-login-page,.browser-voice-card.is-login-page .browser-voice-form { min-width:0; max-width:100%; }
+.browser-voice-card.is-login-page { width:min(520px,calc(100vw - 28px)); max-height:calc(100dvh - 28px); overflow:auto; padding:28px; border-radius:14px; background:#07182a; }
+.browser-voice-onboarding-choice { display:grid; gap:12px; }
+.browser-voice-onboarding-choice>p { margin:0; color:var(--b0r-muted); }
+.browser-voice-choice-actions,.browser-voice-onboarding-actions { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:10px; }
+.browser-voice-onboarding-later-form>.browser-voice-management-message,
+.browser-voice-onboarding-later-form>.browser-voice-management-error,
+.browser-voice-onboarding-later-form>.browser-voice-form-note { grid-column:1/-1; width:100%; }
+.browser-voice-onboarding-choice .browser-voice-choice-actions .browser-voice-submit,
+.browser-voice-onboarding-choice .browser-voice-onboarding-actions .browser-voice-submit { min-width:176px; border-color:rgba(121,242,221,.85); background:linear-gradient(135deg,rgba(19,84,105,.78),rgba(19,61,94,.72)); color:#efffff; box-shadow:0 12px 34px rgba(0,0,0,.22),0 0 24px rgba(121,242,221,.08); }
+.browser-voice-onboarding-step { animation:vault-step-in .62s cubic-bezier(.22,1,.36,1) both; }
+.browser-voice-onboarding-step>.browser-voice-submit:hover { background:linear-gradient(135deg,rgba(24,102,122,.88),rgba(25,75,110,.82)); color:#fff; transform:translateY(-1px); }
+.browser-voice-onboarding-hello { display:grid; justify-items:center; gap:20px; min-height:250px; align-content:center; text-align:center; animation:vault-hello-in .8s cubic-bezier(.16,1,.3,1) both; }
+.browser-voice-onboarding-orbit:before,.browser-voice-onboarding-orbit:after { position:absolute; inset:50% auto auto 50%; border-radius:50%; content:""; transform:translate(-50%,-50%); }
+.browser-voice-onboarding-orbit:after { width:116px; height:28px; border:1px solid rgba(80,216,247,.45); animation:vault-orbit 3.2s linear infinite; }
+.browser-voice-experience-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.browser-voice-experience-grid>button { display:grid; gap:6px; min-height:92px; padding:16px; border:1px solid var(--b0r-line); border-radius:11px; background:transparent; color:var(--b0r-text); text-align:left; }
+.browser-voice-experience-grid>button:hover,.browser-voice-experience-grid>button:focus-visible { border-color:var(--b0r-cyan); background:rgba(29,67,104,.3); transform:translateY(-2px); }
+.browser-voice-experience-grid>button.is-selected { border-color:var(--b0r-cyan); background:rgba(21,63,83,.5); box-shadow:inset 3px 0 0 var(--b0r-cyan); }
+.browser-voice-experience-grid small { color:var(--b0r-muted); line-height:1.35; }
+.browser-voice-modal { width:min(620px,calc(100% - 28px)); max-height:calc(100dvh - 28px); padding:0; border:1px solid rgba(151,178,207,.5); border-radius:14px; background:#07182a; color:var(--b0r-text); box-shadow:0 30px 100px #000; overflow:auto; }
+.browser-voice-modal>form { display:grid; gap:22px; margin:0; padding:30px; }
+.browser-voice-modal-head h2 { margin:0; font-size:1.7rem; font-weight:400; }
+.browser-voice-modal-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px 36px; }
+.browser-voice-modal-fields label { display:grid; gap:7px; min-width:0; color:var(--b0r-muted); font-size:.86rem; }
+.browser-voice-modal-fields input,.browser-voice-modal-fields select { width:100%; min-width:0; min-height:46px; padding:11px 14px; border:1px solid rgba(151,178,207,.48); border-radius:9px; background:rgba(4,22,39,.58); color:var(--b0r-text); }
+.browser-voice-modal-wide { grid-column:1/-1; }
+.browser-voice-modal-actions { display:flex; justify-content:flex-end; gap:12px; margin-top:2px; }
+
+@media (max-width: 800px){
+  .browser-voice-shell.is-b0r { position:fixed; inset:0; height:100dvh; min-height:0; overflow:hidden; overscroll-behavior:none; }
+  .browser-voice-shell.is-b0r,.browser-voice-shell.is-b0r .browser-voice-app-frame,
+  .browser-voice-shell.is-b0r .browser-voice-header,.browser-voice-shell.is-b0r .browser-voice-content-surface,
+  .browser-voice-management-page,.browser-voice-management-page>section,.browser-voice-management-section,
+  .browser-voice-account,.browser-voice-account-section,.browser-voice-connections,
+  .browser-voice-card.is-login-page,.browser-voice-onboarding-choice,.browser-voice-form { width:100%; max-width:100%; overflow-wrap:anywhere; }
+  .browser-voice-shell.is-b0r .browser-voice-header { min-height:100px; padding:20px 0; }
+  .browser-voice-shell.is-b0r .browser-voice-desktop-title { display:none; }
+  .browser-voice-shell.is-b0r .browser-voice-mobile-brand img { width:132px; max-width:42vw; }
+  .browser-voice-shell.is-b0r .browser-voice-future-nav.is-mobile button { display:grid; justify-items:center; gap:4px; min-width:0; padding:6px 2px; font-size:.72rem; }
+  .browser-voice-shell.is-b0r .browser-voice-future-nav.is-mobile svg { width:21px; height:21px; }
+  .browser-voice-connection-tabs { margin-top:-10px; margin-bottom:28px; }
+  .browser-voice-connection-tabs button { flex:0 0 auto; padding-inline:16px; }
+  .browser-voice-management-heading h2 { font-size:2.2rem; }
+  .browser-voice-section-head { flex-direction:column; }
+  .browser-voice-form.is-two-column { grid-template-columns:1fr; }
+  .browser-voice-a2a-facts { grid-template-columns:1fr; }
+  .browser-voice-form.is-two-column>* { grid-column:1; }
+  .browser-voice-connection-row>button,.browser-voice-connection-row>.browser-voice-connection-actions { grid-column:2; justify-self:start; }
+  .browser-voice-account>.browser-voice-management-heading:not(:first-child) { margin-top:42px; padding-top:36px; }
+  .browser-voice-modal-fields { grid-template-columns:1fr; gap:16px; }
+  .browser-voice-modal-wide { grid-column:1; }
+}
+@media (max-width: 560px){
+  .browser-voice-card.is-login-page { width:calc(100vw - 20px); max-height:calc(100dvh - 20px); padding:22px 16px; }
+  .browser-voice-login-brand img { width:150px; max-width:70vw; }
+  .browser-voice-management-heading h2 { font-size:2rem; }
+  .browser-voice-choice-actions,.browser-voice-onboarding-actions,.browser-voice-inline-actions { align-items:stretch; flex-direction:column; }
+  .browser-voice-choice-actions button,.browser-voice-onboarding-actions button,.browser-voice-inline-actions button,.browser-voice-card.is-login-page button { width:100%; max-width:100%; }
+  .browser-voice-account-detail { margin-inline:0; padding:20px 14px; }
+  .browser-voice-account-directory>button { padding-inline:4px; }
+  .browser-voice-connection-row span,.browser-voice-connection-row strong,.browser-voice-connection-row small { max-width:100%; overflow-wrap:anywhere; }
+  .browser-voice-management-message code { white-space:normal; overflow-wrap:anywhere; }
+  .browser-voice-account-facts { grid-template-columns:1fr; }
+  .browser-voice-account-facts>div+div { border-left:0; border-top:1px solid var(--b0r-line); }
+  .browser-voice-modal { width:calc(100% - 20px); max-height:calc(100dvh - 20px); }
+  .browser-voice-modal>form { padding:22px 16px; }
+  .browser-voice-modal-actions { align-items:stretch; flex-direction:column-reverse; }
+  .browser-voice-modal-actions button { width:100%; }
+  .browser-voice-experience-grid { grid-template-columns:1fr; }
+}

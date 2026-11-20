@@ -1,0 +1,119 @@
+#!/bin/sh
+set -eu
+
+package_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+folders_file="$package_dir/compose.folders.yml"
+compose() {
+  if [ -f "$folders_file" ]; then
+    docker compose --env-file "$package_dir/vault.env" -f "$package_dir/compose.yml" -f "$folders_file" "$@"
+  else
+    docker compose --env-file "$package_dir/vault.env" -f "$package_dir/compose.yml" "$@"
+  fi
+}
+
+# Your home folder and drives become visible to Vault. Nothing is used until you
+# give access in the web interface. Rewritten each time so new drives are picked up.
+configure_folders() {
+  sh "$package_dir/folders.sh" compose "$folders_file"
+}
+
+detect_lan_address() {
+  if command -v ip >/dev/null 2>&1; then
+    ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i=1; i<=NF; i++) if ($i == "src") { print $(i+1); exit } }'
+    return
+  fi
+  hostname -I 2>/dev/null | awk '{ print $1 }'
+}
+
+configure_lan() {
+  address=${1:-$(detect_lan_address)}
+  if ! printf '%s\n' "$address" | awk -F. 'NF==4 { for (i=1;i<=4;i++) if ($i !~ /^[0-9]+$/ || $i<0 || $i>255) exit 1; ok=1 } END { exit !ok }'; then
+    printf '%s\n' 'Vault could not detect this computer’s local address.' >&2
+    printf 'Run: %s enable-lan 192.168.1.50\n' "$0" >&2
+    exit 1
+  fi
+  temporary=$(mktemp "$package_dir/vault.env.XXXXXX")
+  awk '!/^VAULT_BIND_ADDRESS=/ && !/^VAULT_TLS_HOSTS=/' "$package_dir/vault.env" > "$temporary"
+  printf 'VAULT_BIND_ADDRESS=0.0.0.0\nVAULT_TLS_HOSTS=localhost,127.0.0.1,%s\n' "$address" >> "$temporary"
+  chmod 0600 "$temporary"
+  mv "$temporary" "$package_dir/vault.env"
+  LAN_ADDRESS=$address
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{ print $1 }'
+  else shasum -a 256 "$1" | awk '{ print $1 }'
+  fi
+}
+
+# Before a new image starts on existing data: database dump and Vault data (keys, files,
+# extensions, config) into backups/<time>/, like scripts/vault_package.py backup.
+backup_existing_data() {
+  docker volume inspect resono-vault-postgres-data >/dev/null 2>&1 || return 0
+  compose stop vault >/dev/null 2>&1 || true
+  compose up -d --wait --no-deps postgres
+  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+  destination="$package_dir/backups/$stamp"
+  (umask 077 && mkdir -p "$destination")
+  compose exec -T postgres sh -ec 'umask 077
+    pg_dump -U vault_runtime -d vault --format=custom -f /tmp/vault-backup.dump
+    tar czf /tmp/vault-backup.tar.gz --exclude=config/database-url --exclude=config/local-api-token \
+      -C /vault-config keys private extensions config'
+  compose cp postgres:/tmp/vault-backup.dump "$destination/vault.dump"
+  compose cp postgres:/tmp/vault-backup.tar.gz "$destination/vault-data.tar.gz"
+  compose exec -T postgres rm -f /tmp/vault-backup.dump /tmp/vault-backup.tar.gz
+  schema_version=0
+  if [ "$(compose exec -T postgres psql -U vault_runtime -d vault -Atc \
+      "SELECT to_regclass('vault_private.schema_migrations') IS NOT NULL")" = t ]; then
+    schema_version=$(compose exec -T postgres psql -U vault_runtime -d vault -Atc \
+      "SELECT coalesce(max(version), 0) FROM vault_private.schema_migrations")
+  fi
+  printf '{\n  "createdAt": "%s",\n  "format": 1,\n  "schemaVersion": %s,\n  "sha256": {\n    "vault-data.tar.gz": "%s",\n    "vault.dump": "%s"\n  }\n}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$schema_version" \
+    "$(sha256_of "$destination/vault-data.tar.gz")" "$(sha256_of "$destination/vault.dump")" \
+    > "$destination/manifest.json"
+  printf 'Backup of your existing Vault data: %s\n' "$destination"
+}
+
+command=${1:-install}
+case "$command" in
+  install|update)
+    if [ -f "$package_dir/images/resono-labs-vault.tar.zst" ]; then
+      zstd -dc "$package_dir/images/resono-labs-vault.tar.zst" | docker load
+    elif [ -f "$package_dir/images/resono-labs-vault.tar.gz" ]; then
+      gzip -dc "$package_dir/images/resono-labs-vault.tar.gz" | docker load
+    fi
+    configure_lan "${VAULT_LAN_ADDRESS:-}"
+    configure_folders
+    backup_existing_data
+    compose up -d --wait
+    printf '%s\n' 'Vault is ready for your computer and local network.'
+    printf 'Computer: https://127.0.0.1:8765\nPhone:    https://%s:8765\n' "$LAN_ADDRESS"
+    printf '%s\n' "Run '$0 setup' for your one-time setup link."
+    ;;
+  setup)
+    credential=$(compose exec -T vault python -m app.vault_runtime.package_runtime show-setup)
+    printf 'https://127.0.0.1:8765/identity/setup/start?credential=%s\n' "$credential"
+    ;;
+  enable-lan)
+    configure_lan "${2:-}"
+    configure_folders
+    compose up -d --wait
+    printf 'Phone: https://%s:8765\n' "$LAN_ADDRESS"
+    ;;
+  start)
+    configure_folders
+    compose up -d --wait
+    ;;
+  stop) compose stop ;;
+  status) compose ps ;;
+  logs) compose logs --tail 200 vault bridge postgres ;;
+  uninstall)
+    compose down --remove-orphans
+    printf '%s\n' 'Vault was removed. Your saved data was preserved.'
+    ;;
+  *)
+    printf 'Usage: %s {install|update|setup|enable-lan [address]|start|stop|status|logs|uninstall}\n' "$0" >&2
+    exit 2
+    ;;
+esac

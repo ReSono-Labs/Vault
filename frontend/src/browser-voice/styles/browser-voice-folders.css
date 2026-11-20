@@ -1,0 +1,230 @@
+/* Folders: picker, lists and the setup step. */
+.browser-voice-folder-dialog {
+  width: min(760px, calc(100% - 28px));
+}
+
+.browser-voice-folder-picker {
+  display: grid;
+  grid-template-columns: minmax(150px, 200px) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 300px;
+}
+
+.browser-voice-folder-places {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid var(--b0r-line);
+}
+
+.browser-voice-folder-places button {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--b0r-text);
+  text-align: left;
+}
+
+.browser-voice-folder-places button:hover:not(:disabled),
+.browser-voice-folder-places button.is-active {
+  background: rgba(151, 178, 207, 0.16);
+}
+
+.browser-voice-folder-places button:disabled {
+  opacity: 0.55;
+}
+
+.browser-voice-folder-places small {
+  color: var(--b0r-muted);
+  font-size: 0.75rem;
+}
+
+.browser-voice-folder-browser {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.browser-voice-folder-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--b0r-muted);
+}
+
+.browser-voice-folder-crumbs button {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--b0r-text);
+  text-decoration: underline;
+}
+
+.browser-voice-folder-crumbs button:disabled {
+  color: var(--b0r-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.browser-voice-folder-list {
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.browser-voice-folder-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--b0r-text);
+  text-align: left;
+}
+
+.browser-voice-folder-list button:hover {
+  background: rgba(151, 178, 207, 0.16);
+}
+
+.browser-voice-folder-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 2px 4px 3px 3px;
+  opacity: 0.75;
+}
+
+.browser-voice-folder-empty {
+  padding: 12px;
+  color: var(--b0r-muted);
+}
+
+.browser-voice-folder-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+
+.browser-voice-folder-new label,
+.browser-voice-folder-confirm-form label {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 7px;
+  color: var(--b0r-muted);
+  font-size: 0.86rem;
+}
+
+.browser-voice-folder-new input,
+.browser-voice-folder-confirm-form input {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid rgba(151, 178, 207, 0.48);
+  border-radius: 9px;
+  background: rgba(4, 22, 39, 0.58);
+  color: var(--b0r-text);
+}
+
+.browser-voice-folder-confirm-form {
+  display: grid;
+  gap: 18px;
+}
+
+.browser-voice-folder-row-actions,
+.browser-voice-folder-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.browser-voice-folder-confirm small {
+  flex: 1 1 100%;
+  max-width: 360px;
+  color: var(--b0r-muted);
+  text-align: right;
+}
+
+.browser-voice-folder-warning {
+  color: #ffcf70;
+}
+
+.browser-voice-folder-access {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.browser-voice-setup-folders {
+  display: grid;
+  gap: 16px;
+}
+
+.browser-voice-setup-folder-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.browser-voice-setup-folder-option input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.browser-voice-setup-folder-option span,
+.browser-voice-setup-folder-pick {
+  display: grid;
+  gap: 4px;
+}
+
+.browser-voice-setup-folder-option small {
+  color: var(--b0r-muted);
+}
+
+.browser-voice-setup-folder-pick {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--b0r-line);
+  border-radius: 12px;
+}
+
+@media (max-width: 560px) {
+  .browser-voice-folder-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .browser-voice-folder-places {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+    padding: 0 0 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--b0r-line);
+  }
+
+  .browser-voice-setup-folder-pick {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,53 @@
+.browser-voice-connections { display:grid; gap:22px; min-width:0; }
+.browser-voice-pages[hidden] { display:none !important; }
+.browser-voice-connection-row { display:grid; grid-template-columns:52px minmax(0,1fr) auto; gap:16px; align-items:center; width:100%; min-height:86px; padding:15px 18px; color:var(--b0r-text); text-align:left; background:rgba(4,22,39,.42); border:1px solid rgba(137,165,194,.28); border-radius:13px; cursor:default; }
+.browser-voice-connection-row:hover { border-color:rgba(107,238,211,.55); background:rgba(12,39,60,.58); }
+.browser-voice-connection-mark { display:grid; place-items:center; width:46px; height:46px; color:#61e8d0; border:1px solid currentColor; border-radius:50%; }
+.browser-voice-connection-mark svg { width:25px; height:25px; }
+.browser-voice-connection-mark.is-calendar { color:#8cbbff; }
+.browser-voice-connection-row > span:nth-child(2),
+.browser-voice-connection-open { display:grid; gap:5px; min-width:0; }
+.browser-voice-connection-open {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+.browser-voice-connection-row strong { font-size:1.05rem; font-weight:560; }
+.browser-voice-connection-row small { overflow:hidden; color:var(--b0r-muted); text-overflow:ellipsis; white-space:nowrap; }
+.browser-voice-connection-row > b { font-size:1.8rem; font-weight:300; }
+.browser-voice-connection-form { display:grid; gap:14px; max-width:780px; padding:18px; border:1px solid rgba(137,165,194,.26); border-radius:13px; background:rgba(4,22,39,.42); }
+.browser-voice-connection-form label { display:grid; gap:7px; color:var(--b0r-text); }
+.browser-voice-connection-form label small { color:var(--b0r-muted); font-weight:400; }
+.browser-voice-connection-form input,.browser-voice-connection-form textarea { min-width:0; padding:12px 13px; color:var(--b0r-text); background:rgba(5,25,43,.9); border:1px solid rgba(137,165,194,.35); border-radius:9px; font:inherit; }
+.browser-voice-connection-form textarea { resize:vertical; }
+.browser-voice-connection-form > button { justify-self:start; min-width:120px; padding:11px 18px; color:#071c2d; font-weight:700; background:#67e9d2; border:0; border-radius:9px; cursor:pointer; }
+.browser-voice-connection-form > button:disabled { opacity:.6; cursor:wait; }
+.browser-voice-connection-form-grid { display:grid; grid-template-columns:minmax(0,1fr) 110px; gap:14px; }
+.browser-voice-connection-security-note { margin:0; color:var(--b0r-muted); font-size:.86rem; }
+.browser-voice-connection-credential { display:grid; gap:7px; padding:14px 16px; border:1px solid rgba(103,233,210,.5); border-radius:12px; background:rgba(11,49,61,.56); }
+.browser-voice-connection-credential code { overflow-wrap:anywhere; user-select:all; }
+.browser-voice-connection-credential span { color:var(--b0r-muted); font-size:.86rem; }
+
+@media (max-width: 800px) {
+  .browser-voice-connection-row { grid-template-columns:48px minmax(0,1fr) 16px; min-height:80px; padding:13px 14px; gap:12px; }
+  .browser-voice-connection-row > b { grid-column:3; grid-row:1 / span 2; }
+  .browser-voice-connection-form { padding:14px; }
+  .browser-voice-connection-form-grid { grid-template-columns:minmax(0,1fr) 90px; }
+}
+
+@media (max-width: 800px) {
+  .browser-voice-connection-row { grid-template-columns:46px minmax(0,1fr); gap:14px; } }
+.browser-voice-connection-form-grid { grid-template-columns:minmax(0,1fr) 110px; }
+@media (max-width: 800px) {
+  .browser-voice-connection-form-grid { grid-template-columns:1fr; } }
+
+/* Inbound Agent2Agent bearer: hidden by default, Show/Copy on request. */
+.browser-voice-inbound-bearer { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+.browser-voice-inbound-bearer code { flex:1 1 260px; min-width:0; font:inherit; letter-spacing:.02em; overflow-wrap:anywhere; }
+.browser-voice-inbound-bearer-actions { display:flex; align-items:center; gap:8px; }
+.browser-voice-inbound-bearer-actions small { min-width:9ch; color:var(--b0r-muted, #9fb3ca); }
