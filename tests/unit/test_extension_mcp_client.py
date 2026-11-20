@@ -125,3 +125,13 @@ def test_unsupported_transport_connections_send_no_request() -> None:
         assert lifecycle.project_scope(user_id="u", workspace_id="w", agent=AgentKind.VOICE, connection=connection) == ()
         assert catalog.definitions_for(AgentKind.VOICE, user_id="u", workspace_id="w") == ()
         assert counting.calls == []
+
+
+def test_an_empty_string_cursor_is_a_real_page() -> None:
+    tool = {"description": "Read", "inputSchema": {"type": "object"}}
+    transport = _initialized({"tools": [{"name": "one", **tool}], "nextCursor": ""},
+                             {"tools": [{"name": "two", **tool}]})
+    client = McpClient(transport)
+    client.initialize()
+    assert [item.name for item in client.discover_tools()] == ["one", "two"]
+    assert transport.calls[-1] == ("tools/list", {"cursor": ""})

@@ -9,12 +9,36 @@ import argparse
 import json
 import os
 from pathlib import Path
+import random
 import stat
 import time
 import urllib.request
 from urllib.parse import urlsplit
 
 LIMIT = 4 * 1024 * 1024
+MAX_LIST_PAGES = 16
+PUBLISH_SECONDS = 5.0          # discovery interval while the tool list keeps changing
+PUBLISH_MAX_SECONDS = 60.0     # an unchanged list is re-read less and less often
+ERROR_MAX_SECONDS = 60.0
+
+
+def jitter(seconds):
+    return seconds * random.uniform(0.8, 1.2)
+
+
+def list_tools(mcp):
+    """Every page of tools/list (bounded). An empty-string cursor is valid; a repeat is a loop."""
+    tools, cursor, seen = [], None, set()
+    for _ in range(MAX_LIST_PAGES):
+        listing = mcp('tools/list', {} if cursor is None else {'cursor': cursor})
+        tools.extend(listing.get('tools', []))
+        cursor = listing.get('nextCursor')
+        if cursor is None:
+            return tools
+        if not isinstance(cursor, str) or cursor in seen:
+            raise ValueError('Link MCP cursor is invalid')
+        seen.add(cursor)
+    raise ValueError('Link MCP tool list is too long')
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -50,6 +74,9 @@ def request(url, token, body):
 def run(settings_path, token_path):
     last_publish = 0
     allowed = set()
+    published = None
+    interval = wait = PUBLISH_SECONDS
+    failures = 0
     while True:
         try:
             settings = private_json(settings_path)
@@ -66,12 +93,15 @@ def run(settings_path, token_path):
                 if 'error' in answer:
                     raise ValueError('Link MCP refused request')
                 return answer.get('result', {})
-            if time.monotonic()-last_publish > 5:
-                listing = mcp('tools/list', {})
-                tools = listing.get('tools', [])
-                request('http://127.0.0.1:8766/link-companion/tools/publish', token, {'tools':tools})
+            if time.monotonic()-last_publish > wait:
+                tools = list_tools(mcp)
+                if tools != published:
+                    request('http://127.0.0.1:8766/link-companion/tools/publish', token, {'tools':tools})
+                    published, interval = tools, PUBLISH_SECONDS
+                else:
+                    interval = min(interval * 2, PUBLISH_MAX_SECONDS)
                 allowed = {t['name'] for t in tools}
-                last_publish = time.monotonic()
+                last_publish, wait = time.monotonic(), jitter(interval)
             pending = request('http://127.0.0.1:8766/link-companion/tools/poll',token,{})
             for call in pending.get('calls', []):
                 if call.get('name') not in allowed:
@@ -84,10 +114,12 @@ def run(settings_path, token_path):
                     except Exception:
                         result = {'isError':True,'content':[{'type':'text','text':'Link tool outcome unknown; not retried.'}]}
                 request('http://127.0.0.1:8766/link-companion/tools/complete',token,{'id':call['id'],'result':result})
+            failures = 0
         except Exception:
             # No credentials, arguments, tool results or platform errors in journal.
-            last_publish = 0
-            time.sleep(2)
+            last_publish, published, interval, wait = 0, None, PUBLISH_SECONDS, PUBLISH_SECONDS
+            failures += 1
+            time.sleep(jitter(min(2 * 2 ** (failures - 1), ERROR_MAX_SECONDS)))
 
 
 if __name__ == '__main__':

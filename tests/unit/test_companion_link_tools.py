@@ -117,3 +117,28 @@ def test_call_cards_only_from_a_live_voice_call():
     assert 'call' not in _arguments_sent(catalog, bridge, owner, background)
     # The same tool and text for every Vault runtime: only the arguments differ.
     assert catalog.definitions_for(AgentKind.VOICE, user_id='owner', workspace_id='ws')[0].description .startswith('Link: SHOW A CARD IN THE CONVERSATION NOW')
+
+
+def test_native_worker_reads_every_tools_page_and_refuses_a_cursor_loop():
+    from app.vault_runtime.link_companion import host_tools
+    pages = {None: {"tools": [{"name": "a"}], "nextCursor": ""}, "": {"tools": [{"name": "b"}], "nextCursor": "p2"},
+             "p2": {"tools": [{"name": "c"}]}}
+    calls = []
+
+    def mcp(method, params):
+        calls.append(params)
+        return pages[params.get("cursor")]
+
+    assert [t["name"] for t in host_tools.list_tools(mcp)] == ["a", "b", "c"]
+    assert calls == [{}, {"cursor": ""}, {"cursor": "p2"}], "an empty-string cursor is a real page"
+    loop = {None: {"tools": [], "nextCursor": "x"}, "x": {"tools": [], "nextCursor": "x"}}
+    import pytest
+    with pytest.raises(ValueError):
+        host_tools.list_tools(lambda method, params: loop[params.get("cursor")])
+
+
+def test_native_worker_backoff_is_jittered_and_bounded():
+    from app.vault_runtime.link_companion import host_tools
+    values = {round(host_tools.jitter(10), 3) for _ in range(50)}
+    assert len(values) > 1 and all(8 <= v <= 12 for v in values)
+    assert host_tools.PUBLISH_MAX_SECONDS <= 60 and host_tools.ERROR_MAX_SECONDS <= 60

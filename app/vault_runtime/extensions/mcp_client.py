@@ -126,7 +126,7 @@ class McpClient:
         cursor: str | None = None
         seen_cursors: set[str] = set()
         for _ in range(MAX_DISCOVERY_PAGES):
-            params = {"cursor": cursor} if cursor else None
+            params = {"cursor": cursor} if cursor is not None else None
             result = self._transport.request("tools/list", params=params)
             raw_tools = result.get("tools")
             if not isinstance(raw_tools, list):
@@ -138,7 +138,8 @@ class McpClient:
             next_cursor = result.get("nextCursor")
             if next_cursor is None:
                 break
-            if not isinstance(next_cursor, str) or not next_cursor or next_cursor in seen_cursors:
+            # An empty string is a valid cursor; only a repeat means a loop.
+            if not isinstance(next_cursor, str) or next_cursor in seen_cursors:
                 raise McpProtocolError("MCP discovery cursor is invalid")
             seen_cursors.add(next_cursor)
             cursor = next_cursor
