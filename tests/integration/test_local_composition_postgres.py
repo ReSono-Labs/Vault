@@ -49,7 +49,7 @@ def test_production_composition_exposes_local_voice_extensions_and_provider(tmp_
         }).encode(),
     )
     assert background.status_code == 202 and background.payload["agentKind"] == "background"
-    assert app.handle(method="GET", target="/extensions/runtime", headers=headers).payload == {"safeMode": True, "scope": "device"}
+    assert app.handle(method="GET", target="/extensions/runtime", headers=headers).payload == {"safeMode": True, "scope": "device", "storageConflicts": []}
     assert app.handle(method="GET", target="/providers/openai", headers=headers).payload["configured"] is False
     def mail_credentials(address: str, suffix: str) -> dict[str, object]:
         return {

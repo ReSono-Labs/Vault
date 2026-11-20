@@ -21,6 +21,13 @@ All notable changes to Vault are listed here. The version comes from
   hosted MCP package and supervised plugin process, with its child processes,
   and nothing starts again (install, enable, boot or restart) until the device
   owner turns it off. The safe mode responses now include `"scope": "device"`.
+- **One workspace per extension name, for now.** Extension files and data are
+  still stored by name for the whole device, so Vault refuses to install a
+  skill, plugin or MCP package whose name another workspace already uses. If
+  existing installs in different workspaces already share a name, Vault finds
+  them at startup, keeps their files, and blocks every use of them until the
+  device owner removes one and reinstalls the other. `GET /extensions/runtime`
+  lists the blocked names in `storageConflicts` (device owner only).
 
 ## 0.1.0 — first public release (not yet published)
 

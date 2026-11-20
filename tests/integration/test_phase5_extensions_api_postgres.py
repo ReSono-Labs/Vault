@@ -108,7 +108,7 @@ def test_skill_preflight_confirm_list_grant_and_safe_mode(extension_api) -> None
     safe = _post(app, "/extensions/safe-mode", {"enabled": True}, headers)
     assert safe.payload == {"safeMode": True, "scope": "device"}
     runtime = app.handle(method="GET", target="/extensions/runtime", headers=headers)
-    assert runtime.status_code == 200 and runtime.payload == {"safeMode": True, "scope": "device"}
+    assert runtime.status_code == 200 and runtime.payload == {"safeMode": True, "scope": "device", "storageConflicts": []}
 
 
 def test_mcp_credentials_never_echo_and_invalid_agent_is_rejected(extension_api) -> None:

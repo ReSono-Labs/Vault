@@ -17,7 +17,7 @@ from app.vault_runtime.extensions.archives import ArchiveInspector
 from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
 from app.vault_runtime.extensions.models import ExtensionAudience
 from app.vault_runtime.extensions.repository import (
-    ExtensionAuthorizationError, ExtensionConflictError, ExtensionRepository,
+    ExtensionAuthorizationError, ExtensionConflictError, ExtensionNotFoundError, ExtensionRepository,
 )
 from app.vault_runtime.extensions.secrets import ExtensionSecretStore, LocalMasterKey
 from app.vault_runtime.extensions.service import ExtensionImportService
@@ -522,3 +522,170 @@ def test_hosted_package_removal_deletes_its_current_and_previous_trees(extension
     assert not (base / "current").exists() and not (base / "previous").exists()
     assert not base.exists()
     assert not (root / "data/demo.hosted").exists()
+
+
+def _second_workspace(identities, owner, member):
+    """A second workspace of the device owner; the ordinary member works in it."""
+    second = identities.create_workspace(principal=owner.principal, display_name="Second")
+    identities.add_member(principal=owner.principal, workspace_id=second, username="member")
+    identities.switch_workspace(principal=member.principal, workspace_id=second)
+    return second, identities.authenticate(session_token=member.session_token)
+
+
+def _skill_zip(name: str, body: str) -> bytes:
+    return _zip({f"{name}/SKILL.md": f"---\nname: {name}\ndescription: Shared name.\n---\n{body}\n"})
+
+
+def _confirm_skill(imports, owner, payload, *, workspace_id, replace=False):
+    preview = imports.preflight_skill(
+        payload, "skill.zip", actor_user_id=owner.principal.user_id, workspace_id=workspace_id,
+        audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
+    )
+    return imports.confirm_skill(
+        preview.token, actor_user_id=owner.principal.user_id, workspace_id=workspace_id, replace=replace,
+    )
+
+
+def test_same_name_in_a_second_workspace_is_refused(extension_state, tmp_path) -> None:
+    extensions, identities, owner, member = extension_state
+    imports, root = _imports(extensions, tmp_path)
+    first = owner.principal.workspace_id
+    second, member_in_second = _second_workspace(identities, owner, member)
+    _confirm_skill(imports, owner, _skill_zip("shared-skill", "First workspace only."), workspace_id=first)
+    tree = root / "skills/shared-skill/current"
+    before = _tree_hash(tree)
+
+    with pytest.raises(ExtensionConflictError, match="already installed in another workspace") as refused:
+        _confirm_skill(imports, owner, _skill_zip("shared-skill", "Second workspace."), workspace_id=second)
+    assert first not in str(refused.value) and second not in str(refused.value)
+    # An ordinary member never reaches the conflict message: installing is owner-only.
+    with pytest.raises(ExtensionAuthorizationError):
+        imports.preflight_skill(
+            _skill_zip("shared-skill", "Member."), "skill.zip", actor_user_id=member_in_second.user_id,
+            workspace_id=second, audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
+        )
+
+    # Both previews issued before either confirm: the second confirm is refused too.
+    payload = _data_plugin("shared.plugin", version="0.1.0", marker="first")
+    previews = [imports.preflight_plugin(
+        payload, "plugin.zip", actor_user_id=owner.principal.user_id, workspace_id=workspace_id,
+        audience=ExtensionAudience(frozenset({AgentKind.VOICE})),
+    ) for workspace_id in (first, second)]
+    imports.confirm_plugin(previews[0].token, actor_user_id=owner.principal.user_id, workspace_id=first, replace=False)
+    plugin_data = _tree_hash(root / "data/shared.plugin")
+    with pytest.raises(ExtensionConflictError, match="another workspace"):
+        imports.confirm_plugin(previews[1].token, actor_user_id=owner.principal.user_id, workspace_id=second, replace=False)
+    # A hosted package's data folder has the same name-keyed path as the plugin's.
+    with pytest.raises(ExtensionConflictError, match="another workspace"):
+        _confirm_hosted(imports, owner, _hosted_package(
+            "shared.plugin", version="0.1.0", marker="hosted", on_conflict=None,
+        ), workspace_id=second)
+    assert _tree_hash(tree) == before
+    assert _tree_hash(root / "data/shared.plugin") == plugin_data
+    assert not (root / "mcps/shared.plugin").exists()
+    assert extensions.get(
+        user_id=owner.principal.user_id, workspace_id=second, kind=ExtensionKind.PLUGIN,
+        identity="shared.plugin", owner=True,
+    ) is None
+
+
+@pytest.mark.parametrize("removed_first", ["first", "second"])
+def test_seeded_storage_collision_blocks_both_installs_and_keeps_bytes(extension_state, tmp_path, removed_first) -> None:
+    extensions, identities, owner, member = extension_state
+    imports, root = _imports(extensions, tmp_path)
+    first = owner.principal.workspace_id
+    second, member_in_second = _second_workspace(identities, owner, member)
+    readers = {first: owner.principal.user_id, second: member_in_second.user_id}
+    markers = {first: "Owner workspace private marker.", second: "Second workspace private marker."}
+    installs = {first: _confirm_skill(imports, owner, _skill_zip("shared-skill", markers[first]), workspace_id=first)}
+    # Seed the legacy state: the second install overwrote the shared tree.
+    installs[second] = extensions.install(
+        actor_user_id=owner.principal.user_id, workspace_id=second, kind=ExtensionKind.SKILL,
+        identity="shared-skill", display_name="shared-skill", version=None, description="Shared name.",
+        content_hash="seeded", configuration={"audience": ["voice"]},
+    )
+    tree = root / "skills/shared-skill/current"
+    (tree / "SKILL.md").write_text(
+        f"---\nname: shared-skill\ndescription: Shared name.\n---\n{markers[second]}\n", encoding="utf-8",
+    )
+    extensions.set_safe_mode(actor_user_id=owner.principal.user_id, workspace_id=first, enabled=False)
+    for workspace_id, record in installs.items():
+        extensions.set_grant(
+            actor_user_id=owner.principal.user_id, target_user_id=readers[workspace_id],
+            workspace_id=workspace_id, extension_id=record.extension_id, agent=AgentKind.VOICE, enabled=True,
+        )
+    activation = SkillActivation(repository=extensions, extension_root=root)
+
+    def read(workspace_id: str) -> str | None:
+        """What this workspace's reader can get through list and load; None when blocked."""
+        listed = activation.list_available(user_id=readers[workspace_id], workspace_id=workspace_id, agent=AgentKind.VOICE)
+        try:
+            loaded = activation.load(
+                user_id=readers[workspace_id], workspace_id=workspace_id, agent=AgentKind.VOICE,
+                extension_id=installs[workspace_id].extension_id, name="shared-skill",
+            )
+        except ExtensionNotFoundError:
+            loaded = None
+        assert (loaded is None) == (listed == ())
+        return loaded
+
+    # Startup detection marks both installs; the device owner sees the name.
+    assert extensions.flag_storage_conflicts() == ("shared-skill",)
+    assert extensions.storage_conflicts() == ("shared-skill",)
+    assert read(first) is None and read(second) is None
+    bytes_before = _tree_hash(tree)
+
+    removed = first if removed_first == "first" else second
+    kept = second if removed == first else first
+    _remove(imports, owner, installs[removed])
+    # The other install still owns the tree: nothing is deleted, and it stays blocked
+    # because the shared bytes may be the other workspace's (here they are).
+    assert _tree_hash(tree) == bytes_before
+    assert read(first) is None and read(second) is None
+    assert extensions.storage_conflicts() == ("shared-skill",)
+
+    # The device owner resolves it by reinstalling in the workspace that keeps it.
+    installs[kept] = _confirm_skill(
+        imports, owner, _skill_zip("shared-skill", markers[kept]), workspace_id=kept, replace=True,
+    )
+    assert read(kept) == f"{markers[kept]}\n"
+    assert read(removed) is None
+    assert extensions.storage_conflicts() == ()
+
+
+def test_seeded_hosted_collision_blocks_restore_projection_and_start(extension_state, tmp_path) -> None:
+    from app.vault_runtime.extensions.mcp_runtime import McpRuntimeError, McpRuntimeSupervisor
+
+    extensions, identities, owner, member = extension_state
+    second, _member_in_second = _second_workspace(identities, owner, member)
+    configuration = {
+        "packageType": "hosted", "runtime": {
+            "type": "process", "command": ["python3", "server.py"], "cwd": ".",
+            "port": 8788, "healthPath": "/health", "mcpPath": "/mcp",
+        },
+    }
+    records = [extensions.install(
+        actor_user_id=owner.principal.user_id, workspace_id=workspace_id, kind=ExtensionKind.MCP,
+        identity="shared.hosted", display_name="shared.hosted", version="0.1.0", description="Hosted",
+        content_hash=f"hash-{workspace_id}", configuration=configuration,
+    ) for workspace_id in (owner.principal.workspace_id, second)]
+    extensions.set_safe_mode(actor_user_id=owner.principal.user_id, workspace_id=second, enabled=False)
+    for record in records:
+        extensions.set_grant(
+            actor_user_id=owner.principal.user_id, target_user_id=owner.principal.user_id,
+            workspace_id=record.workspace_id, extension_id=record.extension_id, agent=AgentKind.VOICE,
+            enabled=True,
+        )
+    assert extensions.list_enabled_supervised_runtimes() == ()
+    assert all(extensions.granted_extensions(
+        user_id=owner.principal.user_id, workspace_id=record.workspace_id, agent=AgentKind.VOICE,
+        kind=ExtensionKind.MCP,
+    ) == () for record in records)
+    supervisor = McpRuntimeSupervisor(
+        repository=extensions,
+        secrets=ExtensionSecretStore(repository=extensions, master_key=LocalMasterKey(tmp_path / "key")),
+        extension_root=tmp_path / "extensions",
+    )
+    for record in records:
+        with pytest.raises(McpRuntimeError, match="another workspace"):
+            supervisor.start(actor_user_id=owner.principal.user_id, workspace_id=record.workspace_id, record=record)

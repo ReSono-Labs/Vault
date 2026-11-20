@@ -990,6 +990,13 @@ Installed rows can be enabled or disabled from Library. Safe mode suppresses
 all third-party runtime projection without deleting records. The Tools tab is
 read-only and groups available tools into collapsed functional categories.
 
+An extension name can be installed in only one workspace at a time, because
+Vault still keeps one copy of an extension's files per name. Installing a name
+another workspace already uses is refused. If two workspaces already share a
+name from an earlier version, Vault keeps the files but blocks the extension in
+both until the device owner removes it from one workspace and reinstalls it in
+the other.
+
 Select an imported Plugin to complete its settings and safely save any declared
 API key. If the plugin declares an external MCP connection, start that service,
 choose **Check tools**, identify whether each tool reads, changes, or deletes

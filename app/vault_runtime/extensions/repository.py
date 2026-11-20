@@ -29,6 +29,39 @@ class ExtensionNotFoundError(ExtensionRepositoryError):
     code = "extension_not_found"
 
 
+# Install trees are <root>/<category>/<identity> and data is <root>/data/<identity>
+# for every workspace (filesystem.py). Until storage is scoped per installation,
+# two workspaces must never share a name-keyed tree or data folder.
+STORAGE_CONFLICT_KEY = "storageConflict"
+
+
+def _uses_data(alias: str) -> str:
+    """SQL: the install has a <root>/data/<identity> folder (plugins, hosted MCP packages)."""
+    return (
+        f"({alias}.kind='plugin' OR ({alias}.kind='mcp' "
+        f"AND {alias}.configuration_json->>'packageType'='hosted'))"
+    )
+
+
+def _storage_shared(alias: str) -> str:
+    """SQL: a non-removed install in another workspace uses the same tree or data folder."""
+    return (
+        "EXISTS (SELECT 1 FROM vault_private.vault_extensions o "
+        f"WHERE o.state<>'removed' AND o.identity={alias}.identity "
+        f"AND o.installed_in_workspace_id<>{alias}.installed_in_workspace_id "
+        f"AND (o.kind={alias}.kind OR ({_uses_data('o')} AND {_uses_data(alias)})))"
+    )
+
+
+def _storage_blocked(alias: str) -> str:
+    """SQL: access through this install stays off until the device owner resolves the conflict.
+
+    The durable flag keeps the remaining install blocked after the other one is
+    removed, because the shared bytes may be the other workspace's.
+    """
+    return f"(({alias}.configuration_json ? '{STORAGE_CONFLICT_KEY}') OR {_storage_shared(alias)})"
+
+
 @dataclass(frozen=True, slots=True)
 class ExtensionRecord:
     extension_id: str
@@ -136,6 +169,65 @@ class ExtensionRepository:
                 )
                 return cursor.fetchone() is not None
 
+    def storage_used_elsewhere(
+        self, *, workspace_id: str, kind: ExtensionKind, identity: str, uses_data: bool,
+    ) -> bool:
+        """Whether another workspace has a non-removed install with the same name-keyed storage.
+
+        Same kind means the same install tree; with ``uses_data`` any install that
+        has a data folder (plugin or hosted MCP package) counts as well.
+        """
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""SELECT 1 FROM vault_private.vault_extensions o
+                       WHERE o.state <> 'removed' AND o.identity=%s AND o.installed_in_workspace_id <> %s
+                         AND (o.kind=%s OR (%s AND {_uses_data('o')}))
+                       LIMIT 1""",
+                    (identity, workspace_id, kind.value, uses_data),
+                )
+                return cursor.fetchone() is not None
+
+    def flag_storage_conflicts(self) -> tuple[str, ...]:
+        """Startup check: mark every install that shares storage with another workspace.
+
+        Marked installs keep their bytes but are left out of every listing, load,
+        tool projection, invocation and process start until the device owner removes
+        one side and reinstalls the other (a reinstall writes a fresh configuration).
+        """
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""UPDATE vault_private.vault_extensions e
+                       SET configuration_json = e.configuration_json || %s::jsonb, updated_at=now()
+                       WHERE e.state <> 'removed' AND NOT (e.configuration_json ? '{STORAGE_CONFLICT_KEY}')
+                         AND {_storage_shared('e')}""",
+                    (json.dumps({STORAGE_CONFLICT_KEY: True}),),
+                )
+            connection.commit()
+        return self.storage_conflicts()
+
+    def storage_conflicts(self) -> tuple[str, ...]:
+        """Names whose installs are blocked by a storage conflict, for the device owner."""
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""SELECT DISTINCT e.identity FROM vault_private.vault_extensions e
+                       WHERE e.state <> 'removed' AND {_storage_blocked('e')}
+                       ORDER BY e.identity""",
+                )
+                return tuple(str(row[0]) for row in cursor.fetchall())
+
+    def storage_blocked(self, *, extension_id: str) -> bool:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""SELECT 1 FROM vault_private.vault_extensions e
+                       WHERE e.extension_id=%s AND {_storage_blocked('e')}""",
+                    (extension_id,),
+                )
+                return cursor.fetchone() is not None
+
     def list_installed(self, *, actor_user_id: str, workspace_id: str) -> tuple[ExtensionRecord, ...]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
@@ -155,12 +247,13 @@ class ExtensionRepository:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    """SELECT extension_id,kind,identity,display_name,version,description,content_hash,
+                    f"""SELECT extension_id,kind,identity,display_name,version,description,content_hash,
                               state,installed_by_user_id,installed_in_workspace_id,previous_content_hash,
                               configuration_json
-                       FROM vault_private.vault_extensions
+                       FROM vault_private.vault_extensions e
                        WHERE kind='mcp' AND state='enabled'
                          AND configuration_json->>'packageType'='hosted'
+                         AND NOT {_storage_blocked('e')}
                        ORDER BY identity""",
                 )
                 return tuple(_record(row) for row in cursor.fetchall())
@@ -169,15 +262,16 @@ class ExtensionRepository:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    """SELECT extension_id,kind,identity,display_name,version,description,content_hash,
+                    f"""SELECT extension_id,kind,identity,display_name,version,description,content_hash,
                               state,installed_by_user_id,installed_in_workspace_id,previous_content_hash,
                               configuration_json
-                       FROM vault_private.vault_extensions
+                       FROM vault_private.vault_extensions e
                        WHERE state='enabled'
                          AND (
                            (kind='mcp' AND configuration_json->>'packageType'='hosted')
                            OR (kind='plugin' AND configuration_json->>'supervised'='true')
                          )
+                         AND NOT {_storage_blocked('e')}
                        ORDER BY kind,identity""",
                 )
                 return tuple(_record(row) for row in cursor.fetchall())
@@ -435,13 +529,13 @@ class ExtensionRepository:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id=user_id, workspace_id=workspace_id)
                 cursor.execute(
-                    """
+                    f"""
                     SELECT 1 FROM vault_private.vault_extension_grants g
                     JOIN vault_private.vault_extensions e ON e.extension_id=g.extension_id
                     JOIN vault_private.vault_extension_runtime_settings s ON s.setting_key='third_party_extensions'
                     WHERE g.extension_id=%s AND g.user_id=%s AND g.workspace_id=%s
                       AND g.agent_kind=%s AND g.capability_name=%s AND g.enabled=true
-                      AND e.state='enabled' AND s.enabled=true
+                      AND e.state='enabled' AND s.enabled=true AND NOT {_storage_blocked('e')}
                     """, (extension_id,user_id,workspace_id,agent.value,capability_name),
                 )
                 return cursor.fetchone() is not None
@@ -486,7 +580,7 @@ class ExtensionRepository:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id=user_id, workspace_id=workspace_id)
                 cursor.execute(
-                    """
+                    f"""
                     SELECT e.extension_id,e.kind,e.identity,e.display_name,e.version,e.description,
                            e.content_hash,e.state,e.installed_by_user_id,e.installed_in_workspace_id,
                            e.previous_content_hash,e.configuration_json,g.capability_name,g.effect_class
@@ -495,7 +589,7 @@ class ExtensionRepository:
                     JOIN vault_private.vault_extension_runtime_settings s ON s.setting_key='third_party_extensions'
                     WHERE g.user_id=%s AND g.workspace_id=%s AND g.agent_kind=%s AND g.enabled=true
                       AND e.kind=%s AND e.state='enabled' AND s.enabled=true
-                      AND g.capability_name LIKE %s
+                      AND g.capability_name LIKE %s AND NOT {_storage_blocked('e')}
                     ORDER BY e.identity,g.capability_name
                     """, (user_id,workspace_id,agent.value,kind.value,f"{capability_prefix}%"),
                 )
@@ -530,7 +624,7 @@ class ExtensionRepository:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id=user_id, workspace_id=workspace_id)
                 cursor.execute(
-                    """
+                    f"""
                     SELECT t.tool_name,t.description,t.input_schema_json,t.output_schema_json,g.effect_class
                     FROM vault_private.vault_mcp_tools t
                     JOIN vault_private.vault_extensions e ON e.extension_id=t.extension_id
@@ -539,7 +633,7 @@ class ExtensionRepository:
                     JOIN vault_private.vault_extension_runtime_settings s ON s.setting_key='third_party_extensions'
                     WHERE e.extension_id=%s AND e.installed_in_workspace_id=%s AND e.state='enabled'
                       AND g.user_id=%s AND g.workspace_id=%s AND g.agent_kind=%s AND g.enabled=true
-                      AND g.effect_class IS NOT NULL AND s.enabled=true
+                      AND g.effect_class IS NOT NULL AND s.enabled=true AND NOT {_storage_blocked('e')}
                     ORDER BY t.tool_name
                     """, (extension_id,workspace_id,user_id,workspace_id,agent.value),
                 )

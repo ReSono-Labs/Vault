@@ -5149,7 +5149,8 @@
     "headers": [],
     "payload": {
      "safeMode": true,
-     "scope": "device"
+     "scope": "device",
+     "storageConflicts": []
     },
     "status": 200
    },
@@ -5159,7 +5160,8 @@
     "headers": [],
     "payload": {
      "safeMode": true,
-     "scope": "device"
+     "scope": "device",
+     "storageConflicts": []
     },
     "status": 200
    }

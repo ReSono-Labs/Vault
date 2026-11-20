@@ -86,9 +86,11 @@ class ExtensionRoutes:
                 extension_id=extension_id,
             ))})
         if method == "GET" and path == "/extensions/runtime":
+            # Owner-only (safe_mode checks device-owner scope): names blocked because
+            # installs in different workspaces share name-keyed storage.
             return LocalApiResponse(200, {"safeMode": repository.safe_mode(
                 actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
-            ), "scope": "device"})
+            ), "scope": "device", "storageConflicts": list(repository.storage_conflicts())})
         if method not in {"POST", "DELETE"}:
             return LocalApiResponse(404, {"error": {"code": "not_found", "message": "Not found."}})
         identity.require_csrf(principal=principal, csrf_token=_csrf_token(headers))

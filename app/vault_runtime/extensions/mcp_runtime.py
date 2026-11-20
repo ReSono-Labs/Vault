@@ -115,6 +115,12 @@ class McpRuntimeSupervisor:
                     "Safe mode is on for this device. Supervised extensions stay stopped "
                     "until the device owner turns it off."
                 )
+            storage_blocked = getattr(self._repository, "storage_blocked", None)
+            if storage_blocked is not None and storage_blocked(extension_id=record.extension_id):
+                raise McpRuntimeError(
+                    "This extension shares its name with an install in another workspace and "
+                    "stays stopped until the device owner resolves it."
+                )
             self.stop(record=record, actor_user_id=actor_user_id, workspace_id=workspace_id)
             install_root = self._install_root(record)
             if not install_root.is_dir():

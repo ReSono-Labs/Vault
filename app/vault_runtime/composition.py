@@ -441,6 +441,10 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
     voice_tools = VoiceToolRuntime(catalog=catalog, authority=tool_authority, voice_modes=voice_modes)
     extension_files = ExtensionFilesystem(extension_root)
     extension_files.recover()
+    # Name-keyed storage shared across workspaces: keep the bytes, block access until resolved.
+    storage_conflicts = extensions.flag_storage_conflicts()
+    if storage_conflicts:
+        logging.getLogger(__name__).warning("extension_storage_conflicts blocked=%d", len(storage_conflicts))
     extension_secrets = ExtensionSecretStore(
         repository=extensions,
         master_key=LocalMasterKey(data_root / "keys" / "extension-credentials.key"),

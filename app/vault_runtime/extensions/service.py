@@ -10,12 +10,14 @@ from pathlib import Path
 from threading import Thread
 
 from app.vault_runtime.extensions.archives import ArchiveInspector, MAX_MCP_PACKAGE_UPLOAD_BYTES, QuarantinedArchive
-from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
+from app.vault_runtime.extensions.filesystem import ExtensionFilesystem, managed_mcp_identity
 from app.vault_runtime.extensions.models import ExtensionAudience, ExtensionKind, ExtensionState
 from app.vault_runtime.extensions.import_diagnostics import blocking_import_diagnostics
 from app.vault_runtime.extensions.package_review import PackageReview, review_plugin_package
 from app.vault_runtime.extensions.preflight import Preflight, PreflightRegistry
-from app.vault_runtime.extensions.repository import ExtensionNotFoundError, ExtensionRecord, ExtensionRepository
+from app.vault_runtime.extensions.repository import (
+    ExtensionConflictError, ExtensionNotFoundError, ExtensionRecord, ExtensionRepository,
+)
 from app.vault_runtime.extensions.skills import SkillDocument, SkillSpecificationError, parse_skill
 from app.vault_runtime.extensions.specification import (
     McpServer, PluginManifest, PluginSpecificationError, parse_mcp_bytes,
@@ -137,6 +139,7 @@ class ExtensionImportService:
                 user_id=actor_user_id, workspace_id=workspace_id,
                 kind=ExtensionKind.SKILL, identity=document.name, owner=True,
             )
+            self._refuse_shared_storage(workspace_id, _skill_claims(document.name))
             return self._skill_preflights.issue(
                 kind=ExtensionKind.SKILL, identity=document.name,
                 principal_user_id=actor_user_id, workspace_id=workspace_id,
@@ -156,6 +159,9 @@ class ExtensionImportService:
             replace=replace,
         )
         candidate = preview.payload
+        self._refuse_shared_storage(
+            workspace_id, _skill_claims(candidate.document.name), discard=candidate.archive.discard,
+        )
         try:
             self._filesystem.replace(category="skills", identity=preview.identity, candidate_root=candidate.archive.content_root)
             record = self._repository.install(
@@ -215,6 +221,7 @@ class ExtensionImportService:
                 user_id=actor_user_id, workspace_id=workspace_id,
                 kind=ExtensionKind.PLUGIN, identity=manifest.name, owner=True,
             )
+            self._refuse_shared_storage(workspace_id, _plugin_claims(manifest.name, servers))
             migration_assessment = None
             if vault_manifest is not None and vault_manifest.migration is not None:
                 try:
@@ -266,6 +273,10 @@ class ExtensionImportService:
             replace=replace,
         )
         candidate = preview.payload
+        self._refuse_shared_storage(
+            workspace_id, _plugin_claims(candidate.manifest.name, candidate.mcp_servers),
+            discard=candidate.archive.discard,
+        )
         components = tuple(("skill", name, digest) for name, _document, digest in candidate.skills)
         components += tuple(("mcp", server.name, _value_hash(server.configuration)) for server in candidate.mcp_servers)
         migration = (
@@ -474,6 +485,7 @@ class ExtensionImportService:
                     user_id=actor_user_id, workspace_id=workspace_id,
                     kind=ExtensionKind.MCP, identity=server.name, owner=True,
                 )
+                self._refuse_shared_storage(workspace_id, ((ExtensionKind.MCP, server.name, False),))
                 previews.append(self._mcp_preflights.issue(
                     kind=ExtensionKind.MCP, identity=server.name,
                     principal_user_id=actor_user_id, workspace_id=workspace_id,
@@ -495,6 +507,7 @@ class ExtensionImportService:
             ExtensionKind.MCP, replace=replace,
         )
         candidate = preview.payload
+        self._refuse_shared_storage(workspace_id, ((ExtensionKind.MCP, candidate.server.name, False),))
         return self._repository.install(
             actor_user_id=actor_user_id, workspace_id=workspace_id,
             kind=ExtensionKind.MCP, identity=candidate.server.name,
@@ -559,6 +572,9 @@ class ExtensionImportService:
                 user_id=actor_user_id, workspace_id=workspace_id,
                 kind=ExtensionKind.MCP, identity=manifest.name, owner=True,
             )
+            self._refuse_shared_storage(workspace_id, _hosted_claims(
+                manifest.name, companion_plugin.name if companion_plugin is not None else None,
+            ))
             candidate = McpPackageCandidate(
                 archive, manifest, configuration_schema, companion_plugin,
                 companion_vault_manifest, companion_configuration_schema,
@@ -584,6 +600,10 @@ class ExtensionImportService:
             ExtensionKind.MCP, replace=replace,
         )
         candidate = preview.payload
+        self._refuse_shared_storage(workspace_id, _hosted_claims(
+            candidate.manifest.name,
+            candidate.companion_plugin.name if candidate.companion_plugin is not None else None,
+        ), discard=candidate.archive.discard)
         blocked = blocking_import_diagnostics(candidate.diagnostics)
         if blocked:
             raise McpPackageManifestError("; ".join(blocked))
@@ -753,6 +773,35 @@ class ExtensionImportService:
         if created_by_import and not data_existed:
             self._remove_unshared_data(identity, excluding_extension_id=None)
 
+    def _refuse_shared_storage(
+        self, workspace_id: str, claims: tuple[tuple[ExtensionKind, str, bool], ...],
+        *, discard=None,
+    ) -> None:
+        """Refuse an install whose name-keyed tree or data folder another workspace uses.
+
+        Callers reach this only after the device-owner check. The message names the
+        extension but nothing about the other workspace.
+        """
+        used = getattr(self._repository, "storage_used_elsewhere", None)
+        if used is None:
+            return
+        for kind, identity, uses_data in claims:
+            if used(workspace_id=workspace_id, kind=kind, identity=identity, uses_data=uses_data):
+                if discard is not None:
+                    discard()
+                raise ExtensionConflictError(
+                    f"'{identity}' is already installed in another workspace on this device. "
+                    "Vault keeps one copy of an extension's files per name for now, so remove it "
+                    "from the other workspace before installing it here."
+                )
+
+    def _remove_unshared_tree(self, workspace_id: str, kind: ExtensionKind, identity: str) -> None:
+        """Delete an install tree unless another workspace's install still owns it."""
+        used = getattr(self._repository, "storage_used_elsewhere", None)
+        if used is not None and used(workspace_id=workspace_id, kind=kind, identity=identity, uses_data=False):
+            return
+        self._filesystem.remove(category=_CATEGORY[kind], identity=identity)
+
     def _remove_unshared_data(self, identity: str, *, excluding_extension_id: str | None) -> None:
         """Plugin data is keyed by identity alone, so an install of any kind in any
         workspace with the same identity may still use it."""
@@ -860,11 +909,11 @@ class ExtensionImportService:
                 )
                 if current.configuration.get("packageType") == "hosted":
                     # Its own current and previous trees; data only when nothing else uses it.
-                    self._filesystem.remove(category="mcps", identity=current.identity)
+                    self._remove_unshared_tree(workspace_id, ExtensionKind.MCP, current.identity)
                     self._remove_unshared_data(current.identity, excluding_extension_id=current.extension_id)
                 else:
                     if current.configuration.get("managedByPluginId") is None:
-                        self._filesystem.remove(category="mcps", identity=current.identity)
+                        self._remove_unshared_tree(workspace_id, ExtensionKind.MCP, current.identity)
                 if remove_companion:
                     companion = self._repository.by_id(
                         actor_user_id=actor_user_id, workspace_id=workspace_id,
@@ -875,10 +924,9 @@ class ExtensionImportService:
                             actor_user_id=actor_user_id, workspace_id=workspace_id,
                             extension_id=companion_id, state=ExtensionState.REMOVED,
                         )
-                        self._filesystem.remove(category="plugins", identity=companion.identity)
+                        self._remove_unshared_tree(workspace_id, ExtensionKind.PLUGIN, companion.identity)
             elif current.kind in {ExtensionKind.SKILL, ExtensionKind.PLUGIN}:
-                category = "skills" if current.kind is ExtensionKind.SKILL else "plugins"
-                self._filesystem.remove(category=category, identity=current.identity)
+                self._remove_unshared_tree(workspace_id, current.kind, current.identity)
                 if current.kind is ExtensionKind.PLUGIN and current.configuration.get("packageData"):
                     self._remove_unshared_data(current.identity, excluding_extension_id=current.extension_id)
         return record
@@ -983,6 +1031,27 @@ class ExtensionImportService:
         if record is None or record.state is ExtensionState.REMOVED:
             return None
         return record
+
+
+_CATEGORY = {ExtensionKind.SKILL: "skills", ExtensionKind.PLUGIN: "plugins", ExtensionKind.MCP: "mcps"}
+
+
+def _skill_claims(name: str) -> tuple[tuple[ExtensionKind, str, bool], ...]:
+    """(kind, identity, uses data folder) for every name-keyed storage path an install takes."""
+    return ((ExtensionKind.SKILL, name, False),)
+
+
+def _plugin_claims(name: str, servers: tuple[McpServer, ...]) -> tuple[tuple[ExtensionKind, str, bool], ...]:
+    return ((ExtensionKind.PLUGIN, name, True),) + tuple(
+        (ExtensionKind.MCP, managed_mcp_identity(plugin_identity=name, server_name=server.name), False)
+        for server in servers
+    )
+
+
+def _hosted_claims(name: str, companion: str | None) -> tuple[tuple[ExtensionKind, str, bool], ...]:
+    return ((ExtensionKind.MCP, name, True),) + (
+        ((ExtensionKind.PLUGIN, companion, True),) if companion is not None else ()
+    )
 
 
 def _directory_hash(root: Path) -> str:

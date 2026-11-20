@@ -286,6 +286,13 @@ same `invoke` path the agent uses.
 - **Hosted MCP packages** run as child processes of Vault on `127.0.0.1`, on
   ports 8788–8899, supervised by `extensions/mcp_runtime.py`. They inherit only a
   short list of harmless environment variables, never Vault's secrets.
+- **Storage is keyed by name, not workspace** (`extensions/filesystem.py`:
+  `<root>/<category>/<identity>` and `<root>/data/<identity>`). Until it is
+  scoped per installation, confirm refuses a name another workspace uses for the
+  same tree or data folder, removal deletes only bytes no other install owns, and
+  startup (`flag_storage_conflicts`) marks existing cross-workspace collisions.
+  Marked installs are left out of every listing, load, projection, invocation
+  and process start (`repository._storage_blocked`) until the owner reinstalls.
 - **Safe mode** is one device-wide, persistent setting
   (`vault_extension_runtime_settings`, key `third_party_extensions`). While it
   is on, no third-party capability is projected, the supervisor refuses every
