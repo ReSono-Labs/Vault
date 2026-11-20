@@ -815,6 +815,9 @@ only Voice and/or Background; they do not register agents.
 
 ### Standards
 
+The full list of supported and unsupported features is in
+[SUPPORT-MATRIX.md](SUPPORT-MATRIX.md).
+
 - **Agent Plugins:** pinned Agent Plugins 1.0.0 manifests using
   `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`.
 - **Agent Skills:** `SKILL.md` with public Agent Skills-style YAML frontmatter,

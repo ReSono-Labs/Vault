@@ -27,10 +27,19 @@ export async function importMcpPackageFolder(grantId: string, path: string): Pro
     (await localApi.folderPreflight("mcp-package", grantId, path)) as McpPackagePreflight);
 }
 
+/** Decision record 2026-11-20: hosted code is trusted code until Vault confines it. */
+export const HOSTED_CODE_WARNING =
+  "This package runs its own program on this computer. It runs as trusted code with the same " +
+  "access as Vault, including Vault's data and every workspace. Install it only if you trust " +
+  "who made it. Continue?";
+
 async function importMcpPackagePreview(preview: McpPackagePreflight): Promise<{ identity: string; message: string }> {
   const blocked = blockingExtensionDiagnostics(preview.diagnostics);
   if (blocked.length) {
     throw new Error(blocked.join(" "));
+  }
+  if (!window.confirm(`${preview.identity}: ${HOSTED_CODE_WARNING}`)) {
+    return { identity: "", message: "" };
   }
   const replacement = preview.replacement
     ? window.confirm(`${preview.identity} is installed. Replace it with this validated version?`)

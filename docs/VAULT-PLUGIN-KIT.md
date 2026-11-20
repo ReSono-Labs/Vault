@@ -32,6 +32,8 @@ A plugin cannot create another Vault agent, and Vault never loads plugin code
 into its own process. Skills, settings and external MCP connections get only
 what Vault grants them.
 
+> What Vault supports, and what it skips: [SUPPORT-MATRIX.md](SUPPORT-MATRIX.md).
+
 > **Trusted code.** A plugin that ships its own server (a supervised
 > `lifecycle` process or a hosted MCP package) runs as the same operating-system
 > user and in the same container as Vault. Until Vault confines these processes,

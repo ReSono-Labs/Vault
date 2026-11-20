@@ -17,6 +17,8 @@ An MCP is **not** part of an Agent Plugin. A zip may optionally include a **comp
 
 External MCP URLs (`mcp.json` only) remain supported for servers you run outside Vault.
 
+> What Vault supports, and what it skips: [SUPPORT-MATRIX.md](SUPPORT-MATRIX.md).
+
 > **Trusted code.** A hosted MCP package runs as the same operating-system user and
 > in the same container as Vault. Until Vault confines these processes, treat it as
 > trusted code running with Vault's effective access, including Vault's data. Before
