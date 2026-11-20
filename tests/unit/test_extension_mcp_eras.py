@@ -286,3 +286,33 @@ def test_real_client_against_the_starters(starter, era, monkeypatch) -> None:
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.parametrize("starter", ["mcp-kit/starters/starter.example/server.py", "plugin-kit/starters/python/server.py"])
+def test_starters_refuse_foreign_origins(starter, monkeypatch) -> None:
+    import importlib.util
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    monkeypatch.setattr("app.vault_runtime.extensions.mcp_http.socket.getaddrinfo", _REAL_GETADDRINFO)
+    spec = importlib.util.spec_from_file_location("starter_origin", Path(__file__).parents[2] / starter)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), module.Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}).encode()
+    url = f"http://127.0.0.1:{server.server_address[1]}/mcp"
+    try:
+        with pytest.raises(HTTPError) as refused:
+            urlopen(Request(url, data=body, method="POST", headers={
+                "Content-Type": "application/json", "Origin": "https://attacker.example"}), timeout=3)
+        assert refused.value.code == 403
+        with urlopen(Request(url, data=body, method="POST", headers={
+                "Content-Type": "application/json", "Origin": "http://localhost:3000"}), timeout=3) as ok:
+            assert ok.status == 200
+    finally:
+        server.shutdown()
+        server.server_close()

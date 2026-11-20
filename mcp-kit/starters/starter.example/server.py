@@ -13,6 +13,7 @@ import os
 import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from urllib.parse import urlsplit
 
 
 MCP_PROTOCOL_VERSION = "2026-07-28"
@@ -58,6 +59,18 @@ class Handler(BaseHTTPRequestHandler):
         auth = self.headers.get("Authorization", "")
         return auth.startswith("Bearer ") and secrets.compare_digest(auth, f"Bearer {token}")
 
+    def _origin_allowed(self) -> bool:
+        """Browsers send Origin; only local pages (or ones listed in MCP_ALLOWED_ORIGINS)
+        may call this server, which blocks DNS rebinding. Vault sends no Origin."""
+        origin = self.headers.get("Origin")
+        if origin is None:
+            return True
+        allowed = {item.strip() for item in os.environ.get("MCP_ALLOWED_ORIGINS", "").split(",") if item.strip()}
+        if origin in allowed:
+            return True
+        host = urlsplit(origin).hostname or ""
+        return host in {"localhost", "127.0.0.1", "::1"}
+
     def _send_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
         self.send_response(status)
@@ -75,6 +88,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path != "/mcp":
             self._send_json(404, {"error": "not_found"})
+            return
+        if not self._origin_allowed():
+            self._send_json(403, {"jsonrpc": "2.0", "error": {"code": -32600, "message": "Origin not allowed"}})
             return
         if not self._authorized():
             self._send_json(401, {"error": "unauthorized"})
