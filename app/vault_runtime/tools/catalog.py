@@ -5,8 +5,7 @@ import json
 from collections.abc import Callable
 from threading import RLock
 
-from jsonschema import Draft202012Validator
-
+from app.core.security.json_schema import check_schema, offline_validator
 from app.vault_runtime.system_agents.inventory import AgentKind
 from app.vault_runtime.tools.argument_aliases import normalize_tool_arguments
 from app.vault_runtime.tools.definitions import ToolDefinition, ToolInvocationContext, ToolInvocationResult
@@ -186,7 +185,7 @@ class ToolCatalog:
 
 
 def _validate_schema(schema: dict[str, object]) -> None:
-    Draft202012Validator.check_schema(schema)
+    check_schema(schema)
 
 
 def _matches_schema(arguments: dict[str, object], schema: dict[str, object]) -> bool:
@@ -196,7 +195,7 @@ def _matches_schema(arguments: dict[str, object], schema: dict[str, object]) -> 
 def _schema_problem(arguments: dict[str, object], schema: dict[str, object]) -> str | None:
     """What is wrong with the arguments, in a few words naming fields only (no values), or None."""
     try:
-        validator = Draft202012Validator(schema)
+        validator = offline_validator(schema)
         errors = sorted(validator.iter_errors(arguments), key=lambda e: (len(e.path), str(e.validator)))
     except Exception:
         return "they do not match the tool's parameters"

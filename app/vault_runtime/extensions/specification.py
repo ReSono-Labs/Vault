@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from app.core.security.json_schema import offline_validator
 
 from app.vault_runtime.extensions.mcp_config import McpConfiguration, validate_mcp_configuration
 
@@ -153,6 +153,6 @@ def _schema(filename: str) -> dict[str, object]:
 
 
 def _validate(value: object, schema: dict[str, object], label: str) -> None:
-    errors = sorted(Draft202012Validator(schema).iter_errors(value), key=lambda item: list(item.path))
+    errors = sorted(offline_validator(schema).iter_errors(value), key=lambda item: list(item.path))
     if errors:
         raise PluginSpecificationError(f"{label} is invalid: {errors[0].message}")

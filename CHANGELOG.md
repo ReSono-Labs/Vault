@@ -5,7 +5,12 @@ All notable changes to Vault are listed here. The version comes from
 
 ## Unreleased
 
-Nothing yet.
+### Security
+
+- **MCP tool schemas are checked offline.** A schema from an MCP server or
+  package may only use references inside itself (`#/$defs/...`). Discovery
+  refuses a tool whose schema points at another document (http, https, file or
+  any other URI), and Vault never fetches such a reference while validating.
 
 ## 0.1.0 — first public release (not yet published)
 

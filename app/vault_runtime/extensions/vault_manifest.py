@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from app.core.security.json_schema import offline_validator
 
 from app.vault_runtime.extensions.mcp_package_migration import (
     McpPackageMigrationError,
@@ -165,7 +165,7 @@ def _read(path: Path) -> dict[str, object]:
 
 def _validate(value: dict[str, object], filename: str, label: str) -> None:
     schema = json.loads((_ROOT / filename).read_text(encoding="utf-8"))
-    errors = sorted(Draft202012Validator(schema).iter_errors(value), key=lambda item: list(item.path))
+    errors = sorted(offline_validator(schema).iter_errors(value), key=lambda item: list(item.path))
     if errors:
         location = ".".join(str(item) for item in errors[0].path)
         raise VaultManifestError(f"{label}{' at ' + location if location else ''}: {errors[0].message}")

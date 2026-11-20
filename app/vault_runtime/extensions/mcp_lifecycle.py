@@ -7,8 +7,7 @@ from hashlib import sha256
 import json
 import re
 
-from jsonschema import Draft202012Validator
-
+from app.core.security.json_schema import offline_validator
 from app.vault_runtime.extensions.mcp_client import McpClient, McpProtocolError
 from app.vault_runtime.extensions.repository import ExtensionRecord, ExtensionRepository
 from app.vault_runtime.extensions.models import ExtensionKind
@@ -131,7 +130,7 @@ class McpLifecycle:
                 if output_schema is not None:
                     if not isinstance(structured, dict):
                         raise McpProtocolError("MCP tool omitted required structured output")
-                    Draft202012Validator(output_schema).validate(structured)
+                    offline_validator(output_schema).validate(structured)
                 text_parts = [
                     str(item["text"]) for item in result.get("content", [])
                     if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str)

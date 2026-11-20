@@ -32,7 +32,7 @@ Hermes / OpenClaw    ── HTTPS :8765 ───────►│
 
 | Path | Contents |
 |---|---|
-| `app/core/` | Shared exceptions and security primitives (PBKDF2 password hashing, opaque tokens, outbound host checks) |
+| `app/core/` | Shared exceptions and security primitives (PBKDF2 password hashing, opaque tokens, outbound host checks, offline JSON Schema checks) |
 | `app/vault_runtime/package_runtime.py` | Process entry point: `initialize`, `serve`, `healthcheck`, `show-setup`, `reconcile-restore` |
 | `app/vault_runtime/composition.py` | Builds every service and wires them into the API app (the composition root) |
 | `app/vault_runtime/local_api/` | HTTPS server (`server.py`), route table (`app.py`), configuration (`config.py`), browser coordination API (`background.py`) |
@@ -176,7 +176,9 @@ Background all read from it, so a tool behaves the same everywhere.
   checks:
   1. the audience and scope;
   2. grants (`LocalToolAuthority`, or the background authority for background work);
-  3. that the arguments match the schema (errors name fields, never values);
+  3. that the arguments match the schema (errors name fields, never values).
+     Schemas are checked offline (`app/core/security/json_schema.py`): only
+     references inside the same schema are allowed, and nothing is fetched;
   4. the approval gate.
 
   After the checks it runs the handler and records the outcome. `ValueError`

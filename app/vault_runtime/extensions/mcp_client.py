@@ -9,9 +9,8 @@ import re
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
-from jsonschema import Draft202012Validator
-
 from app.core.exceptions import BadRequestError
+from app.core.security.json_schema import SchemaReferenceError, check_schema
 from app.core.security.outbound import validate_extension_host
 
 
@@ -177,9 +176,11 @@ def _tool(value: object) -> DiscoveredMcpTool:
     if not isinstance(input_schema, dict) or (output_schema is not None and not isinstance(output_schema, dict)):
         raise McpProtocolError("MCP tool schemas must be objects")
     try:
-        Draft202012Validator.check_schema(input_schema)
+        check_schema(input_schema)
         if output_schema is not None:
-            Draft202012Validator.check_schema(output_schema)
+            check_schema(output_schema)
+    except SchemaReferenceError as exc:
+        raise McpProtocolError(f"MCP tool {name} schema is refused: {exc}") from exc
     except Exception as exc:
         raise McpProtocolError("MCP tool schema is invalid") from exc
     # Annotations are deliberately ignored: server-provided effects are untrusted.
