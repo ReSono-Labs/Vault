@@ -11,7 +11,11 @@ class Transport:
         self.responses = list(responses)
         self.calls = []
 
-    def request(self, method, *, params=None):
+    def open(self):
+        self.calls.append(("open", None))
+        return self.responses.pop(0)["capabilities"]
+
+    def request(self, method, *, params=None, **_):
         self.calls.append((method, params))
         return self.responses.pop(0)
 
@@ -64,21 +68,24 @@ def test_http_transport_revalidates_dns_before_io(monkeypatch) -> None:
     def denied(_host: str, *, target: str):
         raise BadRequestError("Host must not resolve to a local or private network.", target=target)
 
-    monkeypatch.setattr("app.vault_runtime.extensions.mcp_client.validate_extension_host", denied)
+    monkeypatch.setattr("app.vault_runtime.extensions.mcp_http.validate_extension_host", denied)
     transport = HttpMcpTransport("https://rebound.example/mcp")
     with pytest.raises(McpProtocolError, match="denied network"):
-        transport.request("initialize")
+        transport.open()
 
 
 def test_http_transport_merges_headers_ignoring_case_and_vault_headers_win(monkeypatch) -> None:
     import httpx
 
-    monkeypatch.setattr("app.vault_runtime.extensions.mcp_client.validate_extension_host", lambda host, *, target: host)
+    monkeypatch.setattr("app.vault_runtime.extensions.mcp_http.validate_extension_host", lambda host, *, target: host)
+    monkeypatch.setattr("app.vault_runtime.extensions.mcp_http.socket.getaddrinfo",
+                        lambda *_a, **_k: [(2, 1, 6, "", ("203.0.113.7", 443))])
     sent = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         sent.append(request)
-        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {
+            "supportedVersions": [MCP_PROTOCOL_VERSION], "capabilities": {"tools": {}}}})
 
     real_client = httpx.Client
     monkeypatch.setattr(httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
@@ -89,12 +96,15 @@ def test_http_transport_merges_headers_ignoring_case_and_vault_headers_win(monke
         credential_headers=(("authorization", "Bearer secret"),),
         vault_headers=(("X-Vault-Capability", "issued"),),
     )
-    transport.request("initialize")
+    transport.open()
     headers = sent[0].headers
     assert headers.get_list("x-vault-capability") == ["issued"]
     assert headers.get_list("content-type") == ["application/json"]
     assert headers.get_list("accept") == ["application/json, text/event-stream"]
     assert headers.get_list("authorization") == ["Bearer secret"] and headers["x-tenant"] == "t"
+    # Connects to the checked address, keeps the name for Host and TLS (no DNS rebinding).
+    assert sent[0].url.host == "203.0.113.7" and headers["host"] == "example.test"
+    assert sent[0].extensions.get("sni_hostname") == "example.test"
 
 
 def test_unsupported_transport_connections_send_no_request() -> None:

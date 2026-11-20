@@ -820,8 +820,15 @@ only Voice and/or Background; they do not register agents.
 - **Agent Skills:** `SKILL.md` with public Agent Skills-style YAML frontmatter,
   metadata-first discovery, and just-in-time instruction loading.
 - **MCP:** hosted packages use `mcp.package.json` (ZIP/TAR import, supervised process);
-  connection-only rows use pinned Agent Plugins 1.0.0 `mcp.json`. Runtime negotiation
-  uses MCP protocol revision `2025-11-25`.
+  connection-only rows use pinned Agent Plugins 1.0.0 `mcp.json`. Vault speaks MCP
+  `2026-07-28` over Streamable HTTP (per-request `_meta`, `server/discover`, the
+  `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` and `Mcp-Param-*` headers). For older
+  servers it falls back to `2025-11-25` (`initialize` handshake and sessions) when the
+  server's answer is not a current-protocol error, and remembers that per endpoint until
+  Vault restarts. HTTP+SSE (`2024-11-05`) and stdio are listed but never connected.
+  Tool results may carry text, images, audio, resource links and embedded resources;
+  non-text parts are described to the agent. A timed-out call is reported and never
+  repeated, because the tool may already have run.
 - **A2A:** outbound Agent2Agent JSON-RPC protocol version 1.0 with Agent Cards.
 
 ### Import a Skill

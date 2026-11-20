@@ -28,6 +28,15 @@ All notable changes to Vault are listed here. The version comes from
   folder two workspaces shared stays in place and stays blocked until the owner
   reinstalls one.
 - **Link tools:** discovery reads every page and backs off when nothing changes.
+- **MCP 2026-07-28:** Vault speaks the current MCP revision (per-request metadata,
+  `server/discover`, the required request headers and `x-mcp-header` parameters) and
+  falls back to `2025-11-25` for older servers, kept in a separate adapter. Calls go to
+  the address that passed the network check, answers are size-limited while they
+  stream, and SSE answers are read. Timeouts, refused credentials, unreachable servers
+  and server errors get distinct messages; a timed-out call is never repeated. A tool's
+  own error is returned even when it declares an output schema, and images, audio and
+  resources are described instead of dropped. Both starters now run a server that
+  speaks both revisions.
 - **Docs:** hosted executable plugins are described as trusted code with Vault's
   access until OS confinement exists.
 

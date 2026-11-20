@@ -102,18 +102,27 @@ def test_supervisor_starts_starter_and_discovers_tools(tmp_path: Path) -> None:
     assert status.endpoint is not None
     updated = repository.records[record.extension_id]
     endpoint = str(updated.configuration["endpoint"])
+    meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {}}
     payload = json.dumps({
-        "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {},
+        "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"_meta": meta},
     }).encode()
     with urlopen(Request(
         endpoint,
         data=payload,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers={"Content-Type": "application/json", "Accept": "application/json",
+                 "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "tools/list"},
         method="POST",
     ), timeout=3) as response:
         body = json.loads(response.read().decode())
     names = tuple(tool["name"] for tool in body["result"]["tools"])
     assert names == ("starter_greeting",)
+    # Older clients still get the 2025-11-25 handshake.
+    legacy = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {
+        "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}).encode()
+    with urlopen(Request(endpoint, data=legacy, headers={"Content-Type": "application/json"}, method="POST"),
+                 timeout=3) as response:
+        assert json.loads(response.read().decode())["result"]["protocolVersion"] == "2025-11-25"
     supervisor.stop(record=updated)
 
 

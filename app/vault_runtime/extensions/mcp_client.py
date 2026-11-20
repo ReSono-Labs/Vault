@@ -1,4 +1,10 @@
-"""Bounded MCP 2025-11-25 client adapted from R1 mcp/client.py and tool_adapter.py."""
+"""Bounded MCP client: one interface over the current (2026-07-28) and legacy (2025-11-25) eras.
+
+``HttpMcpTransport`` picks the era per endpoint: it tries the current protocol first and
+falls back to the legacy ``initialize`` handshake only when the server's answer is not a
+recognized current-protocol error (the spec's backward-compatibility rule). The choice is
+remembered in this process. The two eras live in ``mcp_modern`` and ``mcp_legacy``.
+"""
 
 from __future__ import annotations
 
@@ -6,16 +12,22 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version as package_version
 import json
 import re
+from threading import Lock
 from typing import Any, Protocol
-from urllib.parse import urlparse
 
-from app.core.exceptions import BadRequestError
 from app.core.security.json_schema import SchemaReferenceError, check_schema
-from app.core.security.outbound import validate_extension_host
-from app.vault_runtime.extensions.mcp_rules import is_reserved_header, merge_headers
+from app.vault_runtime.extensions import mcp_legacy, mcp_modern
+from app.vault_runtime.extensions.mcp_http import (
+    McpAuthError, McpProtocolError, McpTimeoutError, McpTransportError, connection_headers,
+)
 
+__all__ = [
+    "MCP_PROTOCOL_VERSION", "LEGACY_PROTOCOL_VERSION", "DiscoveredMcpTool", "HttpMcpTransport",
+    "McpAuthError", "McpClient", "McpProtocolError", "McpTimeoutError", "McpTransportError",
+]
 
-MCP_PROTOCOL_VERSION = "2025-11-25"
+MCP_PROTOCOL_VERSION = mcp_modern.PROTOCOL_VERSION
+LEGACY_PROTOCOL_VERSION = mcp_legacy.PROTOCOL_VERSION
 try:  # pyproject.toml is the one version source; the installed metadata carries it.
     VAULT_VERSION = package_version("resono-labs-vault")
 except PackageNotFoundError:  # running from a source tree that was never installed
@@ -24,14 +36,15 @@ MAX_DISCOVERY_PAGES = 16
 MAX_DISCOVERED_TOOLS = 256
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 _TOOL_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
-
-
-class McpProtocolError(RuntimeError):
-    pass
+_CLIENT_INFO = {"name": "resono-vault", "version": VAULT_VERSION}
+_ERAS: dict[str, str] = {}      # endpoint -> "modern" | "legacy", for this process
+_ERAS_LOCK = Lock()
 
 
 class McpTransport(Protocol):
-    def request(self, method: str, *, params: dict[str, object] | None = None) -> dict[str, object]: ...
+    def open(self) -> dict[str, Any]: ...
+    def request(self, method: str, *, params: dict[str, Any] | None = None,
+                input_schema: dict[str, Any] | None = None) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,63 +56,74 @@ class DiscoveredMcpTool:
     output_schema: dict[str, object] | None
 
 
+def _speaks_legacy(exc: McpProtocolError) -> bool:
+    """Whether a failed current-protocol request means the server is a legacy one."""
+    if isinstance(exc, (McpTransportError, McpAuthError)):
+        return False
+    if exc.code == -32601:          # current servers MUST implement server/discover
+        return True
+    if exc.code == mcp_modern.UNSUPPORTED_PROTOCOL_VERSION:
+        supported = exc.data.get("supported") if isinstance(exc.data, dict) else None
+        return isinstance(supported, list) and LEGACY_PROTOCOL_VERSION in supported
+    return exc.status in (400, 404, 405) and exc.code not in mcp_modern.MODERN_ERROR_CODES
+
+
 class HttpMcpTransport:
-    """One connection transport. Secret headers are supplied at use time only."""
+    """One connection. Secret headers are supplied at use time only and never stored."""
 
     def __init__(
         self, endpoint: str, *, public_headers: tuple[tuple[str, str], ...] = (),
         credential_headers: tuple[tuple[str, str], ...] = (),
         vault_headers: tuple[tuple[str, str], ...] = (), timeout_seconds: float = 15.0,
+        post: Any = None,
     ) -> None:
         if timeout_seconds <= 0 or timeout_seconds > 60:
             raise ValueError("MCP timeout must be within 60 seconds")
         self._endpoint = endpoint
-        # Merged ignoring case; later layers win. Names Vault generates are dropped from the
-        # package's and the stored credential layers (older records predate that check).
-        self._headers = merge_headers(
-            ((name, value) for name, value in public_headers if not is_reserved_header(name)),
-            ((name, value) for name, value in credential_headers if not is_reserved_header(name)),
-            vault_headers,
-        )
-        self._timeout = timeout_seconds
-        self._next_id = 0
+        headers = connection_headers(public=public_headers, credential=credential_headers, vault=vault_headers)
+        session_key = connection_headers(public=public_headers, credential=credential_headers, vault=())
+        extra = {} if post is None else {"post": post}
+        self._modern = mcp_modern.ModernHttpTransport(
+            endpoint, headers=headers, timeout_seconds=timeout_seconds, client_info=_CLIENT_INFO, **extra)
+        self._legacy = mcp_legacy.LegacyHttpTransport(
+            endpoint, headers=headers, session_key_headers=session_key, timeout_seconds=timeout_seconds,
+            client_info=_CLIENT_INFO, **extra)
+        self._active: Any = None
 
-    def request(self, method: str, *, params: dict[str, object] | None = None) -> dict[str, object]:
-        import httpx
-        host = urlparse(self._endpoint).hostname
-        if not host:
-            raise McpProtocolError("MCP endpoint host is invalid")
+    @property
+    def era(self) -> str | None:
+        return None if self._active is None else self._active.era
+
+    def open(self) -> dict[str, Any]:
+        with _ERAS_LOCK:
+            known = _ERAS.get(self._endpoint)
+        if known == "legacy":
+            try:
+                return self._use(self._legacy)
+            except McpProtocolError as exc:
+                if isinstance(exc, (McpTransportError, McpAuthError)):
+                    raise
+                with _ERAS_LOCK:          # the server may have been upgraded
+                    _ERAS.pop(self._endpoint, None)
         try:
-            validate_extension_host(host, target="MCP host")
-        except BadRequestError as exc:
-            raise McpProtocolError("MCP endpoint resolved to a denied network") from exc
-        self._next_id += 1
-        payload: dict[str, object] = {"jsonrpc": "2.0", "id": self._next_id, "method": method}
-        if params is not None:
-            payload["params"] = params
-        with httpx.Client(timeout=self._timeout, follow_redirects=False) as client:
-            response = client.post(
-                self._endpoint,
-                headers=merge_headers(self._headers, {
-                    "Accept": "application/json, text/event-stream", "Content-Type": "application/json",
-                }),
-                json=payload,
-            )
-        if len(response.content) > MAX_RESPONSE_BYTES:
-            raise McpProtocolError("MCP response exceeds the size limit")
-        response.raise_for_status()
-        try:
-            value = response.json()
-        except (ValueError, UnicodeDecodeError) as exc:
-            raise McpProtocolError("MCP response is not valid JSON") from exc
-        if not isinstance(value, dict) or value.get("jsonrpc") != "2.0" or value.get("id") != self._next_id:
-            raise McpProtocolError("MCP response envelope is invalid")
-        if "error" in value:
-            raise McpProtocolError("MCP server returned a protocol error")
-        result = value.get("result")
-        if not isinstance(result, dict):
-            raise McpProtocolError("MCP result must be an object")
-        return result
+            return self._use(self._modern)
+        except McpProtocolError as exc:
+            if not _speaks_legacy(exc):
+                raise
+        return self._use(self._legacy)
+
+    def _use(self, transport: Any) -> dict[str, Any]:
+        capabilities = transport.open()
+        self._active = transport
+        with _ERAS_LOCK:
+            _ERAS[self._endpoint] = transport.era
+        return capabilities
+
+    def request(self, method: str, *, params: dict[str, Any] | None = None,
+                input_schema: dict[str, Any] | None = None) -> dict[str, Any]:
+        if self._active is None:
+            raise McpProtocolError("MCP client is not initialized")
+        return self._active.request(method, params=params, input_schema=input_schema)
 
 
 class McpClient:
@@ -108,14 +132,7 @@ class McpClient:
         self._initialized = False
 
     def initialize(self) -> None:
-        result = self._transport.request("initialize", params={
-            "protocolVersion": MCP_PROTOCOL_VERSION,
-            "capabilities": {},
-            "clientInfo": {"name": "resono-vault", "version": VAULT_VERSION},
-        })
-        if result.get("protocolVersion") != MCP_PROTOCOL_VERSION:
-            raise McpProtocolError("MCP server did not negotiate the required protocol revision")
-        capabilities = result.get("capabilities")
+        capabilities = self._transport.open()
         if not isinstance(capabilities, dict) or not isinstance(capabilities.get("tools"), dict):
             raise McpProtocolError("MCP server does not declare tools capability")
         self._initialized = True
@@ -150,16 +167,17 @@ class McpClient:
             raise McpProtocolError("MCP tool names must be unique")
         return tuple(tools)
 
-    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+    def call_tool(self, name: str, arguments: dict[str, object], *,
+                  input_schema: dict[str, object] | None = None) -> dict[str, object]:
+        """One call; never retried here after a timeout (the tool may already have run)."""
         self._require_initialized()
         if not _TOOL_NAME.fullmatch(name):
             raise McpProtocolError("MCP tool name is invalid")
-        result = self._transport.request("tools/call", params={"name": name, "arguments": arguments})
+        result = self._transport.request("tools/call", params={"name": name, "arguments": arguments},
+                                         input_schema=input_schema)
         content = result.get("content")
         if not isinstance(content, list) or any(not isinstance(item, dict) for item in content):
             raise McpProtocolError("MCP tool result content is invalid")
-        if "structuredContent" in result and not isinstance(result["structuredContent"], dict):
-            raise McpProtocolError("MCP structuredContent must be an object")
         if "isError" in result and not isinstance(result["isError"], bool):
             raise McpProtocolError("MCP isError must be boolean")
         # Bound post-decoding data even for injected transports.

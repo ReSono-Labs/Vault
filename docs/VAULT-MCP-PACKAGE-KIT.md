@@ -469,7 +469,7 @@ External connection-only MCP rows omit `packageType: "hosted"` and have a fixed 
 The stdlib starter demonstrates the contract only. Production packages should:
 
 - Use the **official MCP Python SDK** with Streamable HTTP transport.
-- Implement **`GET /health`** and **`POST /mcp`** with MCP protocol version `2025-11-25`.
+- Implement **`GET /health`** and **`POST /mcp`** with MCP protocol version `2026-07-28` (Vault tries it first). Answering `2025-11-25` `initialize` as well keeps older clients working; the starter does both.
 - Read **`VAULT_MCP_PORT`**, settings env, and secrets from the environment — never hardcode `/home/…` paths.
 - When using the MCP SDK behind Vault or Link, configure **transport security** for your deployment (e.g. allowed hosts / DNS rebinding rules when a public Host header is forwarded).
 

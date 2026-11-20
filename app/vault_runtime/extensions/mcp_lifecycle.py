@@ -7,8 +7,12 @@ from hashlib import sha256
 import json
 import re
 
+from jsonschema import ValidationError
+
 from app.core.security.json_schema import offline_validator
-from app.vault_runtime.extensions.mcp_client import McpClient, McpProtocolError
+from app.vault_runtime.extensions.mcp_client import (
+    McpAuthError, McpClient, McpProtocolError, McpTimeoutError, McpTransportError,
+)
 from app.vault_runtime.extensions.mcp_rules import connection_executable
 from app.vault_runtime.extensions.repository import ExtensionRecord, ExtensionRepository
 from app.vault_runtime.extensions.models import ExtensionKind
@@ -133,23 +137,22 @@ class McpLifecycle:
             try:
                 client = self._client_factory(connection, context)
                 client.initialize()
-                result = client.call_tool(remote_name, arguments)
-                structured = result.get("structuredContent")
-                if output_schema is not None:
-                    if not isinstance(structured, dict):
-                        raise McpProtocolError("MCP tool omitted required structured output")
-                    offline_validator(output_schema).validate(structured)
-                text_parts = [
-                    str(item["text"]) for item in result.get("content", [])
-                    if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str)
-                ]
-                text = "\n".join(text_parts) or (
-                    json.dumps(structured, separators=(",", ":")) if isinstance(structured, dict)
-                    else "MCP tool returned non-text content."
-                )
-                return ToolInvocationResult(text, structured_content=structured if isinstance(structured, dict) else None, is_error=bool(result.get("isError", False)))
+                result = client.call_tool(remote_name, arguments, input_schema=input_schema)
+            except McpTimeoutError:
+                return ToolInvocationResult(
+                    "MCP server did not answer in time. The tool may still have run; check before retrying.",
+                    is_error=True)
+            except McpAuthError:
+                return ToolInvocationResult(
+                    "MCP server refused the credentials. Reconnect this connection's account.", is_error=True)
+            except McpTransportError:
+                return ToolInvocationResult("MCP server could not be reached.", is_error=True)
+            except McpProtocolError as exc:
+                code = f" ({exc.code})" if exc.code is not None else ""
+                return ToolInvocationResult(f"MCP server returned an error{code}: {str(exc)[:300]}", is_error=True)
             except Exception:
                 return ToolInvocationResult("MCP tool invocation failed.", is_error=True)
+            return _tool_result(result, output_schema)
 
         return ToolDefinition(
             tool_id=f"mcp:{connection.extension_id}:{scope_hash}:{remote_name}", name=model_name,
@@ -161,6 +164,49 @@ class McpLifecycle:
     @staticmethod
     def _source_id(user_id: str, workspace_id: str, agent: AgentKind, extension_id: str) -> str:
         return f"mcp:{extension_id}:{workspace_id}:{user_id}:{agent.value}"
+
+
+def _tool_result(result: dict[str, object], output_schema: dict[str, object] | None) -> ToolInvocationResult:
+    """Project an MCP tool result. A tool error is returned as-is: its structured output
+    need not match the output schema."""
+    is_error = bool(result.get("isError", False))
+    has_structured = "structuredContent" in result
+    structured = result.get("structuredContent")
+    if output_schema is not None and not is_error:
+        if not has_structured:
+            return ToolInvocationResult("MCP tool omitted its required structured output.", is_error=True)
+        try:
+            offline_validator(output_schema).validate(structured)
+        except ValidationError:
+            return ToolInvocationResult("MCP tool output did not match its declared schema.", is_error=True)
+        except Exception:      # e.g. a reference outside the schema, persisted before that check
+            return ToolInvocationResult("MCP tool output schema is refused.", is_error=True)
+    parts = [_describe(item) for item in result.get("content", []) if isinstance(item, dict)]
+    text = "\n".join(part for part in parts if part)
+    if not text:
+        text = (json.dumps(structured, separators=(",", ":")) if has_structured
+                else "MCP tool returned no content.")
+    return ToolInvocationResult(
+        text, structured_content=structured if isinstance(structured, dict) else None, is_error=is_error,
+    )
+
+
+def _describe(item: dict[str, object]) -> str:
+    """Text as-is; other content types are named so the model knows what came back."""
+    kind = item.get("type")
+    if kind == "text":
+        return str(item.get("text", ""))
+    if kind in ("image", "audio"):
+        return f"[{kind} content: {str(item.get('mimeType') or 'unknown type')[:100]}]"
+    if kind == "resource_link":
+        name = item.get("name") or item.get("uri")
+        return f"[resource link: {str(name)[:200]} <{str(item.get('uri', ''))[:500]}>]"
+    if kind == "resource":
+        resource = item.get("resource") if isinstance(item.get("resource"), dict) else {}
+        if isinstance(resource.get("text"), str):
+            return str(resource["text"])
+        return f"[embedded resource: {str(resource.get('uri', ''))[:500]}]"
+    return f"[{str(kind)[:50]} content]"
 
 
 def _model_name(extension_id: str, user_id: str, workspace_id: str, agent: AgentKind, remote_name: str) -> str:

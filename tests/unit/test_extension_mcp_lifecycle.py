@@ -18,7 +18,10 @@ class Transport:
     def __init__(self, responses):
         self.responses = list(responses)
 
-    def request(self, method, *, params=None):
+    def open(self):
+        return self.responses.pop(0)["capabilities"]
+
+    def request(self, method, *, params=None, **_):
         return self.responses.pop(0)
 
 
@@ -208,7 +211,7 @@ def test_invocation_and_output_validation_never_fetch_references(external_refere
         repository.granted = (("weather.read", "Read weather", {"type": "object"}, external, "read"),)
         names = lifecycle.project_scope(user_id="user", workspace_id="workspace", agent=AgentKind.VOICE, connection=_connection())
         result = catalog.invoke(names[0], {}, context=_context())
-        assert result.is_error and result.text == "MCP tool invocation failed."
+        assert result.is_error and result.text == "MCP tool output schema is refused."
     assert probe() == (0, 0)
 
 
@@ -245,4 +248,4 @@ def test_in_document_schema_references_keep_working() -> None:
     good = catalog.invoke(names[0], {"city": "Oslo"}, context=_context())
     assert not good.is_error and good.structured_content == {"temperature": 72}
     mismatched = catalog.invoke(names[0], {"city": "Oslo"}, context=_context())
-    assert mismatched.is_error and mismatched.text == "MCP tool invocation failed."
+    assert mismatched.is_error and mismatched.text == "MCP tool output did not match its declared schema."

@@ -51,7 +51,7 @@ Hermes / OpenClaw    ── HTTPS :8765 ───────►│
 | `app/vault_runtime/tasks/`, `tasks_tools.py`, `notifications/` | Tasks and notifications |
 | `app/vault_runtime/folders/`, `workspace_files/`, `workspace_storage.py`, `workspace_paths.py` | Host folders shared with users, workspace files and per-workspace storage |
 | `app/vault_runtime/commands/` | Command-line tools for agents, confined with Landlock |
-| `app/vault_runtime/extensions/` | Plugin, Skill and MCP import, review, lifecycle, MCP client and supervisor, secrets |
+| `app/vault_runtime/extensions/` | Plugin, Skill and MCP import, review, lifecycle, MCP client (`mcp_client` picks the era; `mcp_modern` 2026-07-28 and `mcp_legacy` 2025-11-25 share `mcp_http`) and supervisor, secrets |
 | `app/vault_runtime/builtin_plugins.py`, `builtin_plugin_tools.py` | Built-in plugins |
 | `app/vault_runtime/agent_network/` | Agent2Agent (A2A) client, inbound server and collaboration tools |
 | `app/vault_runtime/external_memory/` | Scoped memory API for the Hermes and OpenClaw adapters |

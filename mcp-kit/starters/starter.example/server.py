@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Minimal Streamable HTTP MCP server for Vault-hosted packages (stdlib only)."""
+"""Minimal Streamable HTTP MCP server for Vault-hosted packages (stdlib only).
+
+Speaks MCP 2026-07-28 (every request carries ``params._meta`` with the protocol version;
+``server/discover``; no sessions) and, for older clients, 2025-11-25 (``initialize``
+handshake). Vault tries the current protocol first.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 
-MCP_PROTOCOL_VERSION = "2025-11-25"
+MCP_PROTOCOL_VERSION = "2026-07-28"
+LEGACY_PROTOCOL_VERSION = "2025-11-25"
+SERVER_INFO = {"name": "starter.example", "version": "0.2.0"}
+TOOLS = [{
+    "name": "starter_greeting",
+    "description": "Return a short greeting using the configured prefix.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "additionalProperties": False,
+    },
+    "outputSchema": {
+        "type": "object",
+        "properties": {"message": {"type": "string"}},
+        "required": ["message"],
+        "additionalProperties": False,
+    },
+}]
 
 
 def _greeting(name: str, prefix: str) -> dict[str, Any]:
@@ -72,41 +94,68 @@ class Handler(BaseHTTPRequestHandler):
         request_id = request.get("id")
         method = request.get("method")
         params = request.get("params") if isinstance(request.get("params"), dict) else {}
-        if method == "initialize":
-            result = {
-                "protocolVersion": MCP_PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "starter.example", "version": "0.1.0"},
-            }
-        elif method == "tools/list":
-            result = {
-                "tools": [{
-                    "name": "starter_greeting",
-                    "description": "Return a short greeting using the configured prefix.",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {"name": {"type": "string"}},
-                        "additionalProperties": False,
-                    },
-                    "outputSchema": {
-                        "type": "object",
-                        "properties": {"message": {"type": "string"}},
-                        "required": ["message"],
-                        "additionalProperties": False,
-                    },
-                }],
-            }
-        elif method == "tools/call":
-            if params.get("name") != "starter_greeting":
-                self._send_json(200, {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Unknown tool"}})
-                return
-            arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
-            prefix = os.environ.get("VAULT_MCP_SETTING_GREETING", "Hello")
-            result = _greeting(str(arguments.get("name", "there")), prefix)
-        else:
-            self._send_json(200, {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Unknown method"}})
+        if "id" not in request:          # a notification (e.g. notifications/initialized)
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
             return
+        meta = params.get("_meta") if isinstance(params.get("_meta"), dict) else {}
+        version = meta.get("io.modelcontextprotocol/protocolVersion")
+        if version is not None:
+            self._modern(request_id, method, params, version)
+        else:
+            self._legacy(request_id, method, params)
+
+    def _modern(self, request_id: Any, method: Any, params: dict[str, Any], version: Any) -> None:
+        if version != MCP_PROTOCOL_VERSION:
+            self._error(400, request_id, -32022, "Unsupported protocol version",
+                        {"supported": [MCP_PROTOCOL_VERSION, LEGACY_PROTOCOL_VERSION]})
+            return
+        named = params.get("name") if method == "tools/call" else None
+        if (self.headers.get("MCP-Protocol-Version") != version or self.headers.get("Mcp-Method") != method
+                or (named is not None and self.headers.get("Mcp-Name") != named)):
+            self._error(400, request_id, -32020, "Header does not match the request body")
+            return
+        if method == "server/discover":
+            self._result(request_id, {
+                "supportedVersions": [MCP_PROTOCOL_VERSION, LEGACY_PROTOCOL_VERSION],
+                "capabilities": {"tools": {}}, "_meta": {"io.modelcontextprotocol/serverInfo": SERVER_INFO},
+            })
+        elif method in ("tools/list", "tools/call"):
+            self._tools(request_id, method, params)
+        else:
+            self._error(404, request_id, -32601, "Method not found")
+
+    def _legacy(self, request_id: Any, method: Any, params: dict[str, Any]) -> None:
+        if method == "initialize":
+            self._result(request_id, {
+                "protocolVersion": LEGACY_PROTOCOL_VERSION,
+                "capabilities": {"tools": {}}, "serverInfo": SERVER_INFO,
+            })
+        elif method in ("tools/list", "tools/call"):
+            self._tools(request_id, method, params)
+        else:
+            self._error(200, request_id, -32601, "Method not found")
+
+    def _tools(self, request_id: Any, method: str, params: dict[str, Any]) -> None:
+        if method == "tools/list":
+            self._result(request_id, {"tools": TOOLS})
+            return
+        if params.get("name") != "starter_greeting":
+            self._error(200, request_id, -32602, "Unknown tool")
+            return
+        arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        prefix = os.environ.get("VAULT_MCP_SETTING_GREETING", "Hello")
+        self._result(request_id, _greeting(str(arguments.get("name", "there")), prefix))
+
+    def _result(self, request_id: Any, result: dict[str, Any]) -> None:
         self._send_json(200, {"jsonrpc": "2.0", "id": request_id, "result": result})
+
+    def _error(self, status: int, request_id: Any, code: int, message: str, data: Any = None) -> None:
+        error: dict[str, Any] = {"code": code, "message": message}
+        if data is not None:
+            error["data"] = data
+        self._send_json(status, {"jsonrpc": "2.0", "id": request_id, "error": error})
 
 
 def main() -> None:
