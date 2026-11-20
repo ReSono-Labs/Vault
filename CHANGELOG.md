@@ -5,6 +5,13 @@ All notable changes to Vault are listed here. The version comes from
 
 ## Unreleased
 
+### Link
+
+- **Link Front Door v1.** Link's engine can run Vault owner chat over its standard agent
+  contract (`/v1/responses` plus `/link/v1` capabilities, approvals and drafts), beside the
+  existing companion chat routes. Vault cards arrive as Link Cards v1. Steer, streaming and
+  the voice tunnel are reported unsupported; phone voice keeps working as before.
+
 ### Security
 
 - **MCP tool schemas are checked offline.** A schema from an MCP server or
