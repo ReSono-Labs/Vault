@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 from app.core.exceptions import BadRequestError
 from app.core.security.outbound import validate_extension_url
+from app.vault_runtime.extensions.mcp_rules import McpRuleError, url_problem, validate_headers
 
 
 class McpConfigurationError(ValueError):
@@ -33,13 +33,10 @@ def validate_mcp_configuration(value: object) -> McpConfiguration:
         if set(value) - {"type", "url", "headers"}:
             raise McpConfigurationError("remote MCP configuration has unsupported fields")
         endpoint = _remote_url(value.get("url"))
-        headers = _string_map(value.get("headers", {}), "headers")
-        folded = [name.casefold() for name in headers]
-        if len(folded) != len(set(folded)):
-            raise McpConfigurationError("MCP header names collide by case")
-        secret_headers = {"authorization", "cookie", "proxy-authorization", "x-api-key"}
-        if any(name in secret_headers for name in folded):
-            raise McpConfigurationError("credentials require separate secret storage")
+        try:
+            headers = validate_headers(value.get("headers", {}), allow_credentials=False)
+        except McpRuleError as exc:
+            raise McpConfigurationError(str(exc)) from exc
         return McpConfiguration(
             transport=str(transport), endpoint=endpoint,
             headers=tuple(sorted(headers.items())), executable=transport == "streamable-http",
@@ -67,17 +64,10 @@ def validate_mcp_configuration(value: object) -> McpConfiguration:
 
 
 def _remote_url(value: object) -> str:
-    if not isinstance(value, str):
-        raise McpConfigurationError("MCP URL is required")
-    parsed = urlparse(value)
-    if (
-        parsed.scheme not in {"http", "https"} or not parsed.netloc
-        or parsed.username or parsed.password or parsed.fragment
-    ):
-        raise McpConfigurationError("MCP URL must be absolute and contain no credentials or fragment")
-    host = parsed.hostname
-    if not host:
-        raise McpConfigurationError("MCP URL host is required")
+    problem = url_problem(value)
+    if problem is not None:
+        raise McpConfigurationError(problem)
+    assert isinstance(value, str)
     try:
         validate_extension_url(value, target="MCP URL")
     except BadRequestError as exc:

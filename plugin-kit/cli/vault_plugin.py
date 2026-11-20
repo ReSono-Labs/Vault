@@ -26,7 +26,9 @@ CONFIG_SCHEMA = "https://schemas.resonolabs.com/vault/plugin-config/v1.json"
 MAX_FILES = 512
 MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_PACKAGE_BYTES = 32 * 1024 * 1024
-NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
+# Agent Plugins 1.0.0 plugin.schema.json name pattern (1-64 characters).
+NAME_PATTERN = re.compile(r"^(?!.*(?:--|\.\.))(?=.{1,64}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
+VAULT_NAMESPACE = "com.resonolabs.vault"
 
 
 class KitError(ValueError):
@@ -37,6 +39,7 @@ class KitError(ValueError):
 # loads them from app/; the kit download bundles the same files next to this one.
 _RUNTIME_SOURCES = {
     "skills": ("vault_skills.py", "app/vault_runtime/extensions/skills.py"),
+    "mcp_rules": ("vault_mcp_rules.py", "app/vault_runtime/extensions/mcp_rules.py"),
 }
 _RUNTIME_MODULES: dict[str, object] = {}
 
@@ -127,36 +130,94 @@ def validate(root: Path) -> dict[str, object]:
         raise KitError("Plugin package is larger than 32 MiB.")
 
     plugin = _object(root / "plugin.json")
+    declared = plugin.get("$schema")
+    if declared != AGENT_PLUGIN_SCHEMA:
+        raise KitError(f"plugin.json: unsupported Agent Plugins version {declared}" if isinstance(declared, str)
+                       else f"plugin.json at $schema: use {AGENT_PLUGIN_SCHEMA}")
     _validate_schema(plugin, "plugin.schema.json", "plugin.json")
     name = plugin.get("name")
     if not isinstance(name, str) or not NAME_PATTERN.fullmatch(name):
-        raise KitError("plugin.json name must use lowercase letters, numbers, dots, dashes or underscores.")
+        raise KitError("plugin.json name must use lowercase letters, numbers, dots or dashes.")
 
-    vault = _object(root / "vault.json")
-    _validate_schema(vault, "vault.schema.json", "vault.json")
+    warnings: list[str] = []
+    vault, data_root, label = _vault_data(root, plugin, warnings)
     if "configuration" in vault:
-        config = _object(root / str(vault["configuration"]))
-        _validate_schema(config, "config.schema.json", "config.schema.json")
+        config_label = f"{data_root.relative_to(root).as_posix() + '/' if data_root != root else ''}{vault['configuration']}"
+        config = _object(data_root / str(vault["configuration"]))
+        _validate_schema(config, "config.schema.json", config_label)
         keys = [field.get("key") for field in config.get("fields", []) if isinstance(field, dict)]
         if len(keys) != len(set(keys)):
             raise KitError("config.schema.json field keys must be unique.")
-    if "mcp" in vault:
-        mcp = _object(root / str(vault["mcp"]))
-        _validate_schema(mcp, "mcp.schema.json", "mcp.json")
-        for server_name, server in mcp["mcpServers"].items():
-            if not isinstance(server_name, str) or not isinstance(server, dict):
-                raise KitError("Every MCP server needs a name and object configuration.")
-            if server.get("type") != "streamable-http" or not isinstance(server.get("url"), str):
-                raise KitError(f"MCP server '{server_name}' must use streamable-http and provide a URL.")
-            if "headers" in server:
-                raise KitError("Do not put credentials in mcp.json. Declare them in config.schema.json.")
+        rules = _runtime("mcp_rules")
+        for field in config.get("fields", []):
+            header = field.get("secretHeader") if isinstance(field, dict) else None
+            if isinstance(header, str) and rules.is_reserved_header(header):
+                raise KitError(f"{config_label} field {field.get('key')}: secretHeader {header} is set by Vault.")
+    if "mcp" in vault and not (root / "mcp.json").is_file():
+        raise KitError(f"{label} declares mcp.json but the root mcp.json is missing.")
+    servers = _validate_mcp(root, warnings)
     skills = _validate_skills(root)
-    return {"name": name, "files": len(files), "bytes": total, "vault": vault, "plugin": plugin, "skills": skills}
+    return {"name": name, "files": len(files), "bytes": total, "vault": vault, "plugin": plugin,
+            "skills": skills, "mcpServers": servers, "warnings": warnings}
+
+
+def _vault_data(root: Path, plugin: dict[str, object], warnings: list[str]) -> tuple[dict[str, object], Path, str]:
+    """Vault data from plugin.json extensions (preferred) or the legacy root vault.json; never both."""
+    extensions = plugin.get("extensions")
+    namespace = extensions.get(VAULT_NAMESPACE) if isinstance(extensions, dict) else None
+    legacy = root / "vault.json"
+    if namespace is not None:
+        label = f"plugin.json extensions.{VAULT_NAMESPACE}"
+        if legacy.exists():
+            warnings.append(f"vault.json is ignored because {label} is present. Delete vault.json.")
+        value = {"$schema": VAULT_SCHEMA, **namespace} if isinstance(namespace, dict) else namespace
+        if not isinstance(value, dict):
+            raise KitError(f"{label} must be an object.")
+        _validate_schema(value, "vault.schema.json", label)
+        return value, root / VAULT_NAMESPACE, label
+    if legacy.exists():
+        vault = _object(legacy)
+        _validate_schema(vault, "vault.schema.json", "vault.json")
+        warnings.append(f"vault.json is the legacy form. Move its fields to plugin.json extensions.{VAULT_NAMESPACE}.")
+        return vault, root, "vault.json"
+    return {}, root, "plugin.json"
+
+
+def _validate_mcp(root: Path, warnings: list[str]) -> list[str]:
+    """Root mcp.json with the rules Vault's import applies (portable schema plus Vault's checks)."""
+    path = root / "mcp.json"
+    if not path.exists():
+        return []
+    if not path.is_file():
+        raise KitError("mcp.json must be a file.")
+    mcp = _object(path)
+    _validate_schema(mcp, "mcp.schema.json", "mcp.json")
+    rules = _runtime("mcp_rules")
+    servers = []
+    for server_name, server in mcp["mcpServers"].items():
+        problem = rules.server_name_problem(server_name)
+        if problem is not None:
+            raise KitError(f"mcp.json server '{server_name}': {problem}.")
+        unsupported = rules.transport_problem(server)
+        if unsupported is not None:
+            warnings.append(f"mcp.json server '{server_name}': Vault skips it ({unsupported}).")
+            continue
+        problem = rules.url_problem(server.get("url"))
+        if problem is not None:
+            raise KitError(f"mcp.json server '{server_name}': {problem}.")
+        try:
+            rules.validate_headers(server.get("headers", {}), allow_credentials=False)
+        except rules.McpRuleError as exc:
+            hint = " Declare credentials as secret fields in config.schema.json." if "secret storage" in str(exc) else ""
+            raise KitError(f"mcp.json server '{server_name}': {exc}.{hint}") from exc
+        servers.append(server_name)
+    return servers
 
 
 def create(name: str, destination: Path, language: str) -> Path:
     if not NAME_PATTERN.fullmatch(name):
-        raise KitError("Plugin name must use lowercase letters, numbers, dots, dashes or underscores.")
+        raise KitError("Plugin name must be 1-64 lowercase letters, numbers, dots or dashes, start and end "
+                       "with a letter or number, and contain no '--' or '..'.")
     target = (destination / name).resolve()
     if target.exists():
         raise KitError(f"Destination already exists: {target}")
@@ -164,7 +225,6 @@ def create(name: str, destination: Path, language: str) -> Path:
     shutil.copytree(starter, target)
     replacements = {
         "plugin.json": [("starter.example", name)],
-        "vault.json": [],
         "README.md": [("starter.example", name)],
     }
     for relative, changes in replacements.items():
@@ -214,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Created {create(args.name, args.destination, args.language)}")
         elif args.command == "validate":
             result = validate(args.path)
+            for warning in result["warnings"]:
+                print(f"Warning: {warning}", file=sys.stderr)
             print(f"Valid Vault plugin: {result['name']} ({result['files']} files)")
         elif args.command == "inspect":
             result = validate(args.path)
@@ -222,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
                 "name": result["name"], "agentsRequested": vault.get("agents", []),
                 "servicesRequested": vault.get("services", []),
                 "hasConfiguration": "configuration" in vault,
-                "hasMcpTools": "mcp" in vault,
+                "hasMcpTools": bool(result["mcpServers"]),
                 "note": "Vault grants nothing automatically. The owner approves access after installation."
             }, indent=2))
         else:

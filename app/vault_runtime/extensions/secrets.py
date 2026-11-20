@@ -10,6 +10,7 @@ from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from app.vault_runtime.extensions.mcp_rules import validate_headers
 from app.vault_runtime.extensions.repository import (
     ExtensionAuthorizationError, ExtensionNotFoundError, ExtensionRepository,
 )
@@ -60,6 +61,9 @@ class ExtensionSecretStore:
             for name, value in headers.items()
         ):
             raise ValueError("credential headers must map names to non-empty values")
+        # Same field rules as mcp.json headers; Vault-generated names (Accept, Content-Type,
+        # MCP-*, X-Vault-*) cannot be stored as credentials.
+        validate_headers(headers, allow_credentials=True, label="credential header")
         import json
         plaintext = json.dumps(headers, sort_keys=True, separators=(",", ":")).encode()
         nonce = os.urandom(12)

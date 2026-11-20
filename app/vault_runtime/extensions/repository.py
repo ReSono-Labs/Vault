@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.vault_runtime.extensions.filesystem import managed_mcp_identity
+from app.vault_runtime.extensions.mcp_rules import connection_executable
 from app.vault_runtime.extensions.models import ExtensionKind, ExtensionState
 from app.vault_runtime.extensions.schema import ensure_extension_schema
 from app.vault_runtime.system_agents.inventory import AgentKind
@@ -482,10 +483,13 @@ class ExtensionRepository:
             with connection.cursor() as cursor:
                 self._require_scope(cursor, user_id=actor_user_id, workspace_id=workspace_id, owner=True)
                 self._require_scope(cursor, user_id=target_user_id, workspace_id=workspace_id)
-                cursor.execute("SELECT kind FROM vault_private.vault_extensions WHERE extension_id=%s AND installed_in_workspace_id=%s AND state='enabled'", (extension_id,workspace_id))
+                cursor.execute("SELECT kind,configuration_json FROM vault_private.vault_extensions WHERE extension_id=%s AND installed_in_workspace_id=%s AND state='enabled'", (extension_id,workspace_id))
                 installed = cursor.fetchone()
                 if installed is None:
                     raise ExtensionNotFoundError("enabled extension is unavailable")
+                if (enabled and str(installed[0]) == ExtensionKind.MCP.value
+                        and not connection_executable(_configuration(installed[1]))):
+                    raise ValueError("MCP connection uses an unsupported transport")
                 if enabled and capability_name.startswith("skill:"):
                     # Only a Skill this plugin actually ships; the name becomes a storage path.
                     # Turning a grant off stays possible after an upgrade dropped the Skill.
@@ -666,5 +670,9 @@ class ExtensionRepository:
 
 
 def _record(row: Any) -> ExtensionRecord:
-    configuration = row[11] if isinstance(row[11], dict) else json.loads(row[11])
+    configuration = _configuration(row[11])
     return ExtensionRecord(str(row[0]),ExtensionKind(str(row[1])),str(row[2]),str(row[3]),row[4],row[5],str(row[6]),ExtensionState(str(row[7])),str(row[8]),str(row[9]),row[10],configuration)
+
+
+def _configuration(value: Any) -> dict[str, object]:
+    return value if isinstance(value, dict) else json.loads(value)

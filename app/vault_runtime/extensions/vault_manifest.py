@@ -1,4 +1,10 @@
-"""Bounded Vault additions layered beside the Agent Plugins standard."""
+"""Bounded Vault additions layered beside the Agent Plugins standard.
+
+Vault package data lives in ``plugin.json`` under ``extensions["com.resonolabs.vault"]``,
+with the files it names in the top-level ``com.resonolabs.vault/`` folder. The root
+``vault.json`` is the legacy form, read only when the namespace is absent; the two are
+never merged.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +27,8 @@ from app.vault_runtime.extensions.plugin_package_contract import (
     parse_local_share_block,
     parse_workspace_import_block,
 )
+from app.vault_runtime.extensions.mcp_rules import is_reserved_header
+from app.vault_runtime.extensions.specification import VAULT_NAMESPACE
 from app.vault_runtime.system_agents.inventory import AgentKind
 
 
@@ -45,14 +53,45 @@ class VaultPluginManifest:
     workspace_import: WorkspaceImportManifest | None = None
     local_share: LocalShareManifest | None = None
     lifecycle: PluginLifecycleManifest | None = None
+    # "namespace" (plugin.json extensions) or "vault.json" (legacy root file).
+    source: str = "vault.json"
+    # Folder, relative to the package root, that holds the files this data names.
+    data_directory: str = ""
+    diagnostics: tuple[str, ...] = ()
 
 
-def parse_vault_manifest(plugin_root: Path) -> tuple[VaultPluginManifest | None, dict[str, object] | None]:
-    path = plugin_root / "vault.json"
-    if not path.exists():
+def parse_vault_manifest(
+    plugin_root: Path, *, namespace: dict[str, object] | None = None,
+) -> tuple[VaultPluginManifest | None, dict[str, object] | None]:
+    """Read Vault data from the namespace when present, else from the legacy vault.json."""
+    legacy = plugin_root / "vault.json"
+    if namespace is not None:
+        if not isinstance(namespace, dict):
+            raise VaultManifestError(f'plugin.json at extensions.{VAULT_NAMESPACE}: must be an object')
+        value = dict(namespace)
+        value.setdefault("$schema", VAULT_SCHEMA_ID)
+        diagnostics = (
+            (f"vault.json ignored: plugin.json extensions.{VAULT_NAMESPACE} takes precedence",)
+            if legacy.exists() else ()
+        )
+        return _parse_manifest(
+            plugin_root, value, label=f"plugin.json extensions.{VAULT_NAMESPACE}",
+            source="namespace", data_directory=VAULT_NAMESPACE, diagnostics=diagnostics,
+        )
+    if not legacy.exists():
         return None, None
-    value = _read(path)
-    _validate(value, "vault.schema.json", "vault.json")
+    return _parse_manifest(
+        plugin_root, _read(legacy), label="vault.json", source="vault.json", data_directory="",
+        diagnostics=(),
+    )
+
+
+def _parse_manifest(
+    plugin_root: Path, value: dict[str, object], *, label: str, source: str,
+    data_directory: str, diagnostics: tuple[str, ...],
+) -> tuple[VaultPluginManifest, dict[str, object] | None]:
+    _validate(value, "vault.schema.json", label)
+    data_root = plugin_root / data_directory if data_directory else plugin_root
     migration = None
     workspace_import = None
     local_share = None
@@ -87,16 +126,25 @@ def parse_vault_manifest(plugin_root: Path) -> tuple[VaultPluginManifest | None,
         workspace_import=workspace_import,
         local_share=local_share,
         lifecycle=lifecycle,
+        source=source,
+        data_directory=data_directory,
+        diagnostics=diagnostics,
     )
     configuration = None
     if manifest.configuration_file:
-        configuration = _read(plugin_root / manifest.configuration_file)
-        _validate(configuration, "config.schema.json", manifest.configuration_file)
+        configuration = _read(data_root / manifest.configuration_file)
+        _validate(configuration, "config.schema.json", f"{data_directory + '/' if data_directory else ''}{manifest.configuration_file}")
         keys = [field["key"] for field in configuration["fields"]]
         if len(keys) != len(set(keys)):
             raise VaultManifestError("config.schema.json field keys must be unique")
+        for field in configuration["fields"]:
+            header = field.get("secretHeader") if isinstance(field, dict) else None
+            if isinstance(header, str) and is_reserved_header(header):
+                raise VaultManifestError(
+                    f"config.schema.json field {field['key']}: secretHeader {header} is set by Vault"
+                )
     if manifest.mcp_file and not (plugin_root / manifest.mcp_file).is_file():
-        raise VaultManifestError("vault.json declares mcp.json but the file is missing")
+        raise VaultManifestError(f"{label} declares mcp.json but the root mcp.json is missing")
     return manifest, configuration
 
 

@@ -10,6 +10,7 @@ from app.vault_runtime.tools.strict_json import STRICT_JSON_MAX_BYTES
 from app.vault_runtime.system_agents.inventory import AgentKind
 from app.vault_runtime.tools.definitions import ToolInvocationContext
 from app.vault_runtime.extensions.models import ExtensionAudience, ExtensionKind, ExtensionState
+from app.vault_runtime.extensions.mcp_rules import merge_headers
 from app.vault_runtime.extensions.vault_manifest import validate_settings
 from app.vault_runtime.extensions.mcp_package_manifest import validate_mcp_package_settings
 from app.vault_runtime.extensions.mcp_runtime import McpRuntimeError
@@ -304,7 +305,8 @@ class ExtensionRoutes:
                         self._extension_secrets.set_headers(
                             actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
                             extension_id=target_id,
-                            headers=existing_headers | secret_headers,
+                            # Case-insensitive: a newer "Authorization" replaces "authorization".
+                            headers=merge_headers(existing_headers, secret_headers),
                         )
                 return LocalApiResponse(200, _extension_payload(record))
             if self._extension_secrets is None:

@@ -68,3 +68,60 @@ def test_http_transport_revalidates_dns_before_io(monkeypatch) -> None:
     transport = HttpMcpTransport("https://rebound.example/mcp")
     with pytest.raises(McpProtocolError, match="denied network"):
         transport.request("initialize")
+
+
+def test_http_transport_merges_headers_ignoring_case_and_vault_headers_win(monkeypatch) -> None:
+    import httpx
+
+    monkeypatch.setattr("app.vault_runtime.extensions.mcp_client.validate_extension_host", lambda host, *, target: host)
+    sent = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+
+    real_client = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+    transport = HttpMcpTransport(
+        "https://example.test/mcp",
+        # Stored before the header checks existed: Vault-generated names are dropped here too.
+        public_headers=(("x-vault-capability", "forged"), ("content-type", "text/plain"), ("X-Tenant", "t")),
+        credential_headers=(("authorization", "Bearer secret"),),
+        vault_headers=(("X-Vault-Capability", "issued"),),
+    )
+    transport.request("initialize")
+    headers = sent[0].headers
+    assert headers.get_list("x-vault-capability") == ["issued"]
+    assert headers.get_list("content-type") == ["application/json"]
+    assert headers.get_list("accept") == ["application/json, text/event-stream"]
+    assert headers.get_list("authorization") == ["Bearer secret"] and headers["x-tenant"] == "t"
+
+
+def test_unsupported_transport_connections_send_no_request() -> None:
+    from app.vault_runtime.extensions.mcp_lifecycle import McpLifecycle
+    from app.vault_runtime.extensions.models import ExtensionKind, ExtensionState
+    from app.vault_runtime.extensions.repository import ExtensionRecord
+    from app.vault_runtime.system_agents.inventory import AgentKind
+    from app.vault_runtime.tools.catalog import ToolCatalog
+
+    class Repository:
+        def granted_mcp_tools(self, **_):
+            return (("read", "Read", {"type": "object"}, None, "read"),)
+
+        def replace_mcp_tools(self, **_):
+            raise AssertionError("nothing is discovered")
+
+    for transport in ("sse", "stdio"):
+        counting = Transport([])
+        connection = ExtensionRecord(
+            "c1", ExtensionKind.MCP, "legacy", "legacy", None, None, "h", ExtensionState.ENABLED,
+            "owner", "w", None, {"transport": transport, "endpoint": "https://example.test/sse", "executable": False},
+        )
+        catalog = ToolCatalog(authorizer=lambda _d, _c: True)
+        lifecycle = McpLifecycle(repository=Repository(), catalog=catalog,
+                                 client_factory=lambda _c, _x: McpClient(counting))
+        with pytest.raises(McpProtocolError, match="unsupported transport"):
+            lifecycle.discover(actor_user_id="owner", workspace_id="w", connection=connection, client=McpClient(counting))
+        assert lifecycle.project_scope(user_id="u", workspace_id="w", agent=AgentKind.VOICE, connection=connection) == ()
+        assert catalog.definitions_for(AgentKind.VOICE, user_id="u", workspace_id="w") == ()
+        assert counting.calls == []

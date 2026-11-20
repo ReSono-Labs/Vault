@@ -11,7 +11,8 @@ import psycopg
 from app.vault_runtime.extensions.archives import ArchiveInspector
 from app.vault_runtime.extensions.activation import SkillActivation
 from app.vault_runtime.extensions.filesystem import ExtensionFilesystem
-from app.vault_runtime.extensions.mcp_client import HttpMcpTransport, McpClient
+from app.vault_runtime.extensions.mcp_client import HttpMcpTransport, McpClient, McpProtocolError
+from app.vault_runtime.extensions.mcp_rules import connection_executable
 from app.vault_runtime.extensions.mcp_lifecycle import McpLifecycle
 from app.vault_runtime.extensions.repository import ExtensionRepository
 from app.vault_runtime.extensions.secrets import ExtensionSecretStore, LocalMasterKey
@@ -466,6 +467,9 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
 
     def mcp_client(connection, context):
         configuration = connection.configuration
+        if not connection_executable(configuration):
+            # stdio and HTTP+SSE entries are stored for status only: they never send a request.
+            raise McpProtocolError("MCP connection uses an unsupported transport")
         endpoint = configuration.get("endpoint") or configuration.get("url")
         public_headers = configuration.get("headers", {})
         if not isinstance(endpoint, str) or not isinstance(public_headers, dict):
@@ -490,7 +494,7 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         return McpClient(HttpMcpTransport(
             endpoint,
             public_headers=tuple(sorted((str(key), str(value)) for key, value in public_headers.items())),
-            credential_headers=credential_headers + invocation_headers,
+            credential_headers=credential_headers, vault_headers=invocation_headers,
         ))
 
     mcp_lifecycle = McpLifecycle(

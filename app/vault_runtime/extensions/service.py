@@ -89,6 +89,8 @@ class PluginCandidate:
 class McpCandidate:
     server: McpServer
     content_hash: str
+    # Servers in the same mcp.json that were skipped (for example an unsupported transport).
+    diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,8 +190,13 @@ class ExtensionImportService:
         archive = self._inspector.inspect(payload, filename, required_root_file="plugin.json")
         try:
             manifest = parse_plugin_manifest(archive.content_root / "plugin.json")
-            vault_manifest, configuration_schema = parse_vault_manifest(archive.content_root)
+            vault_manifest, configuration_schema = parse_vault_manifest(
+                archive.content_root, namespace=manifest.vault_extension,
+            )
             diagnostics = list(manifest.diagnostics)
+            if vault_manifest is not None:
+                diagnostics.extend(vault_manifest.diagnostics)
+            vault_root = _vault_data_root(archive.content_root, vault_manifest)
             review = review_plugin_package(archive.content_root)
             skills: list[tuple[str, SkillDocument, str]] = []
             skill_root = archive.content_root / "skills"
@@ -225,7 +232,7 @@ class ExtensionImportService:
             migration_assessment = None
             if vault_manifest is not None and vault_manifest.migration is not None:
                 try:
-                    validate_migration_payload(archive.content_root, vault_manifest.migration)
+                    validate_migration_payload(vault_root, vault_manifest.migration)
                     migration_assessment = assess_migration(
                         data_dir=self._filesystem.plugin_data_dir(manifest.name),
                         migration=vault_manifest.migration,
@@ -236,7 +243,7 @@ class ExtensionImportService:
             if vault_manifest is not None and vault_manifest.workspace_import is not None:
                 try:
                     validate_workspace_import_payload(
-                        archive.content_root, vault_manifest.workspace_import,
+                        vault_root, vault_manifest.workspace_import,
                     )
                     if self._workspace_store is not None:
                         workspace_import_assessment = assess_workspace_import(
@@ -283,7 +290,11 @@ class ExtensionImportService:
             candidate.vault_manifest.migration
             if candidate.vault_manifest is not None else None
         )
-        exclude_roots = frozenset({"migration"}) if migration is not None else frozenset()
+        vault_root = _vault_data_root(candidate.archive.content_root, candidate.vault_manifest)
+        # Migration payloads are data, not package code: they are copied, never installed in the tree.
+        exclude_roots = frozenset({
+            candidate.vault_manifest.data_directory or "migration",
+        }) if migration is not None and candidate.vault_manifest is not None else frozenset()
         workspace_import = (
             candidate.vault_manifest.workspace_import
             if candidate.vault_manifest is not None else None
@@ -323,7 +334,7 @@ class ExtensionImportService:
             migration_status: dict[str, str] | None = None
             if migration is not None and migration_assessment is not None:
                 migration_result = import_migration_payload(
-                    package_root=candidate.archive.content_root,
+                    package_root=vault_root,
                     data_dir=self._filesystem.plugin_data_dir(candidate.manifest.name),
                     migration=migration,
                     assessment=migration_assessment,
@@ -346,7 +357,7 @@ class ExtensionImportService:
                         "Workspace paths already exist. Confirm workspace import replacement to continue."
                     )
                 result = import_workspace_payload(
-                    package_root=candidate.archive.content_root,
+                    package_root=vault_root,
                     store=self._workspace_store,
                     workspace_id=workspace_id,
                     manifest=workspace_import,
@@ -371,6 +382,8 @@ class ExtensionImportService:
                     "minimumVaultVersion": candidate.vault_manifest.minimum_version,
                     "agents": sorted(agent.value for agent in candidate.vault_manifest.agents),
                     "services": list(candidate.vault_manifest.services),
+                    # "vault.json" marks the legacy root file; "namespace" the plugin.json form.
+                    "source": candidate.vault_manifest.source,
                 } if candidate.vault_manifest else None,
                 "configurationSchema": candidate.configuration_schema,
                 "settings": {},
@@ -476,7 +489,8 @@ class ExtensionImportService:
         self, payload: bytes, *, actor_user_id: str, workspace_id: str,
         audience: ExtensionAudience,
     ) -> tuple[Preflight[McpCandidate], ...]:
-        servers = parse_mcp_bytes(payload)
+        skipped: list[str] = []
+        servers = parse_mcp_bytes(payload, diagnostics=skipped)
         previews: list[Preflight[McpCandidate]] = []
         try:
             for server in servers:
@@ -491,7 +505,7 @@ class ExtensionImportService:
                     principal_user_id=actor_user_id, workspace_id=workspace_id,
                     candidate_hash=content_hash,
                     current_hash=current.content_hash if current else None,
-                    audience=audience, payload=McpCandidate(server, content_hash),
+                    audience=audience, payload=McpCandidate(server, content_hash, tuple(skipped)),
                 ))
             return tuple(previews)
         except Exception:
@@ -551,7 +565,11 @@ class ExtensionImportService:
                 plugin_root = archive.content_root / manifest.companion_plugin.directory
                 try:
                     companion_plugin = parse_plugin_manifest(plugin_root / "plugin.json")
-                    companion_vault_manifest, companion_configuration_schema = parse_vault_manifest(plugin_root)
+                    companion_vault_manifest, companion_configuration_schema = parse_vault_manifest(
+                        plugin_root, namespace=companion_plugin.vault_extension,
+                    )
+                    if companion_vault_manifest is not None:
+                        diagnostics.extend(companion_vault_manifest.diagnostics)
                 except PluginSpecificationError as exc:
                     diagnostics.append(f"companionPlugin: {exc}")
                 else:
@@ -713,6 +731,7 @@ class ExtensionImportService:
                             "minimumVaultVersion": candidate.companion_vault_manifest.minimum_version,
                             "agents": sorted(agent.value for agent in candidate.companion_vault_manifest.agents),
                             "services": list(candidate.companion_vault_manifest.services),
+                            "source": candidate.companion_vault_manifest.source,
                         } if candidate.companion_vault_manifest is not None else None,
                         "configurationSchema": candidate.companion_configuration_schema,
                         "settings": {},
@@ -1034,6 +1053,13 @@ class ExtensionImportService:
 
 
 _CATEGORY = {ExtensionKind.SKILL: "skills", ExtensionKind.PLUGIN: "plugins", ExtensionKind.MCP: "mcps"}
+
+
+def _vault_data_root(package_root: Path, manifest: VaultPluginManifest | None) -> Path:
+    """Where the files named by Vault package data live: com.resonolabs.vault/ or, legacy, the root."""
+    if manifest is None or not manifest.data_directory:
+        return package_root
+    return package_root / manifest.data_directory
 
 
 def _skill_claims(name: str) -> tuple[tuple[ExtensionKind, str, bool], ...]:

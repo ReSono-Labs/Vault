@@ -9,6 +9,7 @@ import re
 
 from app.core.security.json_schema import offline_validator
 from app.vault_runtime.extensions.mcp_client import McpClient, McpProtocolError
+from app.vault_runtime.extensions.mcp_rules import connection_executable
 from app.vault_runtime.extensions.repository import ExtensionRecord, ExtensionRepository
 from app.vault_runtime.extensions.models import ExtensionKind
 from app.vault_runtime.system_agents.inventory import AgentKind
@@ -35,6 +36,8 @@ class McpLifecycle:
     ) -> tuple[str, ...]:
         if connection.kind.value != "mcp" or connection.workspace_id != workspace_id:
             raise ValueError("MCP connection scope is invalid")
+        if not connection_executable(connection.configuration):
+            raise McpProtocolError("MCP connection uses an unsupported transport")
         client.initialize()
         discovered = client.discover_tools()
         rows = tuple((
@@ -53,6 +56,9 @@ class McpLifecycle:
         connection: ExtensionRecord,
     ) -> tuple[str, ...]:
         source_id = self._source_id(user_id, workspace_id, agent, connection.extension_id)
+        if not connection_executable(connection.configuration):
+            self._catalog.remove_capability_source(source_id)  # Never project an unsupported transport.
+            return ()
         granted = self._repository.granted_mcp_tools(
             user_id=user_id, workspace_id=workspace_id, agent=agent,
             extension_id=connection.extension_id,
@@ -122,6 +128,8 @@ class McpLifecycle:
             )
             if remote_name not in {item[0] for item in current}:
                 return ToolInvocationResult("Tool grant was revoked.", is_error=True)
+            if not connection_executable(connection.configuration):
+                return ToolInvocationResult("MCP connection uses an unsupported transport.", is_error=True)
             try:
                 client = self._client_factory(connection, context)
                 client.initialize()

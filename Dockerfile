@@ -15,6 +15,7 @@ COPY plugin-kit/ /build/plugin-kit/
 COPY docs/VAULT-PLUGIN-KIT.md /build/plugin-kit/GUIDE.md
 RUN cp app/vault_runtime/extensions/standards/plugin.schema.json /build/plugin-kit/schemas/plugin.schema.json \
     && cp app/vault_runtime/extensions/skills.py /build/plugin-kit/cli/vault_skills.py \
+    && cp app/vault_runtime/extensions/mcp_rules.py /build/plugin-kit/cli/vault_mcp_rules.py \
     && mkdir -p /build/plugin-downloads \
     && python -c "import hashlib,pathlib,shutil,tomllib; v=tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']; out=pathlib.Path('/build/plugin-downloads'); shutil.make_archive(str(out/f'resono-labs-vault-plugin-kit-{v}'),'zip',root_dir='/build',base_dir='plugin-kit'); [shutil.make_archive(str(out/f'resono-labs-vault-plugin-{lang}-starter-{v}'),'zip',root_dir='/build/plugin-kit/starters',base_dir=lang) for lang in ('python','typescript')]; files=sorted(out.glob('*.zip')); (out/'SHA256SUMS').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\\n' for p in files))"
 RUN uv sync --frozen --no-dev

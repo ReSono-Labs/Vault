@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from app.core.exceptions import BadRequestError
 from app.core.security.json_schema import SchemaReferenceError, check_schema
 from app.core.security.outbound import validate_extension_host
+from app.vault_runtime.extensions.mcp_rules import is_reserved_header, merge_headers
 
 
 MCP_PROTOCOL_VERSION = "2025-11-25"
@@ -47,12 +48,19 @@ class HttpMcpTransport:
 
     def __init__(
         self, endpoint: str, *, public_headers: tuple[tuple[str, str], ...] = (),
-        credential_headers: tuple[tuple[str, str], ...] = (), timeout_seconds: float = 15.0,
+        credential_headers: tuple[tuple[str, str], ...] = (),
+        vault_headers: tuple[tuple[str, str], ...] = (), timeout_seconds: float = 15.0,
     ) -> None:
         if timeout_seconds <= 0 or timeout_seconds > 60:
             raise ValueError("MCP timeout must be within 60 seconds")
         self._endpoint = endpoint
-        self._headers = dict(public_headers) | dict(credential_headers)
+        # Merged ignoring case; later layers win. Names Vault generates are dropped from the
+        # package's and the stored credential layers (older records predate that check).
+        self._headers = merge_headers(
+            ((name, value) for name, value in public_headers if not is_reserved_header(name)),
+            ((name, value) for name, value in credential_headers if not is_reserved_header(name)),
+            vault_headers,
+        )
         self._timeout = timeout_seconds
         self._next_id = 0
 
@@ -71,7 +79,10 @@ class HttpMcpTransport:
             payload["params"] = params
         with httpx.Client(timeout=self._timeout, follow_redirects=False) as client:
             response = client.post(
-                self._endpoint, headers={**self._headers, "Accept": "application/json, text/event-stream"},
+                self._endpoint,
+                headers=merge_headers(self._headers, {
+                    "Accept": "application/json, text/event-stream", "Content-Type": "application/json",
+                }),
                 json=payload,
             )
         if len(response.content) > MAX_RESPONSE_BYTES:
