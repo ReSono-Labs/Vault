@@ -19,6 +19,8 @@ class BackgroundToolGrant:
     autonomy: AutonomyProfile
     explicit_names: frozenset[str]
     max_calls: int
+    # Delete tools this run may use despite its autonomy (a specialist archiving a stale Home card).
+    allowed_deletes: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if self.max_calls <= 0:
@@ -118,6 +120,8 @@ class BackgroundToolSupply:
     def _allowed(self, definition) -> bool:
         if self._grant.explicit_names and definition.name not in self._grant.explicit_names:
             return False
+        if definition.effect_class == "delete" and definition.name in self._grant.allowed_deletes:
+            return True
         if self._grant.autonomy is AutonomyProfile.LIMITED:
             return definition.effect_class == "read"
         if self._grant.autonomy is AutonomyProfile.EXPANDED:

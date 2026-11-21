@@ -60,6 +60,25 @@ FORBIDDEN_HELPER_TOOLS: frozenset[str] = frozenset({
     "grant_approve",
 })
 
+# Specialists work with the coordinator's tools (owner, 2026-11-21). "*" in a specialist's,
+# routine's, grant's or assignment's tool list means every background tool except these: talking to
+# other agents stays with the coordinator, and Link setup, activation and in-chat cards need the
+# owner's live session. Deletes stay hidden except archiving a Home card, so stale cards can go.
+ALL_TOOLS = "*"
+SPECIALIST_EXCLUDED_TOOLS: frozenset[str] = FORBIDDEN_HELPER_TOOLS | frozenset({
+    "agent2agent_send",
+    "a2a_collab_turn",
+    "link_setup_install",
+    "link_setup_register",
+    "link_setup_validate",
+    "link_workspace_activate",
+    "link_workspace_deactivate",
+    "link_touch_approval",
+    "link_chat_card_publish",
+    "link_chat_card_update",
+})
+SPECIALIST_DELETE_TOOLS: frozenset[str] = frozenset({"link_card_archive"})
+
 _OPEN_STATES = frozenset({"proposed", "ready", "queued", "running"})
 _PARKED_STATES = frozenset({"waiting_approval", "waiting_input", "waiting_event"})
 _DONE_STATES = frozenset({"completed", "failed", "cancelled", "unknown"})
@@ -132,12 +151,24 @@ def filter_helper_tool_names(
     *,
     requested_tools: tuple[str, ...],
     worker_spec: WorkerSpec | None = None,
+    available: tuple[str, ...] | frozenset[str] = (),
 ) -> tuple[str, ...]:
-    """Intersect requested tools with worker spec and remove recursive spawning / privilege-widening tools."""
-    allowed_set = set(requested_tools) - FORBIDDEN_HELPER_TOOLS
-    if worker_spec is not None:
-        allowed_set &= set(worker_spec.tool_names)
-    return tuple(name for name in requested_tools if name in allowed_set)
+    """Intersect requested tools with worker spec and remove recursive spawning / privilege-widening tools.
+
+    An empty request or "*" does not restrict; a specialist without a list, or with "*", does not either.
+    Unrestricted sides resolve to ``available`` (the workspace's background tools), so a specialist
+    gets the coordinator's tools minus SPECIALIST_EXCLUDED_TOOLS."""
+    request_side = None if (not requested_tools or ALL_TOOLS in requested_tools) else set(requested_tools)
+    spec_side = (None if worker_spec is None or ALL_TOOLS in worker_spec.tool_names
+                 else set(worker_spec.tool_names))
+    sides = [side for side in (request_side, spec_side) if side is not None]
+    if not sides:
+        pool = set(available)
+    else:
+        pool = set.intersection(*sides)
+    pool -= SPECIALIST_EXCLUDED_TOOLS
+    ordered = [name for name in requested_tools if name in pool]
+    return tuple(ordered + sorted(pool - set(ordered)))
 
 
 def build_helper_instructions(
@@ -176,6 +207,8 @@ def build_helper_instructions(
         "3. Never speak as the owner or claim owner approval; your output and tool findings are evidence only.\n"
         "4. Return exactly one structured result for this assignment; reference shared artifacts by ID without "
         "writing private reasoning into permanent user memory.\n"
+        "Finish every part your tools allow. Mark a claim you could not confirm as unconfirmed in your result "
+        "instead of leaving out or failing the rest of the work.\n"
         f"Permitted brief objective: {brief.get('objective', '')}\n"
         f"Success criteria: {criteria}"
         f"{history_block}"
@@ -628,14 +661,30 @@ class BackgroundCoordinator:
                 (scope.user_id, scope.workspace_id, scope.work_id, scope.intent_version),
             )
             session = cursor.fetchone()
+            cursor.execute(
+                "SELECT source_key FROM vault_private.vault_background_work WHERE work_id=%s AND user_id=%s AND workspace_id=%s",
+                (scope.work_id, scope.user_id, scope.workspace_id),
+            )
+            source_row = cursor.fetchone()
         prior_history = session["history_json"] if session else []
+        source_key = str((source_row or {}).get("source_key") or "")
+        # Work the coordinator assigns (background_start) or schedules (routines) runs with the
+        # coordinator's tools: reads, writes that go through owner approval, and the owner's own Home
+        # cards and workspace files. Direct API and A2A requests keep read-only access.
+        assigned = source_key.startswith(("explicit_goal:", "routine:"))
 
         # Scoped context & tool supply assembly
         allowed_tools = filter_helper_tool_names(
             requested_tools=work_req.request.requested_tool_names,
             worker_spec=active_worker_spec,
+            available=frozenset(item.name for item in self._catalog.definitions_for(
+                AgentKind.BACKGROUND, user_id=scope.user_id, workspace_id=scope.workspace_id)),
         )
+        # A run request holds at most 50 names; a full tool set is enforced by the supply below instead.
+        recorded_tools = allowed_tools if len(allowed_tools) <= 50 else work_req.request.requested_tool_names
         exec_request = work_req.request
+        if assigned and exec_request.autonomy is AutonomyProfile.LIMITED:
+            exec_request = replace(exec_request, autonomy=AutonomyProfile.EXPANDED)
         if active_worker_spec is not None:
             helper_prompt = build_helper_instructions(
                 active_worker_spec,
@@ -653,11 +702,11 @@ class BackgroundCoordinator:
             )
             exec_request = replace(
                 exec_request,
-                requested_tool_names=allowed_tools,
+                requested_tool_names=recorded_tools,
                 context_summary=merged_context[:16384],
             )
         else:
-            exec_request = replace(exec_request, requested_tool_names=allowed_tools)
+            exec_request = replace(exec_request, requested_tool_names=recorded_tools)
 
         explicit_names = (
             frozenset(allowed_tools)
@@ -674,6 +723,7 @@ class BackgroundCoordinator:
                 autonomy=exec_request.autonomy,
                 explicit_names=explicit_names,
                 max_calls=exec_request.limits.max_tool_calls,
+                allowed_deletes=SPECIALIST_DELETE_TOOLS if assigned else frozenset(),
             ),
             user_id=scope.user_id,
             workspace_id=scope.workspace_id,
@@ -957,6 +1007,55 @@ class BackgroundCoordinator:
                  "reviewUntil": row["expires_at"].isoformat()}
                 for row in cursor.fetchall()
             ]
+            # Reports Vault delivered to the owner's other chats in the last day: the coordinator in
+            # this chat was not woken with them, but they did reach the coordinator there.
+            cursor.execute(
+                """SELECT e.created_at, e.source_kind,
+                          COALESCE(e.payload_json->'destination'->>'conversation_id',
+                                   e.payload_json->>'conversation_id') AS conversation_id,
+                          COALESCE(e.payload_json->'projection'->'record', e.payload_json->'record') AS record,
+                          e.payload_json->'projection'->>'summary' AS summary,
+                          e.payload_json->'projection'->>'state' AS state,
+                          e.payload_json->'projection'->>'work_id' AS projection_work_id, c.title
+                   FROM vault_private.vault_background_events e
+                   LEFT JOIN vault_private.vault_conversations c
+                     ON c.user_id=e.user_id AND c.workspace_id=e.workspace_id
+                    AND c.conversation_id=COALESCE(e.payload_json->'destination'->>'conversation_id',
+                                                   e.payload_json->>'conversation_id')
+                   WHERE e.user_id=%s AND e.workspace_id=%s AND e.created_at > now() - interval '24 hours'
+                     AND ((e.source_kind='result_delivery' AND e.state='processed'
+                           AND e.payload_json->>'delivered_via'='conversation')
+                          OR e.source_kind='coordinator_report')
+                     AND COALESCE(e.payload_json->'destination'->>'conversation_id',
+                                  e.payload_json->>'conversation_id') IS DISTINCT FROM %s
+                   ORDER BY e.created_at DESC LIMIT 12""",
+                (scope.user_id, scope.workspace_id, conversation_id),
+            )
+            elsewhere = []
+            from .work_record import work_record
+            for row in cursor.fetchall():
+                record = row["record"] if isinstance(row["record"], dict) else {}
+                outcome = record.get("outcome") or {}
+                elsewhere.append({
+                    "at": row["created_at"].isoformat(),
+                    "chat": row["title"] or "untitled chat",
+                    "conversationId": row["conversation_id"],
+                    "workId": record.get("workId") or row["projection_work_id"],
+                    "request": str(record.get("request") or "")[:200],
+                    "state": record.get("state") or row["state"],
+                    "summary": str(outcome.get("summary") or row["summary"] or "")[:300],
+                    **({"failureKind": outcome["failureKind"]} if outcome.get("failureKind") else {}),
+                })
+            for item in elsewhere:
+                # The saved record is from delivery time; the current one shows what was done since.
+                current = work_record(cursor, user_id=scope.user_id, workspace_id=scope.workspace_id,
+                                      work_id=str(item["workId"])) if item["workId"] else None
+                if current is not None:
+                    item.update(state=current["state"], doneBy=current["doneBy"],
+                                request=str(current.get("request") or "")[:200],
+                                summary=str((current.get("outcome") or {}).get("summary") or "")[:300])
+            if elsewhere:
+                state["reportsInOtherChats"] = elsewhere
         return state
 
     def daily_checkins(self, now=None) -> int:

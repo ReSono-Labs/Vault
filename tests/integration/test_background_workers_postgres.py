@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -902,3 +903,39 @@ def test_every_finished_run_reaches_the_coordinator_with_who_why_and_outcome(con
     inspect = env["catalog"].definition("background_inspect").handler(invocation, {})
     kinds = {item["startedBy"]["kind"] for item in inspect.structured_content["recentWork"]}
     assert {"chat", "direct_request"} <= kinds
+
+
+def test_a_specialist_with_all_tools_gets_the_coordinators_tools_but_not_agent_sends(context):
+    """2026-11-21: the UAP specialist had only web_search and could not refresh Home cards. A
+    specialist (and its grant) saved with "*" gets every background tool except agent-to-agent
+    sends, and coordinator-assigned work may write and archive Home cards."""
+    env = _setup_env(context)
+    owner, catalog, workers, executor = env["owner"], env["catalog"], env["workers"], env["executor"]
+    for name, effect in (("link_card_publish", "write"), ("link_card_archive", "delete"),
+                         ("agent2agent_send", "write"), ("workspace_delete_path", "delete")):
+        catalog.register(ToolDefinition(
+            tool_id=f"builtin.test.{name}.v1", name=name, description=name,
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+            handler=lambda _context, _arguments: ToolInvocationResult("ok"),
+            effect_class=effect, audiences=frozenset({AgentKind.VOICE, AgentKind.BACKGROUND}),
+        ))
+    with psycopg.connect(env["db_url"]) as conn:
+        conn.execute(
+            """INSERT INTO vault_private.vault_background_execution_grants
+               (grant_id, user_id, workspace_id, purpose, policy_json)
+               VALUES ('grant-all', %s, %s, 'Specialist routine', %s)""",
+            (owner.user_id, owner.workspace_id, Jsonb({"tool_names": ["*"], "resource_policy": {}})),
+        )
+    workers.create_direct(owner, WorkerSpec(role_key="uap_daily_watch", purpose="UAP research",
+                                            instructions="Research and refresh the Home cards.",
+                                            tool_names=("*",), resource_policy={}))
+    request = replace(_request("run-all-1", "Refresh the UAP watch", tools=("*",)),
+                      autonomy=AutonomyProfile.LIMITED)
+    work_id = env["coordinator"].observe(owner, "explicit_goal", "chat:all:1", {
+        "work_request": WorkRequest(request, "grant-all", None, {"role_key": "uap_daily_watch"}),
+        "worker_spec": None,
+    })
+    assert env["coordinator"].dispatch_sync(work_id).state is WorkState.COMPLETED
+    supplied = set(executor.calls[-1]["tool_names"])
+    assert {"tasks_list", "link_card_publish", "link_card_archive"} <= supplied
+    assert "agent2agent_send" not in supplied and "workspace_delete_path" not in supplied

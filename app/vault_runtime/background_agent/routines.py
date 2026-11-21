@@ -165,6 +165,12 @@ def source_fingerprint_changed(
     return (previous_fingerprint != digest, digest)
 
 
+def _tools_line(names) -> str:
+    if "*" in names:
+        return "all background tools (agent-to-agent sends stay with the coordinator)"
+    return ", ".join(names) or "none"
+
+
 class BackgroundRoutines:
     def __init__(self, *, database_url: str, jobs: Any = None) -> None:
         self._database_url = database_url
@@ -270,7 +276,7 @@ class BackgroundRoutines:
         detail_lines = [
             f"Objective: {objective}",
             f"Schedule: {schedule} ({timezone})",
-            f"Tools: {', '.join(req.get('requested_tool_names') or []) or 'none'}",
+            f"Tools: {_tools_line(req.get('requested_tool_names') or [])}",
         ]
         origin_meta = {
             k: v

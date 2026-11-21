@@ -79,16 +79,19 @@ class BackgroundAuthority:
         self._repo = CoordinationRepository(database_url=database_url)
 
     def _restrictions(self, cursor, scope, row):
+        # A list containing "*" (all background tools) does not narrow; the run's tool supply applies
+        # the specialist exclusions. An empty grant or specialist list still means no tools.
         names = None
         policies = []
         if scope.grant_id:
             cursor.execute("""SELECT policy_json FROM vault_private.vault_background_execution_grants
               WHERE user_id=%s AND workspace_id=%s AND grant_id=%s""", (scope.user_id, scope.workspace_id, scope.grant_id))
             grant = cursor.fetchone()["policy_json"]
-            names = set(grant.get("tool_names", []))
+            if "*" not in grant.get("tool_names", []):
+                names = set(grant.get("tool_names", []))
             policies.append(grant.get("resource_policy", {}))
         requested = row["request_json"]["request"].get("requested_tool_names", [])
-        if requested:
+        if requested and "*" not in requested:
             names = set(requested) if names is None else names.intersection(requested)
         worker_status = None
         if row["worker_id"]:
@@ -97,7 +100,8 @@ class BackgroundAuthority:
             worker = cursor.fetchone()
             worker_status = worker["status"]
             tools = worker["spec_json"].get("tool_names", [])
-            names = set(tools) if names is None else names.intersection(tools)
+            if "*" not in tools:
+                names = set(tools) if names is None else names.intersection(tools)
             policies.append(worker["spec_json"].get("resource_policy", {}))
         return names, policies, worker_status
 

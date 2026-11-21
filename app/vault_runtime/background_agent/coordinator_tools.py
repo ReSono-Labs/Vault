@@ -29,7 +29,9 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
             repository._owner(cursor, scope)
             repository._authority(cursor, scope, context.local_session_id, None)
             cursor.execute(
-                """SELECT worker_id, role_key, status, spec_json->>'purpose' AS purpose
+                """SELECT worker_id, role_key, status, spec_json->>'purpose' AS purpose,
+                          CASE WHEN spec_json->'tool_names' ? '*' THEN to_jsonb('all background tools'::text)
+                               ELSE spec_json->'tool_names' END AS tools
                    FROM vault_private.vault_background_workers
                    WHERE user_id=%s AND workspace_id=%s AND status<>'deleted'
                    ORDER BY created_at DESC, worker_id DESC LIMIT 50""",
@@ -111,8 +113,8 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
                 AgentKind.BACKGROUND, user_id=scope.user_id, workspace_id=scope.workspace_id,
             )
         }
-        tool_names = tuple(arguments["tool_names"])
-        if set(tool_names) - allowed:
+        tool_names = tuple(("*",) if arguments.get("tool_names") is None else arguments["tool_names"])
+        if set(tool_names) - allowed - {"*"}:
             return ToolInvocationResult("Choose tools available to background work in this workspace.", is_error=True)
         spec = WorkerSpec(
             role_key=arguments["role_key"], purpose=arguments["purpose"], instructions=arguments["instructions"],
@@ -156,9 +158,10 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
                 "instructions": {"type": "string", "minLength": 1, "maxLength": 4000},
                 "tool_names": {
                     "type": "array", "items": {"type": "string"}, "uniqueItems": True, "maxItems": 20,
+                    "description": "Omit to give it all your background tools (the usual choice). List tool names only to restrict it. Agent-to-agent sends always stay with you.",
                 },
             },
-            "required": ["role_key", "purpose", "instructions", "tool_names"],
+            "required": ["role_key", "purpose", "instructions"],
             "additionalProperties": False,
         },
         handler=propose_specialist,
@@ -183,7 +186,10 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
         if context.conversation_id is None:
             return ToolInvocationResult("Open the Link chat where this routine should report.", is_error=True)
         principal = resolve_principal(context.user_id, context.workspace_id, context.local_session_id)
-        names = arguments["tool_names"]
+        names = arguments.get("tool_names")
+        if names is None:
+            # A specialist's routine runs with all background tools unless the coordinator restricts it.
+            names = ["*"] if arguments.get("role_key") and not arguments.get("reminder") else []
         timing = [key for key in ("cron", "run_at", "delay_minutes") if key in arguments]
         if len(timing) != 1:
             return ToolInvocationResult("Choose exactly one of cron, run_at, or delay_minutes.", is_error=True)
@@ -202,7 +208,7 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
                 AgentKind.BACKGROUND, user_id=principal.user_id, workspace_id=principal.workspace_id,
             )
         }
-        if set(names) - available:
+        if set(names) - available - {"*"}:
             return ToolInvocationResult("Choose tools available to background work in this workspace.", is_error=True)
 
         destination = {"kind": "conversation", "conversation_id": context.conversation_id}
@@ -297,9 +303,10 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
                 "role_key": {"type": "string", "description": "Optional existing specialist role."},
                 "tool_names": {
                     "type": "array", "items": {"type": "string"}, "uniqueItems": True, "maxItems": 20,
+                    "description": "For a specialist's routine: omit to use all its background tools; list names only to restrict it.",
                 },
             },
-            "required": ["objective", "timezone", "tool_names"],
+            "required": ["objective", "timezone"],
             "additionalProperties": False,
         },
         handler=propose_routine,
@@ -461,11 +468,11 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
             role_key = new_specialist["role_key"]
             if coordinator._find_approved_worker(scope, role_key) is not None:
                 return ToolInvocationResult("That role already exists. Select its role_key directly.", is_error=True)
-            names = tuple(new_specialist["tool_names"])
+            names = tuple(("*",) if new_specialist.get("tool_names") is None else new_specialist["tool_names"])
             available = {tool.name for tool in catalog.definitions_for(
                 AgentKind.BACKGROUND, user_id=scope.user_id, workspace_id=scope.workspace_id,
             )}
-            if set(names) - available:
+            if set(names) - available - {"*"}:
                 return ToolInvocationResult("Choose tools available to background work in this workspace.", is_error=True)
             worker_spec = WorkerSpec(
                 role_key=role_key, purpose=new_specialist["purpose"],
@@ -539,13 +546,15 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
                         "role_key": {"type": "string", "minLength": 1, "maxLength": 80},
                         "purpose": {"type": "string", "minLength": 1, "maxLength": 240},
                         "instructions": {"type": "string", "minLength": 1, "maxLength": 4000},
-                        "tool_names": {"type": "array", "items": {"type": "string"}, "uniqueItems": True, "maxItems": 20},
+                        "tool_names": {"type": "array", "items": {"type": "string"}, "uniqueItems": True, "maxItems": 20,
+                                       "description": "Omit to give it all your background tools (the usual choice). List tool names only to restrict it. Agent-to-agent sends always stay with you.",},
                     },
-                    "required": ["role_key", "purpose", "instructions", "tool_names"],
+                    "required": ["role_key", "purpose", "instructions"],
                     "additionalProperties": False,
                 },
                 "tool_names": {
                     "type": "array", "items": {"type": "string"}, "uniqueItems": True, "maxItems": 20,
+                    "description": "Omit to use the specialist's tools (or all your background tools). List names only to restrict.",
                 },
             },
             "required": ["objective"],

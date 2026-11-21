@@ -33,7 +33,7 @@ class WorkerRepository:
         detail_lines = [
             f"Role: {spec.role_key}",
             f"Purpose: {spec.purpose}",
-            f"Tools: {', '.join(spec.tool_names) if spec.tool_names else 'none'}",
+            f"Tools: {'all background tools (agent-to-agent sends stay with the coordinator)' if '*' in spec.tool_names else (', '.join(spec.tool_names) if spec.tool_names else 'none')}",
         ]
         origin_meta = {
             k: v
@@ -81,7 +81,7 @@ class WorkerRepository:
             row = cursor.fetchone()
         if row is None:
             raise BackgroundRunConflictError("Select an idle or paused specialist.")
-        if "memory_lookup" in row["spec_json"]["tool_names"]:
+        if {"memory_lookup", "*"} & set(row["spec_json"]["tool_names"]):
             return None
         return BackgroundActions(database_url=self._repo._database_url).prepare(
             scope, "worker_create", {

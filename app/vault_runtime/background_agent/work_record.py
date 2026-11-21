@@ -48,6 +48,65 @@ def _reason(message: str | None) -> str:
 _SYSTEM_TURN = "vault-wake:"
 _VOICE_PREFIX = "[Spoken on a voice call]"
 _AUTOMATED = "[Automated message from Vault, not from the user]"
+# Work that only wakes the coordinator in its chat (its own routines, follow-ups and reminders).
+_COORDINATOR_GOALS = frozenset({"self_routine", "follow_up", "reminder"})
+
+
+def _coordinator_turn(cursor: Any, work: dict[str, Any], conversation_id: str | None,
+                      objective: str) -> dict[str, object] | None:
+    """The chat turn in which Vault woke the coordinator to do this work, and what it did there:
+    its tool calls (from the turn's own events), its reply and how the turn ended."""
+    if not conversation_id or not objective.strip():
+        return None
+    cursor.execute("SELECT to_regclass('vault_private.vault_conversation_turns') IS NOT NULL AS present")
+    present = cursor.fetchone()
+    if not present or not present["present"]:
+        return None
+    cursor.execute(
+        """SELECT t.turn_id, t.state, t.created_at, t.updated_at, c.title
+           FROM vault_private.vault_conversation_turns t
+           JOIN vault_private.vault_conversations c
+             ON c.user_id=t.user_id AND c.workspace_id=t.workspace_id AND c.conversation_id=t.conversation_id
+           WHERE t.user_id=%s AND t.workspace_id=%s AND t.conversation_id=%s
+             AND t.submission_key LIKE 'vault-wake:%%' AND t.created_at >= %s - interval '5 seconds'
+             AND t.created_at < %s + interval '6 hours' AND strpos(t.input_text, %s) > 0
+           ORDER BY t.created_at LIMIT 1""",
+        (work["user_id"], work["workspace_id"], conversation_id, work["updated_at"], work["updated_at"],
+         objective.strip()[:160]),
+    )
+    turn = cursor.fetchone()
+    if turn is None:
+        return None
+    cursor.execute(
+        """SELECT kind, payload FROM vault_private.vault_conversation_events
+           WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND turn_id=%s
+             AND kind IN ('tool_status','model_response','assistant_final')
+           ORDER BY sequence""",
+        (work["user_id"], work["workspace_id"], conversation_id, turn["turn_id"]),
+    )
+    names: list[str] = []
+    calls = failures = responses = 0
+    reply = ""
+    for row in cursor.fetchall():
+        payload = row["payload"] if isinstance(row["payload"], dict) else {}
+        if row["kind"] == "model_response":
+            responses += 1
+        elif row["kind"] == "assistant_final":
+            reply = str(payload.get("text") or "")
+        elif payload.get("state") == "invoking":
+            calls += 1
+            if payload.get("name") and payload["name"] not in names:
+                names.append(str(payload["name"]))
+        elif payload.get("state") in {"denied", "failed"} or (
+                payload.get("state") == "succeeded" and payload.get("isError")):
+            failures += 1
+    return {
+        "chat": turn["title"] or "untitled chat", "conversationId": conversation_id, "turnId": turn["turn_id"],
+        "turnState": turn["state"], "at": turn["created_at"].isoformat(),
+        "reply": " ".join(reply.split())[:600],
+        "activity": {"attempts": 1, "modelTurns": responses, "toolCalls": calls, "toolsUsed": names[:20],
+                     "toolFailures": failures},
+    }
 
 
 def turn_origin(cursor: Any, turn_id: str | None) -> dict[str, object] | None:
@@ -166,22 +225,40 @@ def work_record(cursor: Any, *, user_id: str, workspace_id: str, work_id: str) -
                 tools.append(str(row["name"]))
     code = last.get("failure_code") if work["state"] in {"failed", "unknown"} else None
     kind = failure_kind(code) if work["state"] in {"failed", "unknown"} else None
+    done_by = work["role_key"] or "Background Agent"
+    summary = str(result.get("summary") or "")[:600]
+    activity = {"attempts": len(runs), "modelTurns": sum(int(r["model_turns"] or 0) for r in runs),
+                "toolCalls": sum(int(r["tool_calls"] or 0) for r in runs), "toolsUsed": tools[:20],
+                "toolFailures": failed_tools}
+    handled = None
+    if request.get("goal_type") in _COORDINATOR_GOALS:
+        # The run only woke the coordinator; the work happened in that chat turn.
+        destination = (work["request_json"] or {}).get("destination") or {}
+        handled = _coordinator_turn(cursor, work, destination.get("conversation_id"),
+                                    str(request.get("objective") or ""))
+        done_by = "the coordinator (you), in its chat"
+        if handled is None:
+            summary = "Vault woke the coordinator to do this in its chat; no turn for it has run yet."
+            activity = {"attempts": 0, "modelTurns": 0, "toolCalls": 0, "toolsUsed": [], "toolFailures": 0}
+        else:
+            done_by = f"the coordinator (you), in chat \"{handled['chat']}\""
+            summary = handled.pop("reply") or summary
+            activity = handled.pop("activity")
     return {
         "workId": work["work_id"],
         "state": work["state"],
         "startedBy": _started_by(cursor, work),
         "request": str(request.get("objective") or "")[:400],
         "originalRequest": str(request.get("original_request") or "")[:400],
-        "doneBy": work["role_key"] or "Background Agent",
+        "doneBy": done_by,
+        **({"handledIn": handled} if handled is not None else {}),
         "outcome": {
             "state": work["state"],
-            "summary": str(result.get("summary") or "")[:600],
+            "summary": summary,
             **({"failureCode": code, "failureKind": kind, "meaning": FAILURE_KINDS.get(kind or ""),
                 "reason": _reason(last.get("failure_message"))} if kind else {}),
         },
-        "activity": {"attempts": len(runs), "modelTurns": sum(int(r["model_turns"] or 0) for r in runs),
-                     "toolCalls": sum(int(r["tool_calls"] or 0) for r in runs), "toolsUsed": tools[:20],
-                     "toolFailures": failed_tools},
+        "activity": activity,
         "partOf": work["parent_work_id"],
         "startedAt": work["created_at"].isoformat() if work["created_at"] else None,
         "finishedAt": (last.get("completed_at") or work["updated_at"]).isoformat()
@@ -216,6 +293,9 @@ def render(record: dict[str, object]) -> str:
         who = kind
     lines = [f"Started by: {who}", f"Done by: {record.get('doneBy')}", f"Request: {record.get('request')}",
              f"Outcome: {outcome.get('state')}"]
+    handled = record.get("handledIn")
+    if isinstance(handled, dict) and handled.get("turnState") != "completed":
+        lines.append(f"Coordinator turn: {handled.get('turnState')}")
     if outcome.get("failureKind"):
         lines += [f"Failure kind: {outcome.get('failureKind')} - {outcome.get('meaning')}",
                   f"Reason: {outcome.get('reason') or outcome.get('failureCode')}"]

@@ -84,6 +84,19 @@ All notable changes to Vault are listed here. The version comes from
   (and where: web chat, Link or a voice call, with their message) or the coordinator acted
   on its own in a turn Vault started. A routine run says who set the routine up. Runs from
   connected agents over A2A are labelled as such.
+- **Specialists work with the coordinator's tools:** a specialist, its routines and work the
+  coordinator assigns get every background tool by default ("*"): Home cards (including
+  archiving stale ones), workspace files, memory and web search. Changes to tasks, email,
+  calendar and contacts still wait for the owner's approval; agent-to-agent sends and Link setup
+  stay with the coordinator. A tool list still restricts a specialist when given. Migration 0004
+  switches existing specialists and their routines to all tools. Direct API and A2A requests
+  stay read-only.
+- **The coordinator knows what its routines did:** the work record of a coordinator routine
+  names the chat turn it ran in, its tool calls and its reply, instead of "Background Agent, 0
+  turns". Each chat now sees reports delivered to the owner's other chats in the last day
+  (`reportsInOtherChats`), so "were you notified?" gets a true answer. The owner's standing
+  policy for failures is part of the coordinator's instructions, and a failed routine with a
+  usable result still gets its Home cards refreshed.
 - **Background runs failed on their own result:** the Background agent was told in prose
   to return its typed result but was never given that type, so the model guessed field
   names and status words and Vault rejected the run (most scheduled routines failed from
