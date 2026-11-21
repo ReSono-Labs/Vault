@@ -665,3 +665,31 @@ def test_background_instructions_carry_the_owners_skill_catalog_when_the_loader_
     assert outcome.state is WorkState.COMPLETED
     assert ('{"name":"notes"}' in model.system) is supplied
     assert asked == ([(scope.user_id, scope.workspace_id, AgentKind.BACKGROUND)] if supplied else [])
+
+
+def test_the_model_is_given_the_exact_result_shape_as_structured_output():
+    """Nov 18-20: the agent had no output type, so the model guessed field names
+    (requirementOutcomes, result) and status words (not_completed) and every routine failed."""
+    from app.vault_runtime.background_agent.executor import ResumableBackgroundExecutor
+
+    seen = []
+
+    class Capturing(ScriptedSDKModel):
+        async def get_response(self, system_instructions, input, model_settings, tools, output_schema, *args, **kwargs):
+            seen.append(output_schema)
+            return await super().get_response(system_instructions, input, model_settings, tools,
+                                              output_schema, *args, **kwargs)
+
+    scope = _scope()
+    authority = FakeAuthority()
+    _, supply = _build_supply(scope, authority, [])
+    executor = ResumableBackgroundExecutor(credentials=FakeCredentials(), authority=authority,
+                                           model_factory=lambda *_: Capturing(["complete"]))
+    outcome = asyncio.run(executor.execute(scope, _request(), None, supply, lambda: False))
+    assert outcome.state is WorkState.COMPLETED
+    schema = seen[0]
+    assert schema is not None and schema.is_strict_json_schema()
+    shape = schema.json_schema()
+    assert set(shape["required"]) == {"status", "summary", "quiet", "artifact_references", "requirement_outcomes",
+                                      "unresolved_issues", "verification_summary", "phase_evidence"}
+    assert shape["additionalProperties"] is False

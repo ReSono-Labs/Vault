@@ -72,6 +72,10 @@ All notable changes to Vault are listed here. The version comes from
   comes from another site. Opening Vault from another computer at home, through the Link
   bridge or over Tailscale keeps working; other proxy addresses can be allowed with
   `RESONO_VAULT_TRUSTED_ORIGINS`.
+- **Background runs failed on their own result:** the Background agent was told in prose
+  to return its typed result but was never given that type, so the model guessed field
+  names and status words and Vault rejected the run (most scheduled routines failed from
+  Nov 18 to Nov 20). The SDK now enforces the exact result shape as structured output.
 - **Unused token removed:** `config/local-api-token` is no longer required or created.
 - **Database:** migration `0002_mcp_accounts` creates the personal-credential tables; a test
   now checks that migrations alone create every extension table.

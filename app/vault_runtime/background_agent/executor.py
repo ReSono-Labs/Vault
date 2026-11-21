@@ -10,7 +10,10 @@ from time import monotonic
 from types import SimpleNamespace
 from typing import Any
 
-from agents import Agent, FunctionTool, ModelSettings, RunConfig, RunHooks, Runner, RunState, set_tracing_disabled
+from agents import (
+    Agent, AgentOutputSchema, FunctionTool, ModelSettings, RunConfig, RunHooks, Runner, RunState,
+    set_tracing_disabled,
+)
 import httpx
 from openai.types.shared import Reasoning
 import psycopg
@@ -471,6 +474,9 @@ class ResumableBackgroundExecutor:
                 store=False if base_url else None,
             ) if isinstance(model_obj, str) else ModelSettings(),
             tools=function_tools,
+            # The SDK enforces the result's exact shape (structured output). Without it the model
+            # guessed field names and status words from the prose, and Vault rejected the run.
+            output_type=AgentOutputSchema(BackgroundAgentOutput, strict_json_schema=True),
         )
         safe_context = {"user_id": scope.user_id, "workspace_id": scope.workspace_id, "work_id": scope.work_id}
         remaining_turns = max(1, request.limits.max_model_turns - turns_used[0] + 1)
