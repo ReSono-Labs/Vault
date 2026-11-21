@@ -7,6 +7,12 @@ All notable changes to Vault are listed here. The version comes from
 
 ### Link
 
+- **Images from Link no longer block later images:** when Vault refused a Link message, the
+  images staged for it stayed and counted against the chat's file limit, so every later image
+  was refused. They are now released. Refusals from Link chat and the Front Door include Vault's
+  reason (its own fixed wording, never message text or image bytes), and the log records it.
+  OpenAI `gpt-6` models are accepted for images.
+
 - **Link Front Door v1.** Link's engine can run Vault owner chat over its standard agent
   contract (`/v1/responses` plus `/link/v1` capabilities, approvals and drafts), beside the
   existing companion chat routes. Vault cards arrive as Link Cards v1. Steer, streaming and
