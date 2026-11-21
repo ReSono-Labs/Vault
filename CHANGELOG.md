@@ -80,6 +80,10 @@ All notable changes to Vault are listed here. The version comes from
   chat was waiting on is reported to the owner's most recent chat. The coordinator decides
   what the owner hears; Vault no longer sends its own "Background work failed" alert for
   work a chat receives. `background_inspect` lists the recent work log.
+- **Work records say who decided:** a run started from a chat says whether the owner asked
+  (and where: web chat, Link or a voice call, with their message) or the coordinator acted
+  on its own in a turn Vault started. A routine run says who set the routine up. Runs from
+  connected agents over A2A are labelled as such.
 - **Background runs failed on their own result:** the Background agent was told in prose
   to return its typed result but was never given that type, so the model guessed field
   names and status words and Vault rejected the run (most scheduled routines failed from

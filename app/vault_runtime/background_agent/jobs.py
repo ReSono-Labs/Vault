@@ -281,7 +281,7 @@ class BackgroundJobs:
             try:
                 self._deliver_outcome(attempt, outcome)
             except Exception:
-                logging.getLogger(__name__).warning("Background result delivery failed")
+                logging.getLogger(__name__).warning("Background result delivery failed", exc_info=True)
         return True
 
     def cancel(self,connection,work_id):

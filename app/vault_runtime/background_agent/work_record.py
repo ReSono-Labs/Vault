@@ -45,6 +45,43 @@ def _reason(message: str | None) -> str:
     return text[:400]
 
 
+_SYSTEM_TURN = "vault-wake:"
+_VOICE_PREFIX = "[Spoken on a voice call]"
+_AUTOMATED = "[Automated message from Vault, not from the user]"
+
+
+def turn_origin(cursor: Any, turn_id: str | None) -> dict[str, object] | None:
+    """Who acted in a chat turn: the owner (and where), or the coordinator on its own in a turn
+    Vault started (a routine, a result or a follow-up woke it)."""
+    if not turn_id:
+        return None
+    cursor.execute(
+        """SELECT submission_key, input_text, created_at FROM vault_private.vault_conversation_turns
+           WHERE turn_id=%s""", (turn_id,),
+    )
+    turn = cursor.fetchone()
+    if turn is None:
+        return None
+    key, text = str(turn["submission_key"] or ""), str(turn["input_text"] or "")
+    at = turn["created_at"].isoformat() if turn["created_at"] else None
+    if key.startswith(_SYSTEM_TURN):
+        woken_by = " ".join(text.replace(_AUTOMATED, "").split())[:200]
+        return {"by": "coordinator", "how": "on its own, in a turn Vault started", "wokenBy": woken_by, "at": at}
+    channel = "voice call" if text.startswith(_VOICE_PREFIX) else "Link" if key.startswith("link:") else "web chat"
+    return {"by": "owner", "how": f"a message in {channel}", "message": " ".join(text.split())[:200], "at": at}
+
+
+def _routine_setup(cursor: Any, work: dict[str, Any], routine_id: str) -> dict[str, object] | None:
+    cursor.execute(
+        """SELECT origin_json->>'turn_id' AS turn_id, created_at FROM vault_private.vault_background_actions
+           WHERE user_id=%s AND workspace_id=%s AND kind='routine_create' AND receipt_json->>'routine_id'=%s
+           ORDER BY created_at DESC LIMIT 1""",
+        (work["user_id"], work["workspace_id"], routine_id),
+    )
+    action = cursor.fetchone()
+    return turn_origin(cursor, action["turn_id"]) if action else None
+
+
 def _started_by(cursor: Any, work: dict[str, Any]) -> dict[str, object]:
     source = str(work.get("source_key") or "")
     routine_id = work.get("routine_id")
@@ -63,13 +100,30 @@ def _started_by(cursor: Any, work: dict[str, Any]) -> dict[str, object]:
                            routineCreatedAt=routine["created_at"].isoformat() if routine["created_at"] else None,
                            routineKind=routine["goal_type"] or "specialist_routine",
                            setUpInConversation=routine["conversation_id"])
+        setup = _routine_setup(cursor, work, str(routine_id))
+        if setup is not None:
+            started["setUpBy"] = setup
         return started
     if source.startswith("explicit_goal:chat:"):
-        return {"kind": "owner_request_in_chat", "conversationId": source.split(":", 2)[2].split(":")[0]}
+        destination = (work.get("request_json") or {}).get("destination") or {}
+        started = {"kind": "chat", "conversationId": source.split(":", 2)[2].split(":")[0]}
+        origin = turn_origin(cursor, destination.get("turn_id"))
+        if origin is not None:
+            started["decidedBy"] = origin
+        return started
     if source.startswith("direct_run:"):
+        run_id = source.split(":", 1)[1].split(":")[0]
+        cursor.execute("SELECT to_regclass('vault_private.vault_a2a_inbound_tasks') IS NOT NULL AS present")
+        a2a = cursor.fetchone()
+        if a2a and a2a["present"]:
+            cursor.execute("SELECT 1 FROM vault_private.vault_a2a_inbound_tasks WHERE run_id=%s", (run_id,))
+        if a2a and a2a["present"] and cursor.fetchone() is not None:
+            return {"kind": "connected_agent",
+                    "note": "A message from a connected agent over A2A. Vault cannot tell which agent: they "
+                            "share one inbound key, so only the message text names the sender."}
         return {"kind": "direct_request",
-                "note": "Started through Vault's API with the owner's sign-in, not from a chat "
-                        "(for example a connected app or agent). The request text may say who sent it."}
+                "note": "Started through Vault's API with the owner's sign-in, not from a chat. "
+                        "The request text may say who sent it."}
     return {"kind": source.split(":", 1)[0] or "unknown"}
 
 
@@ -140,10 +194,26 @@ def render(record: dict[str, object]) -> str:
     started = record.get("startedBy") or {}
     outcome = record.get("outcome") or {}
     activity = record.get("activity") or {}
-    who = {"routine": f"routine {started.get('routineId')} (schedule {started.get('schedule')}, {started.get('timezone')})",
-           "owner_request_in_chat": "the owner, in a chat",
-           "direct_request": "a direct request through Vault's API (not a chat)"}.get(
-        str(started.get("kind")), str(started.get("kind")))
+    def actor(origin: object) -> str:
+        if not isinstance(origin, dict):
+            return "unknown"
+        if origin.get("by") == "coordinator":
+            return f"the coordinator {origin.get('how')} (woken by: {origin.get('wokenBy')})"
+        return f"the owner, {origin.get('how')}: \"{origin.get('message')}\""
+
+    kind = str(started.get("kind"))
+    if kind == "routine":
+        who = (f"routine {started.get('routineId')} on its schedule ({started.get('schedule')}, "
+               f"{started.get('timezone')})"
+               + (f"; set up by {actor(started['setUpBy'])}" if started.get("setUpBy") else ""))
+    elif kind == "chat":
+        who = actor(started.get("decidedBy")) if started.get("decidedBy") else "a chat turn"
+    elif kind == "connected_agent":
+        who = "a connected agent over A2A (not identified)"
+    elif kind == "direct_request":
+        who = "a direct request through Vault's API (not a chat)"
+    else:
+        who = kind
     lines = [f"Started by: {who}", f"Done by: {record.get('doneBy')}", f"Request: {record.get('request')}",
              f"Outcome: {outcome.get('state')}"]
     if outcome.get("failureKind"):

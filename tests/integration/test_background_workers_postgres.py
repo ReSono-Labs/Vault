@@ -868,12 +868,14 @@ def test_every_finished_run_reaches_the_coordinator_with_who_why_and_outcome(con
     result = next(item for item in coordinator.conversation_updates(scope, conversation.conversation_id)
                   if item["type"] == "result")
     record = result["record"]
-    assert record["startedBy"]["kind"] == "owner_request_in_chat"
+    assert record["startedBy"]["kind"] == "chat"
+    assert record["startedBy"]["decidedBy"]["by"] == "owner"
+    assert record["startedBy"]["decidedBy"]["how"] == "a message in Link"
     assert record["request"] == "Prepare the digest"
     assert record["outcome"]["failureKind"] == "vault" and "validation errors" in record["outcome"]["reason"]
     assert record["activity"]["attempts"] == 1
     notice = render_wake_notice([result])
-    assert "<work_record>" in notice and "Failure kind: vault" in notice and "Started by: the owner, in a chat" in notice
+    assert "<work_record>" in notice and "Failure kind: vault" in notice and 'Started by: the owner, a message in Link: "Prepare the digest"' in notice
     # The coordinator decides what the owner hears; Vault no longer alerts the owner directly.
     assert [item for item in notifications.list_active(user_id=principal.user_id, workspace_id=principal.workspace_id)
             if item.get("kind") == "background_result"] == []
@@ -899,4 +901,4 @@ def test_every_finished_run_reaches_the_coordinator_with_who_why_and_outcome(con
     # And the coordinator can look it all up afterwards.
     inspect = env["catalog"].definition("background_inspect").handler(invocation, {})
     kinds = {item["startedBy"]["kind"] for item in inspect.structured_content["recentWork"]}
-    assert {"owner_request_in_chat", "direct_request"} <= kinds
+    assert {"chat", "direct_request"} <= kinds
