@@ -55,3 +55,18 @@ say this plainly. On a four-person device that belongs in the install decision n
 - OS-level confinement of hosted processes becomes available: revisit the trust model text.
 - A transport or capability outside this list is needed by a supported integration.
 - The upstream standards publish a new revision.
+
+## Addendum 2026-11-20: hosted processes are confined
+
+The condition above is met in part: OS-level confinement now exists. Supervised plugin
+and hosted MCP processes start under Linux Landlock (`extensions/confinement.py`). The
+kernel lets each read its own package and system files and read and write only its own
+data folder; Vault's data volume, keys, other installs (including a same-name install in
+another workspace) and other processes' `/proc` entries are refused. Tests prove this
+with real access attempts.
+
+The trust model text changes accordingly: a hosted package is **confined, not
+sandboxed**. It still runs as Vault's operating-system user, keeps network access and
+shares CPU and memory, so the install warning and the owner's approval of the exact
+package stay. Where the kernel has no Landlock, the process runs unconfined and its
+status reports `confinement: none`.

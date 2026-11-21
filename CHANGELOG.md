@@ -51,7 +51,13 @@ All notable changes to Vault are listed here. The version comes from
   to the folder change nothing. Links and special files are refused.
 - **Support table:** `docs/SUPPORT-MATRIX.md` lists what Vault supports for Agent
   Plugins, Agent Skills and MCP, and what it skips. Installing a hosted package now
-  asks you to confirm that it runs as trusted code with Vault's access.
+  asks you to confirm before it runs its own program.
+- **Hosted processes are confined:** supervised plugin and hosted MCP processes start
+  under Linux Landlock. The kernel lets each read its own package and system files and
+  write only its own data folder; Vault's data and keys, other installs (including one
+  with the same name) and other processes' environments are refused. The status shows
+  `confinement: landlock` (or `none` where the kernel lacks Landlock).
+  `RESONO_VAULT_HOSTED_CONFINEMENT=off` is an emergency switch.
 - **Status per part:** a plugin's page lists each Skill and MCP server with its status
   for you (skipped as unsupported or invalid, unreachable, needs sign-in, not checked,
   not granted, ready).

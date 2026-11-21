@@ -426,14 +426,14 @@ marked `@pytest.mark.flags_off("reason")`.
 
 These are current limits, not designs to build on:
 
-- **No OS sandbox for hosted executable plugins yet.** Hosted MCP packages and
-  supervised plugins run as separate processes with a minimal environment, but
-  as the same OS user and in the same container as Vault, so they can read
-  Vault's data volume. Until they are confined, treat them as trusted code
-  running with the Vault process's effective access; the user's connected agent
-  reviews the package and the owner approves before install. The Linux installer
-  checks for bubblewrap, but Vault does not use it yet. Only agent commands are
-  confined (Landlock).
+- **Hosted processes are confined, not sandboxed.** Hosted MCP packages and
+  supervised plugins start under Linux Landlock (`extensions/confinement.py`, which
+  uses the same `commands/landlock.py` as agent commands): their own package read
+  only, their own data folder read and write, system files read only. Vault's data,
+  keys and other installs are refused by the kernel, and Landlock's ptrace checks keep
+  other processes' `/proc` entries out of reach. They still run as Vault's OS user,
+  can use the network and share CPU and memory, so the owner approves each package.
+  Without Landlock in the kernel they run unconfined and report `confinement: none`.
 - **No Origin checks.** CSRF protection relies on the double-submit token, not
   on Origin or `Sec-Fetch-*` headers.
 - **Unused settings.** The local API token in `config/local-api-token` is

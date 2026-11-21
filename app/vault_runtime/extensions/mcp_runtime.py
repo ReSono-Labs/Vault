@@ -17,6 +17,7 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from app.vault_runtime.extensions import confinement
 from app.vault_runtime.extensions.filesystem import extension_category_path, extension_data_path
 from app.vault_runtime.extensions.models import ExtensionKind, ExtensionState
 from app.vault_runtime.extensions.repository import ExtensionRecord, ExtensionRepository, record_storage_identity
@@ -59,6 +60,8 @@ class McpRuntimeStatus:
     endpoint: str | None
     pid: int | None
     last_error: str | None
+    # "landlock": the kernel refuses files outside the install and its data; "none": not confined.
+    confinement: str | None = None
 
 
 @dataclass(slots=True)
@@ -141,6 +144,7 @@ class McpRuntimeSupervisor:
                 list(runtime["command"]), install_root=install_root, data_dir=data_dir, env=env,
                 runtime_cwd=Path(str(runtime.get("cwd", "."))),
             )
+            command, confined_by = self._confine(command, install_root=install_root, data_dir=data_dir, env=env)
             try:
                 process = subprocess.Popen(
                     command, cwd=cwd, env=env,
@@ -174,7 +178,7 @@ class McpRuntimeSupervisor:
                 )
                 raise
             self._processes[record.extension_id] = _ManagedProcess(record, process, port, endpoint)
-            status = McpRuntimeStatus("running", port, endpoint, process.pid, None)
+            status = McpRuntimeStatus("running", port, endpoint, process.pid, None, confined_by)
             self._persist_status(
                 actor_user_id=actor_user_id, workspace_id=workspace_id,
                 record=record, status=status, endpoint=endpoint, runtime=runtime,
@@ -378,6 +382,27 @@ class McpRuntimeSupervisor:
             raise McpRuntimeError("Hosted MCP virtual environment is unavailable")
         return venv_python
 
+    @staticmethod
+    def _confine(command: list[str], *, install_root: Path, data_dir: Path,
+                 env: dict[str, str]) -> tuple[list[str], str]:
+        """Start the process under Landlock: its install (read only) and its own data folder
+        (read and write), plus system files. Vault's data, other installs and other people's
+        workspaces are refused by the kernel. ``RESONO_VAULT_HOSTED_CONFINEMENT=off`` is an
+        emergency switch for kernels where this breaks a package."""
+        if os.environ.get("RESONO_VAULT_HOSTED_CONFINEMENT", "").strip().lower() in {"off", "0", "false"}:
+            return command, "none"
+        abi = confinement.landlock_abi()
+        if abi < 1:
+            logger.warning("Landlock is unavailable; hosted extensions run unconfined")
+            return command, "none"
+        home, scratch = data_dir / ".home", data_dir / ".tmp"
+        for path in (home, scratch):
+            path.mkdir(mode=0o700, exist_ok=True)
+        env["HOME"], env["TMPDIR"] = str(home), str(scratch)
+        certificates = tuple(env[name] for name in ("SSL_CERT_FILE", "SSL_CERT_DIR") if env.get(name))
+        rules = confinement.rules_for(install_root=install_root, data_dir=data_dir, extra_read=certificates)
+        return confinement.launcher_command(command, rules=rules), "landlock"
+
     def _wait_for_health(self, *, port: int, health_path: str) -> None:
         deadline = time.monotonic() + _HEALTH_TIMEOUT_SECONDS
         url = f"http://127.0.0.1:{port}{health_path}"
@@ -404,6 +429,8 @@ class McpRuntimeSupervisor:
             "pid": status.pid,
             "lastError": status.last_error,
         }
+        if status.confinement is not None:
+            runtime_status["confinement"] = status.confinement
         if runtime is not None and isinstance(runtime.get("port"), int):
             published_port = int(runtime["port"])
             runtime_status["publishedPort"] = published_port

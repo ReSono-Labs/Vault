@@ -19,11 +19,14 @@ External MCP URLs (`mcp.json` only) remain supported for servers you run outside
 
 > What Vault supports, and what it skips: [SUPPORT-MATRIX.md](SUPPORT-MATRIX.md).
 
-> **Trusted code.** A hosted MCP package runs as the same operating-system user and
-> in the same container as Vault. Until Vault confines these processes, treat it as
-> trusted code running with Vault's effective access, including Vault's data. Before
-> install, the user's connected agent reviews the package and raises red flags, and
-> the owner approves the exact package.
+> **Confined, not sandboxed.** A hosted MCP package starts under Linux Landlock: the kernel
+> lets it read its own package and system files and read and write only its own data
+> folder. Vault's data, keys, other packages (including another install of the same
+> name) and other processes' environments are refused. It still runs as Vault's
+> operating-system user, can use the network, and shares CPU and memory with Vault, so
+> install only packages you trust. Before install, the user's connected agent reviews
+> the package and raises red flags, and the owner approves the exact package. Where the
+> kernel has no Landlock, the process runs unconfined and its status says so.
 
 ## Package layout
 

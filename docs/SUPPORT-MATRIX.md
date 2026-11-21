@@ -48,7 +48,7 @@ tools not checked yet, available but not granted to you, or ready.
 | Authorization (OAuth 2.1) | Yes | PKCE S256, resource indicators, issuer checks, refresh, revocation, scope step-up |
 | Client registration | Pre-registered, Client ID Metadata Document, Dynamic Client Registration | In that order |
 | Credentials | Personal by default | Shared only when the device owner shares one and grants it; never another person's |
-| Hosted packages (`mcp.package.json`) | Yes | Supervised process per install; **trusted code with Vault's access** |
+| Hosted packages (`mcp.package.json`) | Yes | Supervised process per install, confined by Linux Landlock to its own package and data; it can still use the network |
 
 ## People and workspaces
 
@@ -60,3 +60,4 @@ tools not checked yet, available but not granted to you, or ready.
 | Leaving a workspace or losing a grant | Takes effect at the next use |
 | Same name in two workspaces | Two independent installs (files, data, versions, removal) |
 | Safe mode | Device-wide; stops hosted processes and keeps them stopped |
+| Hosted process file access | Only its own package (read), its own data folder (read and write) and system files; enforced by the kernel |

@@ -29,9 +29,9 @@ export async function importMcpPackageFolder(grantId: string, path: string): Pro
 
 /** Decision record 2026-11-20: hosted code is trusted code until Vault confines it. */
 export const HOSTED_CODE_WARNING =
-  "This package runs its own program on this computer. It runs as trusted code with the same " +
-  "access as Vault, including Vault's data and every workspace. Install it only if you trust " +
-  "who made it. Continue?";
+  "This package runs its own program on this computer. Vault limits it to its own files and " +
+  "data, but it can use the internet and this computer's resources. Install it only if you " +
+  "trust who made it. Continue?";
 
 async function importMcpPackagePreview(preview: McpPackagePreflight): Promise<{ identity: string; message: string }> {
   const blocked = blockingExtensionDiagnostics(preview.diagnostics);
