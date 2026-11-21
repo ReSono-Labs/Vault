@@ -472,6 +472,7 @@ def build_local_app(config: VaultLocalApiConfig) -> VaultLocalApiApp:
         logging.getLogger(__name__).info("mcp_credentials_made_personal moved=%d", migrated)
     mcp_runtime = McpRuntimeSupervisor(
         repository=extensions, secrets=extension_secrets, extension_root=extension_root,
+        workspace_files=lambda workspace_id: Path(config.storage_mount_point) / "workspaces" / workspace_id / "files",
     )
     extension_imports = ExtensionImportService(
         repository=extensions,

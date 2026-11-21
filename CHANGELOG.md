@@ -57,7 +57,11 @@ All notable changes to Vault are listed here. The version comes from
   write only its own data folder; Vault's data and keys, other installs (including one
   with the same name) and other processes' environments are refused. The status shows
   `confinement: landlock` (or `none` where the kernel lacks Landlock).
-  `RESONO_VAULT_HOSTED_CONFINEMENT=off` is an emergency switch.
+  `RESONO_VAULT_HOSTED_CONFINEMENT=off` is an emergency switch. A hosted process may also
+  read and write the files folder of the workspace it is installed in (`VAULT_WORKSPACE_FILES_ROOT`),
+  never another workspace's.
+- **Database:** migration `0002_mcp_accounts` creates the personal-credential tables; a test
+  now checks that migrations alone create every extension table.
 - **Status per part:** a plugin's page lists each Skill and MCP server with its status
   for you (skipped as unsupported or invalid, unreachable, needs sign-in, not checked,
   not granted, ready).

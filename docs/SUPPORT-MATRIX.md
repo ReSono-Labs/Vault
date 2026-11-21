@@ -60,4 +60,4 @@ tools not checked yet, available but not granted to you, or ready.
 | Leaving a workspace or losing a grant | Takes effect at the next use |
 | Same name in two workspaces | Two independent installs (files, data, versions, removal) |
 | Safe mode | Device-wide; stops hosted processes and keeps them stopped |
-| Hosted process file access | Only its own package (read), its own data folder (read and write) and system files; enforced by the kernel |
+| Hosted process file access | Only its own package (read), its own data folder and its workspace's files folder (read and write) and system files; enforced by the kernel |

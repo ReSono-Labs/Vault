@@ -13,7 +13,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -75,8 +75,10 @@ class _ManagedProcess:
 class McpRuntimeSupervisor:
     def __init__(
         self, *, repository: ExtensionRepository, secrets: ExtensionSecretStore,
-        extension_root: Path,
+        extension_root: Path, workspace_files: Callable[[str], Path] | None = None,
     ) -> None:
+        # The files folder of the workspace an extension is installed in (its own workspace only).
+        self._workspace_files = workspace_files
         self._repository = repository
         self._secrets = secrets
         self._root = extension_root.resolve()
@@ -144,7 +146,8 @@ class McpRuntimeSupervisor:
                 list(runtime["command"]), install_root=install_root, data_dir=data_dir, env=env,
                 runtime_cwd=Path(str(runtime.get("cwd", "."))),
             )
-            command, confined_by = self._confine(command, install_root=install_root, data_dir=data_dir, env=env)
+            command, confined_by = self._confine(command, install_root=install_root, data_dir=data_dir, env=env,
+                                                 workspace_files=self._workspace_files_for(record))
             try:
                 process = subprocess.Popen(
                     command, cwd=cwd, env=env,
@@ -290,6 +293,10 @@ class McpRuntimeSupervisor:
         env["VAULT_PLUGIN_DATA"] = str(self._data_dir(record))
         workspace_root = self._data_dir(record) / "workspace"
         env["RESONO_WORKSPACE"] = str(workspace_root)
+        files = self._workspace_files_for(record)
+        env["VAULT_WORKSPACE_ID"] = record.workspace_id
+        if files is not None:
+            env["VAULT_WORKSPACE_FILES_ROOT"] = str(files)
         database_path = self._data_dir(record) / "resono.db"
         if database_path.is_file():
             env["RESONO_DB"] = str(database_path)
@@ -382,9 +389,15 @@ class McpRuntimeSupervisor:
             raise McpRuntimeError("Hosted MCP virtual environment is unavailable")
         return venv_python
 
+    def _workspace_files_for(self, record: ExtensionRecord) -> Path | None:
+        if self._workspace_files is None:
+            return None
+        path = self._workspace_files(record.workspace_id)
+        return path.resolve() if path.is_dir() and not path.is_symlink() else None
+
     @staticmethod
     def _confine(command: list[str], *, install_root: Path, data_dir: Path,
-                 env: dict[str, str]) -> tuple[list[str], str]:
+                 env: dict[str, str], workspace_files: Path | None = None) -> tuple[list[str], str]:
         """Start the process under Landlock: its install (read only) and its own data folder
         (read and write), plus system files. Vault's data, other installs and other people's
         workspaces are refused by the kernel. ``RESONO_VAULT_HOSTED_CONFINEMENT=off`` is an
@@ -401,6 +414,8 @@ class McpRuntimeSupervisor:
         env["HOME"], env["TMPDIR"] = str(home), str(scratch)
         certificates = tuple(env[name] for name in ("SSL_CERT_FILE", "SSL_CERT_DIR") if env.get(name))
         rules = confinement.rules_for(install_root=install_root, data_dir=data_dir, extra_read=certificates)
+        if workspace_files is not None:
+            rules.append((str(workspace_files), "write"))
         return confinement.launcher_command(command, rules=rules), "landlock"
 
     def _wait_for_health(self, *, port: int, health_path: str) -> None:
