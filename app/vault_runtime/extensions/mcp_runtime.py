@@ -17,7 +17,8 @@ from typing import Any, Callable
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from app.vault_runtime.extensions import confinement
+from app.vault_runtime import host_resources
+from app.vault_runtime.extensions import confinement, hosted_limits
 from app.vault_runtime.extensions.filesystem import extension_category_path, extension_data_path
 from app.vault_runtime.extensions.models import ExtensionKind, ExtensionState
 from app.vault_runtime.extensions.repository import ExtensionRecord, ExtensionRepository, record_storage_identity
@@ -37,6 +38,8 @@ _PORT_CAPACITY = _PORT_LIMIT - _PORT_BASE + 1
 _HEALTH_TIMEOUT_SECONDS = 20.0
 _HEALTH_POLL_SECONDS = 0.25
 _PYTHON_NAMES = frozenset({"python", "python3"})
+_WATCHDOG_SECONDS = 2.0
+_PAGE_SIZE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 # Inherited by plugin processes. Everything else in Vault's environment stays private (SEC-04).
 _PLUGIN_INHERITED_ENV = (
     "PATH", "HOME", "HOSTNAME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR",
@@ -62,6 +65,7 @@ class McpRuntimeStatus:
     last_error: str | None
     # "landlock": the kernel refuses files outside the install and its data; "none": not confined.
     confinement: str | None = None
+    limits: dict[str, object] | None = None
 
 
 @dataclass(slots=True)
@@ -70,6 +74,8 @@ class _ManagedProcess:
     process: subprocess.Popen[str]
     port: int
     endpoint: str
+    memory_limit: int | None = None
+    process_limit: int | None = None
 
 
 class McpRuntimeSupervisor:
@@ -87,6 +93,7 @@ class McpRuntimeSupervisor:
         self._port_file = self._runtime_root / "ports.json"
         self._lock = threading.RLock()
         self._processes: dict[str, _ManagedProcess] = {}
+        self._watchdog: threading.Thread | None = None
         self._port_forwarder = RuntimePortForwarder()
 
     def status(self, record: ExtensionRecord) -> McpRuntimeStatus:
@@ -146,8 +153,14 @@ class McpRuntimeSupervisor:
                 list(runtime["command"]), install_root=install_root, data_dir=data_dir, env=env,
                 runtime_cwd=Path(str(runtime.get("cwd", "."))),
             )
+            limits = self._limits()
+            resources = host_resources.detect()
+            network = None if limits.network == "open" else self._network_ports(record, port, limits)
+            cpus = host_resources.share_of_cpus(resources, limits.cpu_percent)
             command, confined_by = self._confine(command, install_root=install_root, data_dir=data_dir, env=env,
-                                                 workspace_files=self._workspace_files_for(record))
+                                                 workspace_files=self._workspace_files_for(record),
+                                                 cpus=cpus, network=network)
+            memory_limit = host_resources.share_of_memory(resources, limits.memory_percent)
             try:
                 process = subprocess.Popen(
                     command, cwd=cwd, env=env,
@@ -180,8 +193,13 @@ class McpRuntimeSupervisor:
                     endpoint=endpoint,
                 )
                 raise
-            self._processes[record.extension_id] = _ManagedProcess(record, process, port, endpoint)
-            status = McpRuntimeStatus("running", port, endpoint, process.pid, None, confined_by)
+            self._processes[record.extension_id] = _ManagedProcess(
+                record, process, port, endpoint, memory_limit, limits.max_processes)
+            self._ensure_watchdog()
+            status = McpRuntimeStatus("running", port, endpoint, process.pid, None, confined_by,
+                                      {"memoryBytes": memory_limit, "cpus": len(cpus),
+                                       "maxProcesses": limits.max_processes,
+                                       "network": "open" if network is None else "standard"})
             self._persist_status(
                 actor_user_id=actor_user_id, workspace_id=workspace_id,
                 record=record, status=status, endpoint=endpoint, runtime=runtime,
@@ -395,9 +413,93 @@ class McpRuntimeSupervisor:
         path = self._workspace_files(record.workspace_id)
         return path.resolve() if path.is_dir() and not path.is_symlink() else None
 
+    def _limits(self) -> hosted_limits.HostedLimits:
+        read = getattr(self._repository, "device_setting", None)
+        try:
+            return hosted_limits.stored(read(hosted_limits.SETTING_KEY) if read is not None else None)
+        except Exception:
+            return hosted_limits.HostedLimits()
+
+    def _network_ports(self, record: ExtensionRecord, port: int,
+                       limits: hosted_limits.HostedLimits) -> tuple[list[int], list[int]]:
+        """Bind its own port; connect to DNS and web ports, the owner's extra ports, Vault's plugin
+        services and the packages of its own workspace (a plugin and its hosted server, say).
+        Postgres, Vault's own API and other workspaces' packages are not on the list."""
+        connect = {53, 80, 443, *limits.extra_ports}
+        service = os.environ.get("RESONO_VAULT_PLUGIN_SERVICE_URL", "")
+        if service:
+            from urllib.parse import urlsplit
+            parts = urlsplit(service)
+            connect.add(parts.port or (443 if parts.scheme == "https" else 80))
+        allocations: dict[str, int] = {}
+        if self._port_file.is_file():
+            try:
+                allocations = json.loads(self._port_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                allocations = {}
+        siblings = getattr(self._repository, "list_enabled_supervised_runtimes", None)
+        for other in (siblings() if siblings is not None else ()):
+            if other.workspace_id != record.workspace_id:
+                continue
+            if other.extension_id in allocations:
+                connect.add(int(allocations[other.extension_id]))
+            published = (_runtime_configuration(other) or {}).get("port")
+            if isinstance(published, int):
+                connect.add(published)
+        published = (_runtime_configuration(record) or {}).get("port")
+        bind = {port, *limits.extra_ports} | ({published} if isinstance(published, int) else set())
+        return sorted(bind), sorted(connect)
+
+    def _ensure_watchdog(self) -> None:
+        if self._watchdog is None or not self._watchdog.is_alive():
+            self._watchdog = threading.Thread(target=self._watch, name="resono-vault-hosted-limits", daemon=True)
+            self._watchdog.start()
+
+    def _watch(self) -> None:
+        """Every 2 seconds: stop a package whose processes together use more memory, or more
+        processes, than its limit. It reports why in its status."""
+        while True:
+            time.sleep(_WATCHDOG_SECONDS)
+            with self._lock:
+                managed = tuple(self._processes.values())
+            if not managed:
+                return
+            usage = _session_usage({item.process.pid for item in managed})
+            for item in managed:
+                memory, count = usage.get(item.process.pid, (0, 0))
+                reason = None
+                if item.memory_limit and memory > item.memory_limit:
+                    reason = (f"Stopped: it used {memory // (1024 * 1024)} MB, over its limit of "
+                              f"{item.memory_limit // (1024 * 1024)} MB.")
+                elif item.process_limit and count > item.process_limit:
+                    reason = f"Stopped: it started {count} processes, over its limit of {item.process_limit}."
+                if reason is not None:
+                    self._stop_for_limit(item, reason)
+
+    def _stop_for_limit(self, item: _ManagedProcess, reason: str) -> None:
+        with self._lock:
+            if self._processes.get(item.record.extension_id) is not item:
+                return
+            record = item.record
+            try:
+                record = self._repository.by_id(actor_user_id=record.installed_by_user_id,
+                                                workspace_id=record.workspace_id,
+                                                extension_id=record.extension_id, owner=True)
+            except Exception:
+                pass
+            self.stop(record=record)
+            logger.warning("supervised extension %s %s", record.identity, reason)
+            try:
+                self._persist_status(actor_user_id=record.installed_by_user_id, workspace_id=record.workspace_id,
+                                     record=record, status=McpRuntimeStatus("error", None, None, None, reason))
+            except Exception:
+                logger.warning("supervised extension %s: status not saved", record.identity)
+
     @staticmethod
     def _confine(command: list[str], *, install_root: Path, data_dir: Path,
-                 env: dict[str, str], workspace_files: Path | None = None) -> tuple[list[str], str]:
+                 env: dict[str, str], workspace_files: Path | None = None,
+                 cpus: tuple[int, ...] | None = None,
+                 network: tuple[list[int], list[int]] | None = None) -> tuple[list[str], str]:
         """Start the process under Landlock: its install (read only) and its own data folder
         (read and write), plus system files. Vault's data, other installs and other people's
         workspaces are refused by the kernel. ``RESONO_VAULT_HOSTED_CONFINEMENT=off`` is an
@@ -416,7 +518,7 @@ class McpRuntimeSupervisor:
         rules = confinement.rules_for(install_root=install_root, data_dir=data_dir, extra_read=certificates)
         if workspace_files is not None:
             rules.append((str(workspace_files), "write"))
-        return confinement.launcher_command(command, rules=rules), "landlock"
+        return confinement.launcher_command(command, rules=rules, cpus=cpus, network=network), "landlock"
 
     def _wait_for_health(self, *, port: int, health_path: str) -> None:
         deadline = time.monotonic() + _HEALTH_TIMEOUT_SECONDS
@@ -446,6 +548,8 @@ class McpRuntimeSupervisor:
         }
         if status.confinement is not None:
             runtime_status["confinement"] = status.confinement
+        if status.limits is not None:
+            runtime_status["limits"] = status.limits
         if runtime is not None and isinstance(runtime.get("port"), int):
             published_port = int(runtime["port"])
             runtime_status["publishedPort"] = published_port
@@ -519,3 +623,25 @@ def _runtime_configuration(record: ExtensionRecord) -> dict[str, Any] | None:
 def _external_endpoint(record: ExtensionRecord) -> str | None:
     endpoint = record.configuration.get("endpoint") or record.configuration.get("url")
     return str(endpoint) if isinstance(endpoint, str) else None
+
+
+def _session_usage(sessions: set[int]) -> dict[int, tuple[int, int]]:
+    """(resident bytes, process count) per session id, over every process in that session.
+    Each package runs in its own session (start_new_session), so this covers its children."""
+    usage: dict[int, list[int]] = {sid: [0, 0] for sid in sessions}
+    for entry in os.scandir("/proc"):
+        if not entry.name.isdigit():
+            continue
+        try:
+            with open(f"/proc/{entry.name}/stat", "rb") as handle:
+                fields = handle.read().rsplit(b")", 1)[1].split()
+            session = int(fields[3])
+            if session not in usage:
+                continue
+            with open(f"/proc/{entry.name}/statm", "rb") as handle:
+                resident = int(handle.read().split()[1]) * _PAGE_SIZE
+        except (OSError, ValueError, IndexError):
+            continue
+        usage[session][0] += resident
+        usage[session][1] += 1
+    return {sid: (values[0], values[1]) for sid, values in usage.items()}

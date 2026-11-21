@@ -52,6 +52,8 @@ services:
     restart: unless-stopped
     cpus: "3.0"
     mem_limit: 6g
+    # Ceiling for Vault and every hosted package together (each package also has its own limit).
+    pids_limit: 4096
     mem_reservation: 4g
     memswap_limit: 6g
     environment:

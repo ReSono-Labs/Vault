@@ -15,7 +15,7 @@ from app.vault_runtime.runtime_paths import resolve_vault_data_root
 class VaultLocalApiConfig:
     host: str
     port: int
-    token: str
+    token: str | None
     data_root: str
     storage_status_file: str
     storage_mount_point: str
@@ -63,17 +63,9 @@ class VaultLocalApiConfig:
     @classmethod
     def from_env(cls) -> "VaultLocalApiConfig":
         data_root = resolve_vault_data_root()
-        token = _optional_env("RESONO_VAULT_LOCAL_API_TOKEN")
-        token_file = _optional_env("RESONO_VAULT_LOCAL_API_TOKEN_FILE") or str(
-            data_root / "config" / "local-api-token"
-        )
-        if not token and token_file:
-            try:
-                token = Path(token_file).read_text(encoding="utf-8").strip()
-            except OSError:
-                token = None
-        if not token:
-            raise RuntimeError("RESONO_VAULT_LOCAL_API_TOKEN or RESONO_VAULT_LOCAL_API_TOKEN_FILE is required.")
+        # The old local API token protected no route; it is no longer required or created.
+        # Existing config/local-api-token files and RESONO_VAULT_LOCAL_API_TOKEN* are ignored.
+        token = None
         host = _optional_env("RESONO_VAULT_LOCAL_API_HOST") or "127.0.0.1"
         tls_certificate_file = _optional_env("RESONO_VAULT_LOCAL_API_TLS_CERTIFICATE_FILE")
         tls_private_key_file = _optional_env("RESONO_VAULT_LOCAL_API_TLS_PRIVATE_KEY_FILE")

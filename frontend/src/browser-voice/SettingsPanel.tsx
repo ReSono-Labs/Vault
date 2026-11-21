@@ -5,10 +5,11 @@ import { PageHeader, PageSection, TabPanel, Tabs, type TabItem } from "@/browser
 import { SettingsCommandsSection } from "@/browser-voice/commands/SettingsCommandsSection";
 import { SettingsFoldersSection } from "@/browser-voice/folders/SettingsFoldersSection";
 import { BackgroundSettings } from "@/browser-voice/background/BackgroundSettings";
+import { HostedLimitsSection } from "@/browser-voice/HostedLimitsSection";
 import { BrowserVoiceMicrophoneIcon, ChatIcon } from "@/browser-voice/presentation/BrowserVoiceIcons";
 import { livePanelShown, setLivePanelShown, type LiveSurface } from "@/browser-voice/conversation/livePanel";
 
-type SettingsTab = "display" | "folders" | "commands" | "assistant";
+type SettingsTab = "display" | "folders" | "commands" | "packages" | "assistant";
 
 export function SettingsPanel({ isAdmin = false, onOpenBackgroundWork }: { isAdmin?: boolean; onOpenBackgroundWork?: () => void }) {
   const [tab, setTab] = useState<SettingsTab>("display");
@@ -25,6 +26,7 @@ export function SettingsPanel({ isAdmin = false, onOpenBackgroundWork }: { isAdm
     { id: "display", label: "Display" },
     ...(foldersAvailable ? [{ id: "folders" as const, label: "Folders" }] : []),
     ...(commandsAvailable ? [{ id: "commands" as const, label: "Commands" }] : []),
+    ...(isAdmin ? [{ id: "packages" as const, label: "Packages" }] : []),
     { id: "assistant", label: "Background assistant" },
   ];
   const selected = tabs.some(item => item.id === tab) ? tab : "display";
@@ -46,6 +48,8 @@ export function SettingsPanel({ isAdmin = false, onOpenBackgroundWork }: { isAdm
       </TabPanel> : null}
 
       {selected === "folders" ? <TabPanel id="folders" idPrefix="settings"><SettingsFoldersSection /></TabPanel> : null}
+
+      {selected === "packages" ? <TabPanel id="packages" idPrefix="settings"><HostedLimitsSection /></TabPanel> : null}
 
       {selected === "commands" ? <TabPanel id="commands" idPrefix="settings"><SettingsCommandsSection isAdmin={isAdmin} /></TabPanel> : null}
 

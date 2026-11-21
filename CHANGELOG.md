@@ -60,6 +60,19 @@ All notable changes to Vault are listed here. The version comes from
   `RESONO_VAULT_HOSTED_CONFINEMENT=off` is an emergency switch. A hosted process may also
   read and write the files folder of the workspace it is installed in (`VAULT_WORKSPACE_FILES_ROOT`),
   never another workspace's.
+- **Limits for hosted packages:** each package that runs its own program gets a share of
+  what Vault may use, measured where Vault runs (the Docker container's limits, a systemd
+  service's limits, or the whole computer). Defaults: 25% of memory, half the CPUs at a
+  lower priority than Vault, 64 processes. Over its memory or process limit a package is
+  stopped and its status says why; under memory pressure the kernel ends the package before
+  Vault. Network is limited to web ports, DNS, its own workspace's packages and ports the
+  owner lists (Settings → Packages, which also has an Open mode). Docker and systemd get a
+  4096-process ceiling.
+- **Cross-site requests refused:** a browser request that changes data is refused when it
+  comes from another site. Opening Vault from another computer at home, through the Link
+  bridge or over Tailscale keeps working; other proxy addresses can be allowed with
+  `RESONO_VAULT_TRUSTED_ORIGINS`.
+- **Unused token removed:** `config/local-api-token` is no longer required or created.
 - **Database:** migration `0002_mcp_accounts` creates the personal-credential tables; a test
   now checks that migrations alone create every extension table.
 - **Status per part:** a plugin's page lists each Skill and MCP server with its status

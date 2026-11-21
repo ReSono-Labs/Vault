@@ -13,17 +13,12 @@ def clean_vault_environment(monkeypatch) -> None:
             monkeypatch.delenv(name, raising=False)
 
 
-def test_vault_local_api_config_requires_token(monkeypatch, tmp_path: Path) -> None:
+def test_vault_local_api_config_no_longer_needs_the_unused_token(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("RESONO_VAULT_DATA_ROOT", str(tmp_path))
-    with pytest.raises(RuntimeError, match="LOCAL_API_TOKEN"):
-        VaultLocalApiConfig.from_env()
-
-
-def test_vault_local_api_config_reads_token_file(monkeypatch, tmp_path: Path) -> None:
-    token_file = tmp_path / "token"
-    token_file.write_text("local-secret\n", encoding="utf-8")
-    monkeypatch.setenv("RESONO_VAULT_LOCAL_API_TOKEN_FILE", str(token_file))
-    assert VaultLocalApiConfig.from_env().token == "local-secret"
+    assert VaultLocalApiConfig.from_env().token is None
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "local-api-token").write_text("old\n", encoding="utf-8")   # existing installs
+    assert VaultLocalApiConfig.from_env().token is None
 
 
 def test_vault_local_api_config_rejects_non_loopback_management_host(monkeypatch) -> None:

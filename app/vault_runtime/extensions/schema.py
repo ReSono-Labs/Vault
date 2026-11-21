@@ -128,6 +128,14 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS vault_private.vault_device_settings (
+      setting_key text PRIMARY KEY,
+      value_json jsonb NOT NULL,
+      changed_by_user_id text REFERENCES vault_private.local_users(user_id) ON DELETE SET NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS vault_private.vault_extension_runtime_settings (
       setting_key text PRIMARY KEY,
       enabled boolean NOT NULL,

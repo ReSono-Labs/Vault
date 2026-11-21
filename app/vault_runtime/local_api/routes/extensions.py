@@ -18,6 +18,8 @@ from app.vault_runtime.extensions.mcp_accounts import CALLBACK_PATH, is_hosted
 from app.vault_runtime.extensions.mcp_oauth import McpSignInError
 from app.vault_runtime.extensions.mcp_http import McpAuthError, McpTransportError
 from app.vault_runtime.extensions.component_status import component_status
+from app.vault_runtime.extensions import hosted_limits
+from app.vault_runtime import host_resources
 from .common import (
     LocalApiResponse,
     _csrf_token,
@@ -147,6 +149,10 @@ class ExtensionRoutes:
         if method == "GET" and path.startswith("/extensions/") and path.endswith("/account"):
             extension_id = path.removeprefix("/extensions/").removesuffix("/account").strip("/")
             return self._mcp_account(method="GET", principal=principal, extension_id=extension_id, payload=None)
+        if method == "GET" and path == "/extensions/runtime/limits":
+            # Owner only: the device-wide limits and what they mean on this hardware.
+            repository.safe_mode(actor_user_id=principal.user_id, workspace_id=principal.workspace_id)
+            return LocalApiResponse(200, _limits_payload(repository))
         if method == "GET" and path == "/extensions/runtime":
             # Owner-only (safe_mode checks device-owner scope): names blocked because
             # installs in different workspaces share name-keyed storage.
@@ -243,6 +249,14 @@ class ExtensionRoutes:
             else:
                 raise ValueError("Extension kind is invalid.")
             return LocalApiResponse(201, _extension_payload(record))
+        if path == "/extensions/runtime/limits":
+            current = hosted_limits.stored(repository.device_setting(hosted_limits.SETTING_KEY))
+            chosen = hosted_limits.parse(payload.get("limits"), base=current)
+            repository.set_device_setting(actor_user_id=principal.user_id, workspace_id=principal.workspace_id,
+                                          key=hosted_limits.SETTING_KEY, value=chosen.to_json())
+            if payload.get("restart") is True and imports is not None:
+                imports.leave_safe_mode()          # restarts every enabled hosted package with the new limits
+            return LocalApiResponse(200, _limits_payload(repository))
         if path == "/extensions/safe-mode":
             enabled = _required_bool(payload, "enabled")
             was_enabled = repository.safe_mode(
@@ -560,4 +574,17 @@ def _extension_payload(record) -> dict[str, Any]:
         "contentHash": record.content_hash, "state": record.state.value,
         "workspaceId": record.workspace_id,
         "configuration": configuration,
+    }
+
+
+def _limits_payload(repository) -> dict[str, Any]:
+    limits = hosted_limits.stored(repository.device_setting(hosted_limits.SETTING_KEY))
+    resources = host_resources.detect()
+    return {
+        "limits": limits.to_json(),
+        "host": {"memoryBytes": resources.memory_bytes, "cpus": resources.cpus,
+                 "memorySource": resources.memory_source, "cpuSource": resources.cpu_source},
+        "perPackage": {"memoryBytes": host_resources.share_of_memory(resources, limits.memory_percent),
+                       "cpus": len(host_resources.share_of_cpus(resources, limits.cpu_percent))},
+        "appliesTo": "Each hosted package, from its next start.",
     }

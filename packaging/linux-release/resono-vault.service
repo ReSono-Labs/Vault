@@ -21,6 +21,9 @@ ExecStart=/opt/resono-vault/runtime/bin/python3 -m app.vault_runtime.package_run
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
+# Ceiling for Vault and every hosted package together (each package also has its own limit).
+# Set MemoryMax= or CPUQuota= here to cap Vault; package limits are shares of what Vault may use.
+TasksMax=4096
 PrivateTmp=true
 ProtectSystem=strict
 ReadWritePaths=/var/lib/resono-vault

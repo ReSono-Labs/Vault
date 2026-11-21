@@ -17,6 +17,7 @@ from app.vault_runtime.personal_data import PersonalDataRepository
 from app.vault_runtime.calendar.runtime import LocalCalendarRuntime
 from app.vault_runtime.extensions.repository import ExtensionRepository
 from app.vault_runtime.extensions.mcp_accounts import McpAccounts
+from app.vault_runtime.local_api.origin_check import cross_site_refusal
 from app.vault_runtime.extensions.secrets import ExtensionSecretStore
 from app.vault_runtime.extensions.service import ExtensionImportService
 from app.vault_runtime.extensions.mcp_lifecycle import McpLifecycle
@@ -79,7 +80,7 @@ class VaultLocalApiApp(
     """Phase-bounded extraction of the Voice Vault local API foundation."""
 
     def __init__(
-        self, *, store: VaultLocalApiHealthStore, token: str, max_body_bytes: int = 1_048_576,
+        self, *, store: VaultLocalApiHealthStore, token: str | None = None, max_body_bytes: int = 1_048_576,
         identity_service: LocalIdentityService | None = None,
         voice_coordinator: VoiceSessionCoordinator | None = None,
         voice_sessions: VoiceSessionRepository | None = None,
@@ -180,6 +181,14 @@ class VaultLocalApiApp(
     ) -> LocalApiResponse:
         target_parts = urlsplit(target)
         path = target_parts.path
+        refused = cross_site_refusal(method=method, headers=headers)
+        if refused is not None:
+            return LocalApiResponse(403, {"error": {
+                "code": "cross_site_request",
+                "message": ("Vault refused a change requested from another site "
+                            f"({refused}). If you open Vault through a proxy with a different address, "
+                            "add that address to RESONO_VAULT_TRUSTED_ORIGINS."),
+            }})
         for route in _ROUTES:  # First match wins: the table order is the order of precedence.
             if route.matches(self, method, path):
                 return getattr(self, route.handler)(

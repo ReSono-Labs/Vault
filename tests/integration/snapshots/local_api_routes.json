@@ -5284,6 +5284,70 @@
    "owner": {
     "headers": [],
     "payload": {
+     "appliesTo": "Each hosted package, from its next start.",
+     "host": {
+      "cpuSource": "cgroup",
+      "cpus": 4.0,
+      "memoryBytes": 8589934592,
+      "memorySource": "cgroup"
+     },
+     "limits": {
+      "cpuPercent": 50,
+      "extraPorts": [],
+      "maxProcesses": 64,
+      "memoryPercent": 25,
+      "network": "standard"
+     },
+     "perPackage": {
+      "cpus": 2,
+      "memoryBytes": 2147483648
+     }
+    },
+    "status": 200
+   },
+   "route": "GET /extensions/runtime/limits",
+   "target": "/extensions/runtime/limits",
+   "wrongCsrf": {
+    "headers": [],
+    "payload": {
+     "appliesTo": "Each hosted package, from its next start.",
+     "host": {
+      "cpuSource": "cgroup",
+      "cpus": 4.0,
+      "memoryBytes": 8589934592,
+      "memorySource": "cgroup"
+     },
+     "limits": {
+      "cpuPercent": 50,
+      "extraPorts": [],
+      "maxProcesses": 64,
+      "memoryPercent": 25,
+      "network": "standard"
+     },
+     "perPackage": {
+      "cpus": 2,
+      "memoryBytes": 2147483648
+     }
+    },
+    "status": 200
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "Local session is required."
+     }
+    },
+    "status": 403
+   },
+   "auth": "session",
+   "csrf": false,
+   "owner": {
+    "headers": [],
+    "payload": {
      "safeMode": true,
      "scope": "device",
      "storageConflicts": []
@@ -5507,6 +5571,42 @@
    },
    "route": "POST /extensions/confirm",
    "target": "/extensions/confirm",
+   "wrongCsrf": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "CSRF proof is invalid."
+     }
+    },
+    "status": 403
+   }
+  },
+  {
+   "anonymous": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "local_session_invalid",
+      "message": "Local session is required."
+     }
+    },
+    "status": 403
+   },
+   "auth": "session",
+   "csrf": true,
+   "owner": {
+    "headers": [],
+    "payload": {
+     "error": {
+      "code": "extension_request_failed",
+      "message": "Limits must be an object."
+     }
+    },
+    "status": 400
+   },
+   "route": "POST /extensions/runtime/limits",
+   "target": "/extensions/runtime/limits",
    "wrongCsrf": {
     "headers": [],
     "payload": {

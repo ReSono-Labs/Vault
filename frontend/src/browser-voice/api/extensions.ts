@@ -64,7 +64,25 @@ export type ComponentStatus = {
   account?: string;
 };
 
+export type HostedLimits = {
+  memoryPercent: number;
+  cpuPercent: number;
+  maxProcesses: number;
+  network: "standard" | "open";
+  extraPorts: number[];
+};
+
+export type HostedLimitsView = {
+  limits: HostedLimits;
+  host: { memoryBytes: number; cpus: number; memorySource: string; cpuSource: string };
+  perPackage: { memoryBytes: number; cpus: number };
+  appliesTo: string;
+};
+
 export const extensionsApi = {
+  hostedLimits: () => request<HostedLimitsView>("/extensions/runtime/limits"),
+  saveHostedLimits: (limits: Partial<HostedLimits>, restart: boolean) =>
+    request<HostedLimitsView>("/extensions/runtime/limits", { method: "POST", body: JSON.stringify({ limits, restart }) }),
   extensionComponents: (extensionId: string) =>
     request<{ items: ComponentStatus[] }>(`/extensions/${encodeURIComponent(extensionId)}/components`),
   mcpAccount: (extensionId: string) =>

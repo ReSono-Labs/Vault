@@ -109,7 +109,11 @@ server.py ─► VaultLocalApiApp.handle() ─► _ROUTES (first match) ─► r
   `LocalPrincipal` (`user_id`, `workspace_id`).
 - **CSRF.** Requests that change data must send the `resono_csrf` cookie value in
   the `X-ReSono-CSRF` header. The route checks both and then calls
-  `identity.require_csrf`.
+  `identity.require_csrf`. Before any route runs, `local_api/origin_check.py` refuses a
+  cookie-session request that changes data when its `Origin` (or `Sec-Fetch-Site`) names
+  another site. It accepts the address the person opened Vault at (`Host`, or
+  `X-Forwarded-Host` from a local proxy such as the Link bridge or Tailscale Serve) and
+  anything in `RESONO_VAULT_TRUSTED_ORIGINS`. Bearer-token clients (the Link app) are not affected.
 - **Other credentials.** The external memory API, Link companion, A2A inbound and
   plugin services each use their own bearer token or per-call capability header.
   Each is checked in its route module.
@@ -393,6 +397,8 @@ when developing:
 | `RESONO_VAULT_DEVICE_LOCATIONS` | empty | Host folders Vault can offer; empty hides Folders |
 | `RESONO_VAULT_GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | unset | Gemini sign-in |
 | `RESONO_VAULT_MCP_OAUTH_CLIENT_METADATA_URL` | unset | HTTPS Client ID Metadata Document for MCP sign-in |
+| `RESONO_VAULT_TRUSTED_ORIGINS` | unset | Extra browser origins allowed to change data (a proxy with another address) |
+| `RESONO_VAULT_HOSTED_CONFINEMENT` | on | `off` starts hosted packages without Landlock (emergency only) |
 
 These switches are on in production (`from_env`) and can be turned off in an
 emergency: `RESONO_VAULT_DECISION_REVIEW_ENABLED`, `_INDEXED_MEMORY_ENABLED`,
@@ -434,11 +440,12 @@ These are current limits, not designs to build on:
   other processes' `/proc` entries out of reach. They still run as Vault's OS user,
   can use the network and share CPU and memory, so the owner approves each package.
   Without Landlock in the kernel they run unconfined and report `confinement: none`.
-- **No Origin checks.** CSRF protection relies on the double-submit token, not
-  on Origin or `Sec-Fetch-*` headers.
-- **Unused settings.** The local API token in `config/local-api-token` is
-  required at startup, but no route checks it. The `RESONO_VAULT_BROWSER_STARTUP_*`
-  and `RESONO_VAULT_BROWSER_MEDIA_*` settings are parsed but unused.
+- **Unused settings.** The `RESONO_VAULT_BROWSER_STARTUP_*` and
+  `RESONO_VAULT_BROWSER_MEDIA_*` settings are parsed but unused. (The old local API
+  token is no longer required or created; existing files are ignored.)
+- **Hosted package network limits are by port.** In Standard mode a package may connect
+  only to allowed TCP ports (Landlock filters ports, not addresses), so it can still reach
+  any host on 80 or 443, including a cloud metadata address. UDP is not filtered.
 - **Network model calls.** Memory review, live tool selection, titles, web search
   and Vault Help call the selected model provider. Only embeddings are fully
   local.

@@ -23,7 +23,7 @@ def test_package_initialization_is_idempotent_and_creates_owned_secrets(
     assert (tmp_path / "config/database-url").read_text().startswith(
         "postgresql://vault_runtime:"
     )
-    assert (tmp_path / "config/local-api-token").stat().st_mode & 0o777 == 0o600
+    assert not (tmp_path / "config/local-api-token").exists()      # no longer created
     certificate = x509.load_pem_x509_certificate((tmp_path / "tls/vault.crt").read_bytes())
     alternatives = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     assert "localhost" in alternatives.get_values_for_type(x509.DNSName)

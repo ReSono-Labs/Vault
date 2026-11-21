@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import resource
 from pathlib import Path
 import sys
 
@@ -49,20 +50,36 @@ def rules_for(*, install_root: Path, data_dir: Path, extra_read: tuple[str, ...]
             (str(install_root), "read"), (str(data_dir), "write")]
 
 
-def launcher_command(command: list[str], *, rules: list[tuple[str, str]]) -> list[str]:
+def launcher_command(command: list[str], *, rules: list[tuple[str, str]], cpus: tuple[int, ...] | None = None,
+                     network: tuple[list[int], list[int]] | None = None) -> list[str]:
+    """``cpus``: the CPUs it may run on. ``network``: (TCP ports to bind, TCP ports to connect)."""
     bootstrap = (f"import sys; sys.path.insert(0, {_ROOT!r}); "
                  "from app.vault_runtime.extensions.confinement import main; raise SystemExit(main(sys.argv[1:]))")
-    return [sys.executable, "-I", "-c", bootstrap, json.dumps({"rules": rules}), "--", *command]
+    spec = {"rules": rules, "cpus": list(cpus) if cpus else None,
+            "network": [list(network[0]), list(network[1])] if network is not None else None}
+    return [sys.executable, "-I", "-c", bootstrap, json.dumps(spec), "--", *command]
 
 
 def main(argv: list[str]) -> int:
     if len(argv) < 3 or argv[1] != "--":
         print("confinement: usage: SPEC -- COMMAND ...", file=sys.stderr)
         return 2
-    rules = [(str(path), str(kind)) for path, kind in json.loads(argv[0])["rules"]]
+    spec = json.loads(argv[0])
+    rules = [(str(path), str(kind)) for path, kind in spec["rules"]]
+    network = spec.get("network")
     command = argv[2:]
     try:
-        restrict_self(rules)
+        if spec.get("cpus"):
+            os.sched_setaffinity(0, {int(cpu) for cpu in spec["cpus"]})
+        os.nice(10)                        # Vault wins when the two compete for CPU
+        with open("/proc/self/oom_score_adj", "w") as handle:
+            handle.write("1000")           # under memory pressure the kernel ends this, not Vault
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except OSError as exc:
+        print(f"Vault couldn't apply this extension's limits: {exc}", file=sys.stderr)
+        return 126
+    try:
+        restrict_self(rules, network=(network[0], network[1]) if network else None)
     except LandlockError as exc:
         print(f"Vault couldn't start this extension safely: {exc}", file=sys.stderr)
         return 126

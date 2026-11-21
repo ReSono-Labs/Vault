@@ -328,6 +328,25 @@ class ExtensionRepository:
                        WHERE t.extension_id=%s AND e.installed_in_workspace_id=%s""", (extension_id, workspace_id))
                 return int(cursor.fetchone()[0])
 
+    def device_setting(self, key: str) -> dict[str, object] | None:
+        """A device-wide setting (no person scope: the supervisor reads it at every start)."""
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT value_json FROM vault_private.vault_device_settings WHERE setting_key=%s", (key,))
+                row = cursor.fetchone()
+                return row[0] if row and isinstance(row[0], dict) else None
+
+    def set_device_setting(self, *, actor_user_id: str, workspace_id: str, key: str, value: dict[str, object]) -> None:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._require_scope(cursor, user_id=actor_user_id, workspace_id=workspace_id, owner=True)
+                cursor.execute(
+                    """INSERT INTO vault_private.vault_device_settings (setting_key,value_json,changed_by_user_id)
+                       VALUES (%s,%s::jsonb,%s) ON CONFLICT (setting_key) DO UPDATE SET
+                       value_json=EXCLUDED.value_json, changed_by_user_id=EXCLUDED.changed_by_user_id, updated_at=now()""",
+                    (key, json.dumps(value, separators=(",", ":")), actor_user_id))
+                self._event(cursor, None, workspace_id, actor_user_id, "device_setting_changed", {"key": key})
+
     def managed_children(
         self, *, actor_user_id: str, workspace_id: str, plugin_id: str, owner: bool = True,
     ) -> tuple[ExtensionRecord, ...]:

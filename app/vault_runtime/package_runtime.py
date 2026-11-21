@@ -49,7 +49,6 @@ def initialize() -> None:
     user = os.environ.get("RESONO_VAULT_PACKAGE_DATABASE_USER", "vault_runtime")
     database_url = f"postgresql://{quote(user)}:{quote(password)}@{host}:5432/{quote(name)}"
     _write_once(DATA_ROOT / "config/database-url", database_url)
-    _write_once(DATA_ROOT / "config/local-api-token", secrets.token_urlsafe(48))
     setup = _write_once(DATA_ROOT / "config/setup-credential", secrets.token_urlsafe(32))
     _write_once(DATA_ROOT / "config/setup-credential-hash", sha256(setup.encode()).hexdigest())
     _write_once(DATA_ROOT / "config/session-capability-secret", secrets.token_urlsafe(48))

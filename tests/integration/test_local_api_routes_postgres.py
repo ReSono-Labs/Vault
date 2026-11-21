@@ -165,6 +165,7 @@ ROUTES: tuple[Route, ...] = (
     R("GET", "/extensions/oauth/callback", "none", query="state=wrong&code=wrong"),
     R("GET", "/extensions/{id}/account"),
     R("GET", "/extensions/{id}/components"),
+    R("GET", "/extensions/runtime/limits"),
     R("GET", "/extensions/runtime"),
     R("POST", "/extensions/skills/preflight"),
     R("POST", "/extensions/plugins/preflight"),
@@ -172,6 +173,7 @@ ROUTES: tuple[Route, ...] = (
     R("POST", "/extensions/mcp-packages/preflight"),
     R("POST", "/extensions/folder-preflight"),
     R("POST", "/extensions/confirm"),
+    R("POST", "/extensions/runtime/limits"),
     R("POST", "/extensions/safe-mode"),
     R("POST", "/extensions/{id}/state"),
     R("POST", "/extensions/{id}/grants"),
@@ -403,6 +405,10 @@ def _csrf_failure(result: dict) -> bool:
 
 @pytest.fixture()
 def routes_app(tmp_path, monkeypatch):
+    from app.vault_runtime import host_resources
+    # The limits route reports this machine's memory and CPUs; pin them so the snapshot is stable.
+    monkeypatch.setattr(host_resources, "detect", lambda: host_resources.HostResources(
+        8 * 1024**3, 4.0, (0, 1, 2, 3), "cgroup", "cgroup"))
     url = os.getenv("VAULT_TEST_DATABASE_URL")
     if not url:
         pytest.skip("Exact isolated database required")

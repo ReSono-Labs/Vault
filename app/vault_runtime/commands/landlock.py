@@ -55,6 +55,18 @@ class _RulesetAttrV6(ctypes.Structure):
 
 _SCOPE_ABSTRACT_UNIX_SOCKET = 1 << 0
 _SCOPE_SIGNAL = 1 << 1
+_RULE_NET_PORT = 2
+NET_BIND_TCP = 1 << 0     # ABI 4
+NET_CONNECT_TCP = 1 << 1  # ABI 4
+
+
+class _RulesetAttrV4(ctypes.Structure):
+    _fields_ = [("handled_access_fs", ctypes.c_uint64), ("handled_access_net", ctypes.c_uint64)]
+
+
+class _NetPortAttr(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [("allowed_access", ctypes.c_uint64), ("port", ctypes.c_uint64)]
 
 
 class _PathBeneathAttr(ctypes.Structure):
@@ -103,18 +115,24 @@ _DIRECTORY_ONLY = READ_DIR | REMOVE_DIR | MAKE_DIR | MAKE_REG | MAKE_SYM | MAKE_
     | MAKE_BLOCK | REMOVE_FILE | REFER
 
 
-def restrict_self(rules: list[tuple[str, str]]) -> None:
+def restrict_self(rules: list[tuple[str, str]], *, network: tuple[list[int], list[int]] | None = None) -> bool:
     """Apply to the calling process (irreversible; call right before exec).
 
     Each rule is (path, kind). A rule covers the path and everything beneath it; paths not
-    covered by any rule are refused.
+    covered by any rule are refused. ``network`` is (TCP ports it may bind, TCP ports it may
+    connect to); every other TCP bind or connect is refused. Network rules need ABI 4: on an
+    older kernel they are skipped and this returns False.
     """
     abi = abi_version()
     if abi < 1:
         raise LandlockError("Landlock is not available.")
     libc = _libc()
     handled = READ | _write_access(abi)
-    attr = _RulesetAttrV6(handled, 0, _SCOPE_ABSTRACT_UNIX_SOCKET | _SCOPE_SIGNAL) if abi >= 6 else _RulesetAttr(handled)
+    net = network is not None and abi >= 4
+    handled_net = NET_BIND_TCP | NET_CONNECT_TCP if net else 0
+    scope = _SCOPE_ABSTRACT_UNIX_SOCKET | _SCOPE_SIGNAL
+    attr = (_RulesetAttrV6(handled, handled_net, scope) if abi >= 6
+            else _RulesetAttrV4(handled, handled_net) if net else _RulesetAttr(handled))
     ruleset = libc.syscall(_SYS_CREATE_RULESET, ctypes.byref(attr), ctypes.c_size_t(ctypes.sizeof(attr)), ctypes.c_uint32(0))
     if ruleset < 0:
         raise LandlockError(f"Landlock ruleset failed ({ctypes.get_errno()}).")
@@ -138,9 +156,18 @@ def restrict_self(rules: list[tuple[str, str]]) -> None:
                     raise LandlockError(f"Landlock rule for {path} failed ({ctypes.get_errno()}).")
             finally:
                 os.close(fd)
+        if net:
+            bind, connect = network  # type: ignore[misc]
+            for port in sorted(set(bind) | set(connect)):
+                access = (NET_BIND_TCP if port in bind else 0) | (NET_CONNECT_TCP if port in connect else 0)
+                rule_net = _NetPortAttr(access, port)
+                if libc.syscall(_SYS_ADD_RULE, ruleset, ctypes.c_int(_RULE_NET_PORT), ctypes.byref(rule_net),
+                                ctypes.c_uint32(0)) < 0:
+                    raise LandlockError(f"Landlock network rule for port {port} failed ({ctypes.get_errno()}).")
         if libc.prctl(38, 1, 0, 0, 0) < 0:  # PR_SET_NO_NEW_PRIVS
             raise LandlockError("no_new_privs failed.")
         if libc.syscall(_SYS_RESTRICT_SELF, ruleset, ctypes.c_uint32(0)) < 0:
             raise LandlockError(f"Landlock restrict failed ({ctypes.get_errno()}).")
     finally:
         os.close(ruleset)
+    return net
