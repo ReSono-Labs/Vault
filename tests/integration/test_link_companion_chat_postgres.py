@@ -88,12 +88,17 @@ def test_companion_owner_chat_end_to_end(mounted):
     # Safe codes only.
     assert _chat(m, "GET", "sessions/missing/messages", token).payload == {"error": {"code": "not_found", "retryable": False}}
     assert _chat(m, "GET", "runs/missing", token).payload == {"error": {"code": "not_found", "retryable": False}}
-    assert _chat(m, "POST", f"sessions/{session}/messages", token, {"text": ""}).payload == {"error": {"code": "rejected", "retryable": False}}
+    # A refusal says why in Vault's own fixed wording (never the message text or image bytes).
+    def rejected(payload):
+        error = payload["error"]
+        return (error["code"], error["retryable"]) == ("rejected", False) and bool(error.get("reason"))
+    empty = _chat(m, "POST", f"sessions/{session}/messages", token, {"text": ""}).payload
+    assert rejected(empty) and empty["error"]["reason"] == "empty message"
     too_many = [{"media_type": "image/png", "data": _image("PNG")}] * 5
-    assert _chat(m, "POST", f"sessions/{session}/messages", token,
-                 {"text": "x", "images": too_many}).payload == {"error": {"code": "rejected", "retryable": False}}
-    assert _chat(m, "POST", f"sessions/{session}/messages", token,
-                 {"text": "x", "images": [{"media_type": "image/bmp", "data": _image("BMP")}]}).payload == {"error": {"code": "rejected", "retryable": False}}
+    assert rejected(_chat(m, "POST", f"sessions/{session}/messages", token,
+                          {"text": "x", "images": too_many}).payload)
+    assert rejected(_chat(m, "POST", f"sessions/{session}/messages", token,
+                          {"text": "x", "images": [{"media_type": "image/bmp", "data": _image("BMP")}]}).payload)
     image_only = _chat(m, "POST", f"sessions/{session}/messages", token,
                        {"images": [{"media_type": "image/jpeg", "data": _image("JPEG")}]})
     assert image_only.status_code == 202 and _run(m, token, image_only.payload["run_id"])["state"] == "completed"

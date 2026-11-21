@@ -111,6 +111,26 @@ class ConversationAttachments(ConversationRepository):
                 cursor.execute("DELETE FROM vault_private.vault_conversation_attachments WHERE attachment_id=%s",(identity,))
         return len(rows)
 
+    def release(self, principal, conversation_id, ids):
+        """Discard inputs staged for a message whose turn was refused, so they never count against
+        the next message's file limit. Only this owner's unsubmitted inputs in this conversation."""
+        from app.vault_runtime.workspace_files.errors import WorkspaceFileNotFoundError
+        if not ids:
+            return 0
+        with self._connect() as connection,connection.cursor() as cursor:
+            cursor.execute("""SELECT attachment_id FROM vault_private.vault_conversation_attachments
+              WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND attachment_id=ANY(%s)
+                AND turn_id IS NULL FOR UPDATE SKIP LOCKED""",
+              (*self._scope(principal, conversation_id), list(ids)))
+            rows=[r[0] for r in cursor.fetchall()]
+            for identity in rows:
+                try:
+                    self._files(principal).delete_path(workspace_id=principal.workspace_id,path=identity,recursive=False)
+                except WorkspaceFileNotFoundError:
+                    pass
+                cursor.execute("DELETE FROM vault_private.vault_conversation_attachments WHERE attachment_id=%s",(identity,))
+        return len(rows)
+
     def _files(self, principal):
         return WorkspaceFilesystemStore(self.storage, private_user_id=principal.user_id)
 
@@ -223,7 +243,7 @@ class ConversationAttachments(ConversationRepository):
         if len(rows)!=len(ids):
             raise InputError("Attachment is unavailable, expired, or already submitted.")
         if sum(1 for r in rows if r[0].startswith('image/')):
-            supported=(provider=='gemini' or provider=='openai' and model.startswith(('gpt-4o','gpt-4.1','gpt-5','o3','o4'))
+            supported=(provider=='gemini' or provider=='openai' and model.startswith(('gpt-4o','gpt-4.1','gpt-5','gpt-6','o3','o4'))
                 or provider=='xai' and ('vision' in model or model.startswith(('grok-4','grok-2-image'))))
             if not supported:
                 raise InputError("Select an image-capable model before submitting images.")

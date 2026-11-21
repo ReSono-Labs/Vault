@@ -98,10 +98,14 @@ class LinkCompanionRoutes:
             return fail(404, "not_found")
         except ConflictError:
             return fail(409, "busy")
-        except (ChatRejected, InputError, ValueError):
-            return fail(400, "invalid_request")
-        except Exception:
-            logging.getLogger(API_LOGGER).warning("link_front_door_failed")  # No message text or images.
+        except (ChatRejected, InputError, ValueError) as exc:
+            reason = _rejection_reason(exc)
+            logging.getLogger(API_LOGGER).warning("link_front_door_rejected %s: %s", type(exc).__name__, reason)
+            body = front_door.error_body("invalid_request")
+            body["error"]["message"] = reason
+            return LocalApiResponse(400, body, no_store)
+        except Exception as exc:
+            logging.getLogger(API_LOGGER).warning("link_front_door_failed %s", type(exc).__name__)  # No message text or images.
             return fail(503, "unavailable")
 
     def _route_link_companion_pairing(
@@ -408,10 +412,14 @@ class LinkCompanionRoutes:
             return fail(404, "not_found")
         except ConflictError:
             return fail(409, "busy")
-        except (ChatRejected, InputError, ValueError):
-            return fail(400, "rejected")
-        except Exception:
-            logging.getLogger(API_LOGGER).warning("link_companion_chat_failed")  # No message text, images or internal detail.
+        except (ChatRejected, InputError, ValueError) as exc:
+            # The reason is Vault's own fixed wording (never message text or image bytes), so the
+            # owner's apps and this log say why a message was refused.
+            reason = _rejection_reason(exc)
+            logging.getLogger(API_LOGGER).warning("link_companion_chat_rejected %s: %s", type(exc).__name__, reason)
+            return LocalApiResponse(400, {"error": {"code": "rejected", "retryable": False, "reason": reason}}, no_store)
+        except Exception as exc:
+            logging.getLogger(API_LOGGER).warning("link_companion_chat_failed %s", type(exc).__name__)  # No message text, images or internal detail.
             return fail(503, "unavailable")
 
     def _handle_link_companion(
@@ -453,6 +461,12 @@ class LinkCompanionRoutes:
 
 
 _COMPANION_RETRYABLE = {"busy", "unavailable", "provider_unavailable"}
+
+
+def _rejection_reason(exc: Exception) -> str:
+    """Why Vault refused a chat request: the exception's fixed wording, bounded to one line."""
+    text = " ".join(str(exc).split())[:200]
+    return text or type(exc).__name__
 
 
 def _companion_error(status: int, code: str, retryable: bool | None = None) -> LocalApiResponse:

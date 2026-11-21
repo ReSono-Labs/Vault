@@ -459,7 +459,7 @@ class ConversationRuntime:
                 if len(attached)>16 or sum(item['size'] for item in attached)>20*1024*1024 or sum(len(p.get('text','')) for p in input_parts)>262144:
                     raise InputError("Attached conversation context exceeds its input budget; end this activity segment before continuing.")
             if input_parts and any(p['type']=='input_image' for p in input_parts):
-                supported=(provider=='gemini' or provider=='openai' and model.startswith(('gpt-4o','gpt-4.1','gpt-5','o3','o4'))
+                supported=(provider=='gemini' or provider=='openai' and model.startswith(('gpt-4o','gpt-4.1','gpt-5','gpt-6','o3','o4'))
                     or provider=='xai' and ('vision' in model or model.startswith(('grok-4','grok-2-image'))))
                 if not supported:
                     raise InputError("Selected model has no verified image-input adapter; select an image-capable model before submitting images.")

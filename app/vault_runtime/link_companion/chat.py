@@ -111,9 +111,19 @@ def handle_chat(runtime: Any, principal: Any, *, method: str, parts: list[str], 
                     staged = runtime.attachments.stage(principal, conversation_id,
                         upload_key=f"link:{key}:{index}"[:128], name=name, data=data)
                     attachment_ids.append(staged["id"])
-            result = runtime.submit(principal, conversation_id, submission_key=f"link:{key}",
-                input_text=text, expected_history_version=conversation.history_version,
-                attachment_ids=attachment_ids or None)
+            try:
+                result = runtime.submit(principal, conversation_id, submission_key=f"link:{key}",
+                    input_text=text, expected_history_version=conversation.history_version,
+                    attachment_ids=attachment_ids or None)
+            except Exception:
+                # A refused turn must not leave its images staged: they would count against the
+                # conversation's file limit and refuse every later image.
+                if attachment_ids:
+                    try:
+                        runtime.attachments.release(principal, conversation_id, attachment_ids)
+                    except Exception:
+                        logging.getLogger(__name__).warning("link_companion_attachment_release_failed")
+                raise
             return respond(202, {"run_id": result["turnId"]})
         if method == "GET":
             values = parse_qs(query, keep_blank_values=True)
