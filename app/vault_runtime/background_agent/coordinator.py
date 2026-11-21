@@ -760,6 +760,46 @@ class BackgroundCoordinator:
                     self.jobs.request_wake(scope.user_id, scope.workspace_id, str(destination["conversation_id"]))
                 except Exception:
                     logger.warning("coordinator_wake_request_failed")
+        elif (outcome.state in {WorkState.COMPLETED, WorkState.FAILED, WorkState.UNKNOWN}
+              and not destination.get("conversation_id") and not destination.get("internal")):
+            # Work that no chat is waiting on (a direct request through the API, for example) is
+            # still reported to the coordinator, who decides whether the owner needs to know.
+            self.report_to_coordinator(scope, reason="no_chat")
+
+    def report_to_coordinator(self, scope: WorkScope, *, reason: str) -> str | None:
+        """Record the work's outcome for the owner's most recently active chat and wake the
+        coordinator there. Returns the conversation, or None when the owner has no open chat."""
+        from uuid import uuid4
+        from psycopg.types.json import Jsonb
+        from .work_record import work_record
+        with self._repo._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT conversation_id FROM vault_private.vault_conversations
+                   WHERE user_id=%s AND workspace_id=%s AND state='open'
+                   ORDER BY COALESCE(activity_at, updated_at) DESC LIMIT 1""",
+                (scope.user_id, scope.workspace_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            conversation_id = str(row["conversation_id"])
+            record = work_record(cursor, user_id=scope.user_id, workspace_id=scope.workspace_id,
+                                 work_id=scope.work_id)
+            if record is None:
+                return None
+            cursor.execute(
+                """INSERT INTO vault_private.vault_background_events
+                   (event_id, user_id, workspace_id, source_kind, source_id, payload_json, state)
+                   VALUES (%s, %s, %s, 'coordinator_report', %s, %s, 'processed')
+                   ON CONFLICT DO NOTHING""",
+                (str(uuid4()), scope.user_id, scope.workspace_id, f"{scope.work_id}:{scope.intent_version}",
+                 Jsonb({"conversation_id": conversation_id, "reason": reason, "record": record})),
+            )
+        try:
+            self.jobs.request_wake(scope.user_id, scope.workspace_id, conversation_id)
+        except Exception:
+            logger.warning("coordinator_wake_request_failed")
+        return conversation_id
 
     # ---- The coordinator as a bot that owns its chat's work -------------------
     # Donor behavior: Rakazo wakes the same bot on its thread for timers, helper results and
@@ -819,6 +859,26 @@ class BackgroundCoordinator:
                     "workId": projection.get("work_id"),
                     "state": projection.get("state"),
                     "summary": str(projection.get("summary") or "")[:4000],
+                    **({"record": projection["record"]} if isinstance(projection.get("record"), dict) else {}),
+                })
+            cursor.execute(
+                """SELECT event_id, payload_json, created_at FROM vault_private.vault_background_events
+                   WHERE user_id=%s AND workspace_id=%s AND source_kind='coordinator_report'
+                     AND payload_json->>'conversation_id'=%s AND created_at > %s
+                   ORDER BY created_at LIMIT 40""",
+                (scope.user_id, scope.workspace_id, conversation_id, since),
+            )
+            for row in cursor.fetchall():
+                payload = row["payload_json"] or {}
+                record = payload.get("record") or {}
+                updates.append({
+                    "id": f"report:{row['event_id']}",
+                    "type": "work_report",
+                    "at": row["created_at"].isoformat(),
+                    "workId": record.get("workId"),
+                    "state": record.get("state"),
+                    "summary": str((record.get("outcome") or {}).get("summary") or "")[:4000],
+                    "record": record,
                 })
             cursor.execute(
                 """SELECT event_id, payload_json, created_at FROM vault_private.vault_background_events

@@ -72,6 +72,14 @@ All notable changes to Vault are listed here. The version comes from
   comes from another site. Opening Vault from another computer at home, through the Link
   bridge or over Tailscale keeps working; other proxy addresses can be allowed with
   `RESONO_VAULT_TRUSTED_ORIGINS`.
+- **The coordinator hears about every finished run:** every background run that finishes
+  or fails reaches the coordinator with a work record (`background_agent/work_record.py`):
+  who started it (a routine and its schedule, the owner in a chat, or a direct request
+  through the API), why, which specialist did it, the tools it used, and how it ended, with
+  failures sorted into needs-owner, task, temporary, unconfirmed or Vault problems. Work no
+  chat was waiting on is reported to the owner's most recent chat. The coordinator decides
+  what the owner hears; Vault no longer sends its own "Background work failed" alert for
+  work a chat receives. `background_inspect` lists the recent work log.
 - **Background runs failed on their own result:** the Background agent was told in prose
   to return its typed result but was never given that type, so the model guessed field
   names and status words and Vault rejected the run (most scheduled routines failed from

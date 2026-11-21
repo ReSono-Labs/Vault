@@ -826,3 +826,77 @@ def test_chat_assignment_resumes_after_specialist_approval_without_another_messa
     assert not direct.is_error, direct.text
     assert "actionId" not in direct.structured_content
     assert coordinator.dispatch_sync(direct.structured_content["workId"]).state is WorkState.COMPLETED
+
+
+def test_every_finished_run_reaches_the_coordinator_with_who_why_and_outcome(context):
+    """2026-11-21: the coordinator learned of failures only as a bare 'failed' line, could not
+    say who started the work or why, and work no chat waited on never reached it at all."""
+    from app.vault_runtime.background_agent.coordination_contracts import OwnerScope
+    from app.vault_runtime.background_agent.coordinator_tools import register_background_conversation_tools
+    from app.vault_runtime.background_agent.direct_runs import DirectBackgroundRuns
+    from app.vault_runtime.conversation.runtime import render_wake_notice
+    from app.vault_runtime.conversation.runtime_store import ConversationRuntimeStore
+
+    env = _setup_env(context)
+    principal, coordinator = env["principal"], env["coordinator"]
+    notifications = NotificationRepository(database_url=env["db_url"])
+    notifications.ensure_schema()
+    coordinator._results._notifications = notifications
+
+    async def fail(*_):
+        return ExecutionOutcome(WorkState.FAILED, failure_code="validationerror",
+                                failure_message="9 validation errors for BackgroundAgentOutput requirement_outcomes")
+
+    coordinator._executor.execute = fail
+    store = ConversationRuntimeStore(database_url=env["db_url"])
+    store.ensure_schema()
+    conversation = store.create(principal, "report-test")
+    turn = store.submit_text(principal, conversation.conversation_id, "link:report-test",
+                             "Prepare the digest", conversation.history_version)
+    register_background_conversation_tools(catalog=env["catalog"], database_url=env["db_url"],
+                                           resolve_principal=None, coordinator=coordinator)
+    invocation = ToolInvocationContext(
+        agent=AgentKind.VOICE, user_id=principal.user_id, workspace_id=principal.workspace_id,
+        tool_call_id="report-call", local_session_id=principal.session_id,
+        conversation_id=conversation.conversation_id, turn_id=turn.turn_id,
+    )
+    started = env["catalog"].definition("background_start").handler(invocation, {
+        "objective": "Prepare the digest", "tool_names": ["tasks_list"], "context_summary": "Nightly digest."})
+    assert coordinator.dispatch_sync(started.structured_content["workId"]).state is WorkState.FAILED
+    scope = OwnerScope(principal.user_id, principal.workspace_id)
+
+    result = next(item for item in coordinator.conversation_updates(scope, conversation.conversation_id)
+                  if item["type"] == "result")
+    record = result["record"]
+    assert record["startedBy"]["kind"] == "owner_request_in_chat"
+    assert record["request"] == "Prepare the digest"
+    assert record["outcome"]["failureKind"] == "vault" and "validation errors" in record["outcome"]["reason"]
+    assert record["activity"]["attempts"] == 1
+    notice = render_wake_notice([result])
+    assert "<work_record>" in notice and "Failure kind: vault" in notice and "Started by: the owner, in a chat" in notice
+    # The coordinator decides what the owner hears; Vault no longer alerts the owner directly.
+    assert [item for item in notifications.list_active(user_id=principal.user_id, workspace_id=principal.workspace_id)
+            if item.get("kind") == "background_result"] == []
+
+    # Work no chat waits on (a direct API request) is reported to the most recent chat too.
+    # The same observation DirectBackgroundRuns.submit makes: no destination, so no chat waits on it.
+    coordinator.observe(scope, DirectBackgroundRuns.SOURCE_KIND, "direct-report-1", {
+        "explicit": True,
+        "work_request": WorkRequest(request=_request("direct-report-1", "iOS test from a connected app"),
+                                    grant_id=None, local_session_id=principal.session_id, destination={}),
+    })
+    with psycopg.connect(env["db_url"]) as connection:
+        work_id = connection.execute(
+            "SELECT work_id FROM vault_private.vault_background_work WHERE source_key LIKE 'direct_run:direct-report-1%'"
+        ).fetchone()[0]
+    assert coordinator.dispatch_sync(work_id).state is WorkState.FAILED
+    report = next(item for item in coordinator.conversation_updates(scope, conversation.conversation_id)
+                  if item["type"] == "work_report")
+    assert report["record"]["startedBy"]["kind"] == "direct_request"
+    assert report["record"]["request"] == "iOS test from a connected app"
+    assert "no chat was waiting on it" in render_wake_notice([report])
+
+    # And the coordinator can look it all up afterwards.
+    inspect = env["catalog"].definition("background_inspect").handler(invocation, {})
+    kinds = {item["startedBy"]["kind"] for item in inspect.structured_content["recentWork"]}
+    assert {"owner_request_in_chat", "direct_request"} <= kinds

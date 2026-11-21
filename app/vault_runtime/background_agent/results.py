@@ -15,6 +15,7 @@ from psycopg.types.json import Jsonb
 from .coordination_contracts import WorkScope, WorkState
 from .coordination_repository import CoordinationRepository, _json
 from .errors import BackgroundRunAuthorizationError, BackgroundRunConflictError
+from .work_record import work_record
 
 _LOG = logging.getLogger(__name__)
 
@@ -115,6 +116,9 @@ class BackgroundResults:
                 ],
                 "verification_summary": str(result_json.get("verification_summary") or ""),
                 "cards": result_json.get("cards") if isinstance(result_json.get("cards"), list) else [],
+                # Who started it, why, who did it, what it did, how it ended: for the coordinator.
+                "record": work_record(cursor, user_id=scope.user_id, workspace_id=scope.workspace_id,
+                                      work_id=scope.work_id),
             }
 
             delivered_via = "activity"
@@ -168,8 +172,11 @@ class BackgroundResults:
                 (delivery_id, scope.user_id, scope.workspace_id, delivery_key, Jsonb(payload)),
             )
 
+        # A result delivered to a chat wakes the coordinator there, and the coordinator decides
+        # whether the owner needs to hear about it. Vault notifies the owner directly only when
+        # no coordinator chat receives it.
         if (not quiet and not destination.get("internal")
-                and delivered_via in {"conversation", "notification", "notification_fallback"} and self._notifications is not None):
+                and delivered_via in {"notification", "notification_fallback"} and self._notifications is not None):
             try:
                 title = f"Background work {state}"
                 body = projection["summary"] or f"Background work {scope.work_id} finished ({state})."

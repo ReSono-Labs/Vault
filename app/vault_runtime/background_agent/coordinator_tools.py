@@ -65,16 +65,30 @@ def register_background_conversation_tools(*, catalog, database_url: str, resolv
             pending_approvals = [
                 {**row, "review_until": row["review_until"].isoformat()} for row in cursor.fetchall()
             ]
+            # The work log: the most recent finished work, with who started it, why and how it ended.
+            from .work_record import work_record
+            cursor.execute(
+                """SELECT work_id FROM vault_private.vault_background_work
+                   WHERE user_id=%s AND workspace_id=%s AND state IN ('completed','failed','unknown','cancelled')
+                   ORDER BY updated_at DESC LIMIT 15""",
+                (scope.user_id, scope.workspace_id),
+            )
+            recent_work = [record for (work_id,) in [(row["work_id"],) for row in cursor.fetchall()]
+                           if (record := work_record(cursor, user_id=scope.user_id, workspace_id=scope.workspace_id,
+                                                     work_id=work_id)) is not None]
         return ToolInvocationResult(
-            "Retrieved specialists, saved routines, and pending approvals available for review.",
+            "Retrieved specialists, saved routines, pending approvals, and recent finished work.",
             {"specialists": specialists, "routines": routines, "pendingApprovals": pending_approvals,
-             "pendingRoutines": [item for item in pending_approvals if item["kind"] == "routine_create"]},
+             "pendingRoutines": [item for item in pending_approvals if item["kind"] == "routine_create"],
+             "recentWork": recent_work},
         )
 
     catalog.register(ToolDefinition(
         tool_id="builtin.background.inspect.v1",
         name="background_inspect",
-        description="List pending approvals in this conversation and list specialists and routines with their status and next run.",
+        description=("List pending approvals in this conversation, specialists and routines with their status and "
+                     "next run, and recent finished work (recentWork): who started each piece, why, which "
+                     "specialist did it, what it did and how it ended."),
         input_schema={"type": "object", "properties": {}, "additionalProperties": False},
         handler=inspect,
         audiences=frozenset({AgentKind.VOICE}),
