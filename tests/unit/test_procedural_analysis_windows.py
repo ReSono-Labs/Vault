@@ -116,7 +116,7 @@ def test_large_source_windows_resume_read_every_character_and_preserve_late_corr
     assert len(calls)==count
 
 
-@pytest.mark.parametrize('fault',['omitted_span','fabricated_excerpt','nonadvancing'])
+@pytest.mark.parametrize('fault',['omitted_span','nonadvancing'])
 def test_source_window_invalid_evidence_never_becomes_a_checkpoint(fault):
     data=snapshot().model_dump(mode='json')
     data['sources'].append(dict(source_id='large',kind='tool_result',text='x'*110000))
@@ -132,3 +132,22 @@ def test_source_window_invalid_evidence_never_becomes_a_checkpoint(fault):
         review_windows(ReviewInput.model_validate(data),reviewer=DecisionReviewer(model_runner=runner(execute)),
             model='configured-model',provider='openai',stage=cache_stage(cache))
     assert not cache
+
+
+
+
+def test_a_fabricated_excerpt_is_dropped_and_never_kept_as_evidence():
+    """ERR-1122 (2026-11-22): text that is not in the source is dropped instead of failing the whole
+    review; it never reaches the source view the assessment reads."""
+    from app.vault_runtime.decision_learning.analysis_windows import source_window_evidence
+    data=snapshot().model_dump(mode='json')
+    data['sources'].append(dict(source_id='large',kind='tool_result',text='x'*110000))
+    def execute(**kwargs):
+        spans=json.loads(kwargs['input_text'])['sources']
+        return dict(reviewed_span_indexes=[s['span_index'] for s in spans],has_more=False,
+            excerpts=[dict(span_index=spans[0]['span_index'],start=spans[0]['start'],end=spans[0]['start']+3,
+                text='BAD FABRICATED TEXT')])
+    view=source_window_evidence(ReviewInput.model_validate(data),reviewer=DecisionReviewer(model_runner=runner(execute)),
+        model='configured-model',provider='openai',stage=cache_stage({}))
+    assert view and all(not item['reviewed_excerpts'] for item in view)
+    assert 'BAD FABRICATED TEXT' not in json.dumps(view)
