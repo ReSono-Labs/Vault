@@ -116,7 +116,7 @@ def test_large_source_windows_resume_read_every_character_and_preserve_late_corr
     assert len(calls)==count
 
 
-@pytest.mark.parametrize('fault',['omitted_span','nonadvancing'])
+@pytest.mark.parametrize('fault',['omitted_span'])
 def test_source_window_invalid_evidence_never_becomes_a_checkpoint(fault):
     data=snapshot().model_dump(mode='json')
     data['sources'].append(dict(source_id='large',kind='tool_result',text='x'*110000))
@@ -151,3 +151,22 @@ def test_a_fabricated_excerpt_is_dropped_and_never_kept_as_evidence():
         model='configured-model',provider='openai',stage=cache_stage({}))
     assert view and all(not item['reviewed_excerpts'] for item in view)
     assert 'BAD FABRICATED TEXT' not in json.dumps(view)
+
+
+
+def test_a_continuation_that_adds_no_usable_evidence_ends_its_window():
+    """2026-11-22 live check: has_more with no usable excerpt failed whole reviews. The window ends
+    instead, without asking the model again for that window."""
+    from app.vault_runtime.decision_learning.analysis_windows import source_window_evidence
+    data=snapshot().model_dump(mode='json')
+    data['sources'].append(dict(source_id='large',kind='tool_result',text='x'*110000))
+    calls=[]
+    def execute(**kwargs):
+        spans=json.loads(kwargs['input_text'])['sources']
+        calls.append(spans[0]['span_index'])
+        return dict(reviewed_span_indexes=[s['span_index'] for s in spans],has_more=True,
+            excerpts=[dict(span_index=spans[0]['span_index'],start=0,end=3,text='NOT IN SOURCE')])
+    view=source_window_evidence(ReviewInput.model_validate(data),reviewer=DecisionReviewer(model_runner=runner(execute)),
+        model='configured-model',provider='openai',stage=cache_stage({}))
+    assert len(calls)==len(set(calls))  # One page per window, no endless continuation.
+    assert all(not item['reviewed_excerpts'] for item in view)

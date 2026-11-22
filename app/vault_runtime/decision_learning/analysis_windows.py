@@ -176,8 +176,9 @@ def source_window_evidence(snapshot, *, reviewer, model, provider, stage):
                         continue  # Repeated evidence adds nothing.
                     keys.append(key)
                     texts.append(anchored[2])
-                if page.has_more and not keys:
-                    raise DecisionReviewError('Source-window continuation did not advance.')
+                # A continuation that adds no usable evidence (nothing new, or only excerpts that are
+                # not in the source) cannot make progress: this window is done. Nothing is invented;
+                # judgments that then lack evidence become unknown (2026-11-22 live check).
                 if saved is None:
                     stage(name,dict(**binding,output=page.model_dump(mode='json')))
                 for key,text in zip(keys,texts):
@@ -186,7 +187,7 @@ def source_window_evidence(snapshot, *, reviewer, model, provider, stage):
                         view[by_index[key[0]].source_id]['reviewed_excerpts'].append(
                             dict(start=key[1],end=key[2],text=text))
                 excluded.extend(list(k) for k in keys)
-                if not page.has_more:
+                if not page.has_more or not keys:
                     break
             else:
                 raise DecisionReviewError('Source-window continuation exhausted its page budget.')

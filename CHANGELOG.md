@@ -110,7 +110,8 @@ All notable changes to Vault are listed here. The version comes from
 - **Session reviews no longer block chat or fail on small model slips (DCI ERR-1122):** reviews
   have their own two slots and run one at a time per chat, so the owner's messages always start.
   Dropped model streams are retried twice with backoff. Window reviews re-anchor excerpts to the
-  exact original text and drop only excerpts that are not there; citations of unselected sources
+  exact original text and drop only excerpts that are not there (a continuation with nothing
+  usable ends its window); citations of unselected sources
   are removed (the judgment becomes unknown) instead of failing the review. The review lease is
   renewed without the segment lock (a deadlock), the whole-review budget is 30 minutes, and a
   segment that used its three attempts stays failed instead of re-arming after every chat turn,
