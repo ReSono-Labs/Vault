@@ -19,7 +19,7 @@ from openai.types.shared import Reasoning
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.vault_runtime.background_agent.action_bridge import ROUTES, _phase
+from app.vault_runtime.background_agent.action_bridge import DIRECT_WRITES, ROUTES, _phase
 from app.vault_runtime.background_agent.checkpoints import (
     GEMINI_ADAPTER_VERSION,
     MAX_CHECKPOINT_BYTES,
@@ -56,6 +56,10 @@ from app.vault_runtime.background_agent.tool_supply import (
 from app.vault_runtime.system_agents.inventory import AgentKind
 from app.vault_runtime.tools.definitions import ToolInvocationContext, ToolInvocationResult
 from app.vault_runtime.tools.strict_json import parse_json_object_bytes
+
+# A write the run may see but has no owner-approval route for (for example a plugin's write tool).
+_NO_APPROVAL_ROUTE = ("This change needs the owner and has no approval route from background work. It was not "
+                      "done; report it in your result so the coordinator can do it or ask the owner.")
 
 
 class _RunCancelled(Exception):
@@ -670,6 +674,8 @@ class ResumableBackgroundExecutor:
                         return True
                 return False
 
+            if is_write and name in DIRECT_WRITES:
+                return False  # The owner's own Home cards and files: done directly (action_bridge.DIRECT_WRITES).
             if is_write:
                 if tools.calls_used >= request.limits.max_tool_calls:
                     record_and_raise(_BudgetExceeded("tool_budget_exceeded"))
@@ -679,7 +685,12 @@ class ResumableBackgroundExecutor:
                         "tool_arguments": dict(params),
                         "summary": f"{name}: {json.dumps(params, sort_keys=True, ensure_ascii=False)}",
                     }
-                    self._actions.check(scope, name, stored)
+                    try:
+                        self._actions.check(scope, name, stored)
+                    except BackgroundRunAuthorizationError:
+                        # No approval route for this change: the agent hears why; the run continues.
+                        cached_results[call_id] = ToolInvocationResult(_NO_APPROVAL_ROUTE, is_error=True)
+                        return False
                     prepared = self._actions.prepare(scope, name, stored, "v1", call_id)
                     interrupted_meta[call_id] = {
                         "action_id": prepared.action_id,
@@ -939,9 +950,14 @@ class ResumableBackgroundExecutor:
                         replies.append({"functionResponse": {"name": name, "response": res.mcp_result()}})
                         continue
 
-                    if is_write and self._actions is not None:
+                    if is_write and self._actions is not None and name not in DIRECT_WRITES:
                         stored = {"tool": name, "tool_arguments": dict(arguments), "summary": f"{name}: {json.dumps(arguments, sort_keys=True)}"}
-                        self._actions.check(scope, name, stored)
+                        try:
+                            self._actions.check(scope, name, stored)
+                        except BackgroundRunAuthorizationError:
+                            refused = ToolInvocationResult(_NO_APPROVAL_ROUTE, is_error=True)
+                            replies.append({"functionResponse": {"name": name, "response": refused.mcp_result()}})
+                            continue
                         prepared = self._actions.prepare(scope, name, stored, "v1", call_id)
                         synthetic = SimpleNamespace(raw_item=SimpleNamespace(
                             name=name, call_id=call_id, arguments=json.dumps(arguments, sort_keys=True),

@@ -82,6 +82,10 @@ def render_wake_notice(updates):
             + (f"\n\n({more} more updates are in coordinatorState.)" if more>0 else ""))[:16000]
 
 
+# Concurrent session reviews (memory and Decisions), separate from the chat turn slots.
+REVIEW_WORKERS = 2
+
+
 class ConversationRuntime:
     def __init__(self,*,database_url,credentials,memories,catalog,authority,runner=run_agent_turn,
                  max_workers=4,turn_seconds=120,review_idle_seconds=120):
@@ -94,6 +98,9 @@ class ConversationRuntime:
             raise ValueError("Bounded Chat review idle interval required.")
         self.review_idle_seconds=review_idle_seconds
         self._slots,self._closing,self._lock,self._workers = BoundedSemaphore(max_workers),Event(),RLock(),{}
+        # Reviews have their own small pool and run one at a time per conversation, so the owner's
+        # messages always find a chat slot (2026-11-22: four reviews of one chat refused a Link message).
+        self._review_slots,self._reviewing = BoundedSemaphore(REVIEW_WORKERS),set()
         self.view_slots = BoundedSemaphore(16)
         self.voice_learning = None
         self.voice_decision_review = None
@@ -741,8 +748,10 @@ class ConversationRuntime:
     def _start_review(self,principal,conversation_id,segment_id):
         with self._lock:
             key="review:"+segment_id
-            if self._closing.is_set() or key in self._workers or not self._slots.acquire(blocking=False):
+            if (self._closing.is_set() or key in self._workers or conversation_id in self._reviewing
+                    or not self._review_slots.acquire(blocking=False)):
                 return
+            self._reviewing.add(conversation_id)
             handed_off = False
             execution_lock=None
             try:
@@ -773,7 +782,8 @@ class ConversationRuntime:
                 if not handed_off:
                     if execution_lock is not None:
                         execution_lock.close()
-                    self._slots.release()
+                    self._reviewing.discard(conversation_id)
+                    self._review_slots.release()
 
     def _review_segment(self,principal,conversation_id,segment_id,snapshot,key,stop,execution_lock):
         completed=True
@@ -830,7 +840,8 @@ class ConversationRuntime:
             execution_lock.close()
             with self._lock:
                 self._workers.pop(key,None)
-                self._slots.release()
+                self._reviewing.discard(conversation_id)
+                self._review_slots.release()
 
     def stop(self,principal,conversation_id,turn_id):
         self.store.stop_turn(principal,conversation_id,turn_id)

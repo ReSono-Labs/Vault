@@ -16,6 +16,10 @@ from .schema import ensure_review_schema
 LEASE_RENEW_SECONDS = 30
 
 
+
+# A whole decision review, including every window page (was 600 s; long window reviews ran out).
+REVIEW_BUDGET_SECONDS = 1800
+
 class ReviewConflictError(RuntimeError):
     code = "decision_review_conflict"
 
@@ -137,6 +141,18 @@ class DecisionReviewRepository:
               (Jsonb({name:value}),claim.review_id))
             return value
 
+    def _renew(self, principal, claim):
+        with self._connect() as connection, connection.cursor() as cursor:
+            ConversationRepository._require_authority(cursor, principal)
+            cursor.execute("""UPDATE vault_private.vault_decision_reviews SET
+              lease_until=GREATEST(lease_until,clock_timestamp()+interval '180 seconds')
+              WHERE review_id=%s AND user_id=%s AND workspace_id=%s AND state='running'
+                AND lease_owner=%s AND attempts=%s AND lease_until>clock_timestamp()
+              RETURNING review_id""",
+              (claim.review_id, principal.user_id, principal.workspace_id, claim.token, claim.attempt))
+            if cursor.fetchone() is None:
+                raise ReviewConflictError("Stage lease expired or superseded.")
+
     @contextmanager
     def keepalive(self, principal, claim, snapshot):
         """Renew this existing fenced lease while a bounded model call is pending."""
@@ -145,16 +161,17 @@ class DecisionReviewRepository:
         self.stage(principal, claim, snapshot, name="analysis")
         stop = Event()
         failures = []
-        deadline = monotonic() + 600
+        deadline = monotonic() + REVIEW_BUDGET_SECONDS
         def renew():
             while not stop.wait(LEASE_RENEW_SECONDS):
                 if monotonic() >= deadline:
                     failures.append(ReviewConflictError('Review execution budget exhausted.'))
                     return
                 try:
-                    # Existing stage read requalifies source/authority and renews
-                    # precisely this owner/attempt. It writes no review output.
-                    self.stage(principal, claim, snapshot, name='analysis')
+                    # Extends only this owner/attempt's lease. Reusing stage() here took the segment
+                    # lock beside the review's own stage() writes and deadlocked (2026-11-22). Source
+                    # qualification is still checked by every stage() and by complete().
+                    self._renew(principal, claim)
                 except Exception as error:
                     failures.append(error)
                     return

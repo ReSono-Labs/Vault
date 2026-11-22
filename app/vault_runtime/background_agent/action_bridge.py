@@ -45,6 +45,15 @@ ROUTES: dict[str, ToolRoute] = {
 
 _TASK_OPERATIONS = {"tasks_add": "add", "tasks_edit": "edit", "tasks_mark_completed": "complete", "tasks_remove": "remove"}
 
+# Writes coordinator-assigned work makes directly, without an owner approval (owner, 2026-11-21): the
+# owner's own Home cards and workspace files, which are theirs and easy to undo. Every other write
+# either has an approval route above or is refused as a tool error.
+DIRECT_WRITES: frozenset[str] = frozenset({
+    "link_card_publish", "link_card_archive", "link_card_close", "link_card_move", "link_location_upsert",
+    "workspace_write_file", "workspace_save_file", "workspace_patch_file", "workspace_create_directory",
+    "workspace_copy_path", "workspace_move_path", "workspace_upload_files",
+})
+
 
 def supported(tool_name: str) -> bool:
     return tool_name in ROUTES

@@ -693,3 +693,79 @@ def test_the_model_is_given_the_exact_result_shape_as_structured_output():
     assert set(shape["required"]) == {"status", "summary", "quiet", "artifact_references", "requirement_outcomes",
                                       "unresolved_issues", "verification_summary", "phase_evidence"}
     assert shape["additionalProperties"] is False
+
+
+class _NamedWriteModel(ScriptedSDKModel):
+    """Calls one write tool by name, then completes (ERR-BGW, 2026-11-22)."""
+
+    def __init__(self, tool_name: str) -> None:
+        super().__init__(["write", "complete"])
+        self.tool_name = tool_name
+
+    async def get_response(self, system_instructions, input, *args, **kwargs):
+        self.seen_inputs.append(input)
+        if len(self.seen_inputs) == 1:
+            output = [ResponseFunctionToolCall(
+                id="call-w", call_id="call-w", name=self.tool_name, type="function_call",
+                arguments='{"card_id":"card-1","text":"hello"}',
+            )]
+        else:
+            output = [ResponseOutputMessage(
+                id="msg-done", role="assistant", status="completed", type="message",
+                content=[ResponseOutputText(type="output_text", text=_complete_json(), annotations=[])],
+            )]
+        return ModelResponse(output=output, usage=Usage(requests=1), response_id=f"resp-{len(self.seen_inputs)}")
+
+
+def _single_write_supply(scope, authority, effects, name):
+    catalog = ToolCatalog(authorizer=lambda _d, _c: True,
+                          background_authorizer=lambda d, _c, _a: d.name in authority.allowed)
+
+    def handler(_ctx, args):
+        effects.append(dict(args))
+        return ToolInvocationResult('{"status":"completed"}', {"status": "completed"})
+
+    catalog.register(ToolDefinition(
+        tool_id=f"test.{name}.v1", name=name, description=name,
+        input_schema={"type": "object", "properties": {"card_id": {"type": "string"}, "text": {"type": "string"}},
+                      "required": ["card_id", "text"], "additionalProperties": False},
+        handler=handler, effect_class="write", audiences=frozenset({AgentKind.BACKGROUND}),
+    ))
+    return BackgroundToolSupply(catalog=catalog, grant=BackgroundToolGrant(
+        autonomy=AutonomyProfile.EXPANDED, explicit_names=frozenset({name}), max_calls=8),
+        background_scope=scope, authority=authority)
+
+
+def test_owner_home_card_and_file_writes_run_directly_without_an_action():
+    """The UAP routine failed on 2026-11-22 when workspace_write_file was sent to owner approval,
+    which has no route for it. The owner's own Home cards and files are written directly."""
+    from app.vault_runtime.background_agent.executor import ResumableBackgroundExecutor
+    for name in ("workspace_write_file", "link_card_publish"):
+        scope, actions, effects = _scope(), FakeActionStore(), []
+        authority = FakeAuthority({name})
+        executor = ResumableBackgroundExecutor(credentials=FakeCredentials(), actions=actions, authority=authority,
+                                               model_factory=lambda *_: _NamedWriteModel(name))
+        outcome = asyncio.run(executor.execute(scope, _request(), None,
+                                               _single_write_supply(scope, authority, effects, name), lambda: False))
+        assert outcome.state is WorkState.COMPLETED, outcome
+        assert effects == [{"card_id": "card-1", "text": "hello"}]
+        assert actions.rows == {}
+
+
+def test_a_write_without_an_approval_route_is_a_tool_error_and_the_run_continues():
+    from app.vault_runtime.background_agent.executor import ResumableBackgroundExecutor
+
+    class NoRoute(FakeActionStore):
+        def check(self, scope, kind, arguments):
+            raise BackgroundRunAuthorizationError("Work authority and a registered domain are required")
+
+    scope, actions, effects = _scope(), NoRoute(), []
+    authority = FakeAuthority({"crm_update_deal"})
+    model = _NamedWriteModel("crm_update_deal")
+    executor = ResumableBackgroundExecutor(credentials=FakeCredentials(), actions=actions, authority=authority,
+                                           model_factory=lambda *_: model)
+    outcome = asyncio.run(executor.execute(scope, _request(), None,
+                                           _single_write_supply(scope, authority, effects, "crm_update_deal"), lambda: False))
+    assert outcome.state is WorkState.COMPLETED, outcome
+    assert effects == [] and actions.rows == {}
+    assert "no approval route" in json.dumps(model.seen_inputs[-1])

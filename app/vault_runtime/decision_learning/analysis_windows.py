@@ -41,17 +41,75 @@ corrections. A single excerpt must remain within one supplied original source sp
 """
 
 
-def validate_selected_citations(output, source_view):
+def restrict_to_selected(output, source_view, snapshot):
+    """Keep only citations of sources that have reviewed excerpts (2026-11-22: rejecting the whole
+    review for one such citation failed reviews permanently). A judgment left without evidence
+    becomes unknown, and a teaching proposal that loses a source can no longer teach. Nothing is
+    added or upgraded; the result is normalized and strictly validated again by the caller."""
     if source_view is None:
-        return
+        return output
+    from .reviewer import normalize_model_output
     available={s['source_id'] for s in source_view if s['reviewed_excerpts']}
+    assessments=[]
     for assessment in output.assessments:
+        update={}
         for name in type(assessment).model_fields:
             dimension=getattr(assessment,name)
-            if hasattr(dimension,'evidence_source_ids') and not set(dimension.evidence_source_ids)<=available:
-                raise DecisionReviewError('Assessment cited evidence absent from reviewed source excerpts.')
-    if any(not set(p.source_ids)<=available for p in output.proposals):
-        raise DecisionReviewError('Proposal cited evidence absent from reviewed source excerpts.')
+            if not hasattr(dimension,'evidence_source_ids'):
+                continue
+            kept=tuple(i for i in dimension.evidence_source_ids if i in available)
+            if kept!=dimension.evidence_source_ids:
+                update[name]=dimension.model_copy(update={'evidence_source_ids':kept,
+                    'judgment':dimension.judgment if kept else 'unknown'})
+        assessments.append(assessment.model_copy(update=update) if update else assessment)
+    proposals=[]
+    for proposal in output.proposals:
+        kept=tuple(i for i in proposal.source_ids if i in available)
+        if kept!=proposal.source_ids:
+            change={'source_ids':kept}
+            if proposal.disposition in {'create','add_example','revise'}:
+                change.update(disposition='insufficient_evidence',target_definition_id=None)
+            proposal=proposal.model_copy(update=change)
+        proposals.append(proposal)
+    restricted=type(output).model_validate(output.model_copy(update={'assessments':tuple(assessments),
+        'proposals':tuple(proposals)}).model_dump(mode='json'))
+    return normalize_model_output(restricted,snapshot)[0]
+
+
+_QUOTES=str.maketrans({'\u2018':"'",'\u2019':"'",'\u201c':'"','\u201d':'"','\u00a0':' '})
+
+
+def _folded(text):
+    """Quote- and whitespace-folded text, with each folded character's index in the original."""
+    chars,index=[],[]
+    for position,char in enumerate(text.translate(_QUOTES)):
+        if char.isspace():
+            if chars and chars[-1]==' ':
+                continue
+            char=' '
+        chars.append(char)
+        index.append(position)
+    return ''.join(chars),index
+
+
+def anchor_excerpt(excerpt, span):
+    """(start, end, text) of the original text an excerpt quotes, or None when it is not there.
+
+    Models miscount absolute offsets and drift quotes or spacing (2026-11-22: 7 reviews failed on
+    one such excerpt). The kept text is always the exact original slice, never the model's copy."""
+    def exact(start,end):
+        return (start,end,span.text[start-span.start:end-span.start])
+    if span.start<=excerpt.start<excerpt.end<=span.end and excerpt.text==span.text[excerpt.start-span.start:excerpt.end-span.start]:
+        return exact(excerpt.start,excerpt.end)
+    found=span.text.find(excerpt.text)
+    if found>=0:
+        return exact(span.start+found,span.start+found+len(excerpt.text))
+    folded,index=_folded(span.text)
+    needle=_folded(excerpt.text)[0].strip()
+    found=folded.find(needle) if needle else -1
+    if found<0:
+        return None
+    return exact(span.start+index[found],span.start+index[found+len(needle)-1]+1)
 
 
 def source_window_evidence(snapshot, *, reviewer, model, provider, stage):
@@ -107,25 +165,26 @@ def source_window_evidence(snapshot, *, reviewer, model, provider, stage):
                 if (len(page.reviewed_span_indexes)!=len(by_index)
                         or set(page.reviewed_span_indexes)!=set(by_index)):
                     raise DecisionReviewError('Source window did not account for every original span.')
-                keys=[]
+                keys,texts=[],[]
                 for excerpt in page.excerpts:
                     span=by_index.get(excerpt.span_index)
-                    if (span is None or not span.start<=excerpt.start<excerpt.end<=span.end
-                            or excerpt.text!=span.text[excerpt.start-span.start:excerpt.end-span.start]):
-                        raise DecisionReviewError('Source-window excerpt is not exact original evidence.')
-                    key=(excerpt.span_index,excerpt.start,excerpt.end)
+                    anchored=anchor_excerpt(excerpt,span) if span is not None else None
+                    if anchored is None:
+                        continue  # Not in the original text: dropped, never kept as evidence.
+                    key=(excerpt.span_index,anchored[0],anchored[1])
                     if key in keys or list(key) in excluded:
-                        raise DecisionReviewError('Source-window continuation repeated evidence.')
+                        continue  # Repeated evidence adds nothing.
                     keys.append(key)
+                    texts.append(anchored[2])
                 if page.has_more and not keys:
                     raise DecisionReviewError('Source-window continuation did not advance.')
                 if saved is None:
                     stage(name,dict(**binding,output=page.model_dump(mode='json')))
-                for key,excerpt in zip(keys,page.excerpts):
+                for key,text in zip(keys,texts):
                     if key not in selected:
                         selected.add(key)
-                        view[by_index[excerpt.span_index].source_id]['reviewed_excerpts'].append(
-                            dict(start=excerpt.start,end=excerpt.end,text=excerpt.text))
+                        view[by_index[key[0]].source_id]['reviewed_excerpts'].append(
+                            dict(start=key[1],end=key[2],text=text))
                 excluded.extend(list(k) for k in keys)
                 if not page.has_more:
                     break
@@ -172,8 +231,8 @@ def review_windows(snapshot,*,reviewer,model,provider,stage):
                     raise DecisionReviewError('Saved assessment page binding changed.')
                 output=ReviewOutput.model_validate(saved['output'])
                 more=saved['has_more']
+            output=restrict_to_selected(output,source_view,part)
             _validate_output(output,part)
-            validate_selected_citations(output,source_view)
             if type(more) is not bool or len(output.proposals)>32 or len(output.model_dump_json())>100000:
                 raise DecisionReviewError('Invalid assessment page continuation.')
             if fixed is not None and output.assessments!=fixed:

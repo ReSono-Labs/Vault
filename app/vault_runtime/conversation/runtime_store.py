@@ -158,8 +158,11 @@ class ConversationRuntimeStore(ConversationRepository):
               decision_review_state=CASE WHEN decision_review_state='completed' THEN 'completed' ELSE 'pending' END,
               review_attempts=CASE WHEN review_state='queued' THEN review_attempts ELSE 0 END,review_due_at=now()
           WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND segment_id=%s
-            AND state='sealed' AND review_state IN ('not_requested','queued','failed','blocked_authority')""",
+            AND state='sealed' AND review_state IN ('not_requested','queued','failed','blocked_authority')
+            AND NOT (review_state='failed' AND review_attempts>=3)""",
           (principal.session_id,*self._scope(principal,conversation_id),segment_id))
+        # A segment that used its three attempts stays failed: re-arming it after every chat turn
+        # repeated the same failing review (2026-11-22). A new migration can requeue it on purpose.
 
     def queue_voice_review(self,principal,voice_session_id):
         """Reuse the existing review bridge/intent; never copy Voice transcripts."""
@@ -217,7 +220,9 @@ class ConversationRuntimeStore(ConversationRepository):
             self._require_authority(cursor,principal)
             cursor.execute("""UPDATE vault_private.vault_conversation_segments
               SET review_state=CASE WHEN %s THEN 'completed' WHEN review_attempts>=3 THEN 'failed' ELSE 'queued' END,
-                  review_due_at=now()+interval '30 seconds'
+                  review_due_at=now()+CASE WHEN review_attempts<=1 THEN interval '30 seconds'
+                                           WHEN review_attempts=2 THEN interval '5 minutes'
+                                           ELSE interval '30 minutes' END
               WHERE user_id=%s AND workspace_id=%s AND conversation_id=%s AND segment_id=%s
                 AND review_state='running' AND review_session_id=%s
               RETURNING review_state,review_attempts""",

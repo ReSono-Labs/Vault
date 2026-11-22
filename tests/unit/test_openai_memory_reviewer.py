@@ -110,3 +110,48 @@ def test_oversized_transcript_never_calls_provider_or_reports_truncated_success(
     assert calls==[]
     with pytest.raises(MemoryReviewProviderError,match="consolidation"):
         _reviewer({"contractVersion":2,"summary":"x"*20001,"candidates":[]}).review("valid input")
+
+
+def _structured(execute):
+    reviewer = OpenAIMemoryReviewer(credentials=_Credentials(), user_id="user-1", workspace_id="workspace-1",
+                                    executor=execute)
+    waits = []
+    reviewer._sleep = waits.append
+    return reviewer, waits
+
+
+def _dropped_stream():
+    import httpx
+    return httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+
+
+def test_a_dropped_review_stream_is_retried_with_backoff():
+    """2026-11-22: 27 decision reviews failed on one dropped Codex stream."""
+    calls = []
+    def execute(**kwargs):
+        calls.append(kwargs)
+        if len(calls) < 3:
+            raise _dropped_stream()
+        return {"ok": True}
+    reviewer, waits = _structured(execute)
+    raw, model = reviewer.review_structured(input_text="x", instructions="y", output_type=dict, review_name="R")
+    assert raw == {"ok": True} and model == "gpt-5.6-sol" and len(calls) == 3 and waits == [2.0, 6.0]
+
+
+def test_review_retries_stop_after_three_tries_and_never_repeat_other_errors():
+    calls = []
+    def dropped(**kwargs):
+        calls.append(kwargs)
+        raise _dropped_stream()
+    reviewer, waits = _structured(dropped)
+    with pytest.raises(MemoryReviewProviderError):
+        reviewer.review_structured(input_text="x", instructions="y", output_type=dict, review_name="R")
+    assert len(calls) == 3 and len(waits) == 2
+    calls.clear()
+    def invalid(**kwargs):
+        calls.append(kwargs)
+        raise ValueError("model returned the wrong shape")
+    reviewer, waits = _structured(invalid)
+    with pytest.raises(MemoryReviewProviderError):
+        reviewer.review_structured(input_text="x", instructions="y", output_type=dict, review_name="R")
+    assert len(calls) == 1 and waits == []

@@ -7,6 +7,8 @@ import re
 from collections.abc import Callable
 from typing import Any, Literal
 
+import time
+
 import httpx
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,6 +27,21 @@ from app.vault_runtime.memory.contracts import (
     REVIEWER_CONTRACT_VERSION,
 )
 from app.vault_runtime.voice.credentials import VoiceProviderCredentialStore
+
+# Seconds to wait before each retry of a review call whose stream dropped or reset.
+REVIEW_RETRY_WAITS = (2.0, 6.0)
+
+
+def _transient(error: BaseException | None) -> bool:
+    """A dropped, reset or timed-out connection, or a provider 5xx: worth one more try."""
+    import openai
+    seen = 0
+    while error is not None and seen < 8:
+        if isinstance(error, (httpx.RemoteProtocolError, httpx.ReadError, httpx.WriteError, httpx.ConnectError,
+                              httpx.TimeoutException, openai.APIConnectionError, openai.InternalServerError)):
+            return True
+        error, seen = error.__cause__ or error.__context__, seen + 1
+    return False
 
 
 FINALIZATION_TRANSCRIPT_CHARACTER_LIMIT = 100_000
@@ -99,6 +116,7 @@ class OpenAIMemoryReviewer:
         self._executor = executor
         self._reasoning_effort = reasoning_effort
         self._input_parts = ()
+        self._sleep = time.sleep
 
     def with_input_parts(self, parts):
         """Bind original owned visual inputs for this scoped review attempt."""
@@ -197,9 +215,25 @@ class OpenAIMemoryReviewer:
             credential, model = self._credentials.background_access(
                 user_id=self._user_id, workspace_id=self._workspace_id,
             )
+        input_value=([dict(role='user',content=[dict(type='input_text',text=input_text),*self._input_parts])]
+                     if self._input_parts else input_text)
+        # Dropped or reset model streams are retried (2026-11-22: 27 decision reviews failed on
+        # "peer closed connection without sending complete message body"). Reviews call no tools,
+        # so repeating the call has no side effect.
+        for wait in (*REVIEW_RETRY_WAITS, None):
+            try:
+                return self._review_once(credential, model, provider_key, input_text, input_value,
+                                         instructions=instructions, output_type=output_type,
+                                         review_name=review_name), model
+            except MemoryReviewProviderError as exc:
+                if wait is None or not _transient(exc.__cause__):
+                    raise
+                self._sleep(wait)
+        raise AssertionError("unreachable")
+
+    def _review_once(self, credential, model, provider_key, input_text, input_value, *,
+                     instructions, output_type, review_name):
         try:
-            input_value=([dict(role='user',content=[dict(type='input_text',text=input_text),*self._input_parts])]
-                         if self._input_parts else input_text)
             raw = self._review_gemini(
                 credential.value, model, input_text,
                 oauth=getattr(credential, "auth_method", "api_key") == "gemini_oauth",
@@ -219,7 +253,7 @@ class OpenAIMemoryReviewer:
             raise MemoryReviewProviderError(
                 "The memory review capability could not complete this review."
             ) from exc
-        return raw, model
+        return raw
 
     @staticmethod
     def _review_gemini(
