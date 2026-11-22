@@ -103,6 +103,19 @@ All notable changes to Vault are listed here. The version comes from
   (`reportsInOtherChats`), so "were you notified?" gets a true answer. The owner's standing
   policy for failures is part of the coordinator's instructions, and a failed routine with a
   usable result still gets its Home cards refreshed.
+- **Background work stops failing on its own writes (DCI ERR-1122):** coordinator-assigned work
+  writes the owner's Home cards and workspace files directly; a write with no approval route
+  comes back to the agent as a tool error instead of ending the run (the UAP routine failed on
+  `workspace_write_file` on 2026-11-22).
+- **Session reviews no longer block chat or fail on small model slips (DCI ERR-1122):** reviews
+  have their own two slots and run one at a time per chat, so the owner's messages always start.
+  Dropped model streams are retried twice with backoff. Window reviews re-anchor excerpts to the
+  exact original text and drop only excerpts that are not there; citations of unselected sources
+  are removed (the judgment becomes unknown) instead of failing the review. The review lease is
+  renewed without the segment lock (a deadlock), the whole-review budget is 30 minutes, and a
+  segment that used its three attempts stays failed instead of re-arming after every chat turn,
+  with retries spaced 30 s, 5 min, 30 min. Migration 0005 gives failed segments whose session is
+  still active one new round, three minutes apart.
 - **Background runs failed on their own result:** the Background agent was told in prose
   to return its typed result but was never given that type, so the model guessed field
   names and status words and Vault rejected the run (most scheduled routines failed from
