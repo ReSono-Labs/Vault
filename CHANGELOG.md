@@ -117,6 +117,12 @@ All notable changes to Vault are listed here. The version comes from
   segment that used its three attempts stays failed instead of re-arming after every chat turn,
   with retries spaced 30 s, 5 min, 30 min. Migration 0005 gives failed segments whose session is
   still active one new round, three minutes apart.
+- **Web search works with ChatGPT sign-in:** the `web_search` tool (chat, voice, coordinator and
+  background work) follows the provider's selected method. With ChatGPT sign-in it runs OpenAI's
+  hosted web search through the Codex Responses endpoint (streamed, unstored, with the account
+  header), so it no longer needs a platform API key; with an API key it uses the platform API as
+  before. A stream that fails with HTTP 200 (for example a used-up plan) is an error, not an
+  answer. Request shape after pi-web-access (MIT).
 - **Background runs failed on their own result:** the Background agent was told in prose
   to return its typed result but was never given that type, so the model guessed field
   names and status words and Vault rejected the run (most scheduled routines failed from

@@ -20,7 +20,9 @@ from app.vault_runtime.voice.provider import ProviderCredential
 # OpenAI capabilities that are not available through the ChatGPT subscription (OAuth)
 # route. They always use the retained API key, even while OAuth is the selected method.
 # Everything else follows the selected method.
-API_KEY_CAPABILITIES = frozenset({"live_transcription", "web_search", "decisions"})
+# Web search follows the selected method: with ChatGPT sign-in it runs through the Codex Responses
+# endpoint (web_search.py), so it needs no API key (owner, 2026-11-23).
+API_KEY_CAPABILITIES = frozenset({"live_transcription", "decisions"})
 
 
 class VoiceProviderCredentialError(RuntimeError):

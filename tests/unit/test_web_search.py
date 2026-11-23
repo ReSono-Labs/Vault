@@ -174,7 +174,7 @@ def test_xai_search_uses_only_xai_endpoint_and_normalizes_citations(monkeypatch)
 
 
 
-def test_openai_web_search_uses_the_api_key_capability_not_the_selected_oauth(monkeypatch):
+def test_openai_web_search_with_an_api_key_uses_the_platform_api(monkeypatch):
     seen = {}
     class Selected(_Credentials):
         def background_access(self, **kwargs):
@@ -184,7 +184,83 @@ def test_openai_web_search_uses_the_api_key_capability_not_the_selected_oauth(mo
         seen["api_key"] = api_key
         return _provider_payload()
     monkeypatch.setattr(web_search, "_responses_web_search", search)
+    monkeypatch.setattr(web_search, "_codex_web_search", lambda **_: (_ for _ in ()).throw(AssertionError("codex")))
     result = web_search.run_web_search(credentials=Selected(), context=_context(), query="official documentation")
     assert seen["capability"] == "web_search" and seen["api_key"] == "sk-from-capability"
     assert result["results"][0]["url"] == "https://example.test/current"
     assert "sk-from-capability" not in json.dumps(result)
+
+
+def _jwt(account: str) -> str:
+    import base64
+    claims = base64.urlsafe_b64encode(json.dumps(
+        {"https://api.openai.com/auth": {"chatgpt_account_id": account}}).encode()).decode().rstrip("=")
+    return f"header.{claims}.signature"
+
+
+def _stream_lines(*events):
+    return [f"data: {json.dumps(event)}" for event in events] + ["data: [DONE]"]
+
+
+class _Stream:
+    def __init__(self, lines, status=200):
+        self.lines, self.status_code = lines, status
+    def __enter__(self):
+        return self
+    def __exit__(self, *_):
+        return False
+    def read(self):
+        return b""
+    def iter_lines(self):
+        return iter(self.lines)
+
+
+def test_chatgpt_sign_in_searches_through_the_codex_endpoint_with_the_same_tool_contract(monkeypatch):
+    """2026-11-23: web search needed a platform API key even with ChatGPT sign-in selected."""
+    token = _jwt("acct-123")
+    class SignedIn(_Credentials):
+        def background_access(self, **kwargs):
+            return ProviderCredential(token, auth_method="chatgpt_oauth"), "gpt-6-luna"
+    captured = {}
+    message = _provider_payload()["output"][0]
+    def stream(method, url, **kwargs):
+        captured.update(method=method, url=url, **kwargs)
+        return _Stream(_stream_lines(
+            {"type": "response.web_search_call.completed"},
+            {"type": "response.output_item.done", "item": {"type": "web_search_call", "status": "completed"}},
+            {"type": "response.output_item.done", "item": message},
+            {"type": "response.completed", "response": {"id": "resp-codex-1", "output": []}},
+        ))
+    monkeypatch.setattr(web_search.httpx, "stream", stream)
+    monkeypatch.setattr(web_search, "_responses_web_search", lambda **_: (_ for _ in ()).throw(AssertionError("api")))
+    catalog = ToolCatalog(authorizer=lambda definition, context: True)
+    web_search.register_web_search_tool(catalog=catalog, credentials=SignedIn())  # type: ignore[arg-type]
+    result = catalog.invoke("web_search", {"query": "latest result"}, context=_context(AgentKind.BACKGROUND))
+    assert result.is_error is False
+    content = result.structured_content
+    assert content["results"][0]["url"] == "https://example.test/current"
+    assert content["metadata"]["responseId"] == "resp-codex-1" and content["metadata"]["model"] == "gpt-6-luna"
+    assert captured["url"] == "https://chatgpt.com/backend-api/codex/responses" and captured["method"] == "POST"
+    assert captured["headers"]["Authorization"] == f"Bearer {token}"
+    assert captured["headers"]["chatgpt-account-id"] == "acct-123"
+    body = captured["json"]
+    assert body["stream"] is True and body["store"] is False and body["tool_choice"] == "required"
+    assert body["tools"] == [{"type": "web_search"}] and body["model"] == "gpt-6-luna"
+    assert token not in json.dumps(content)
+
+
+def test_a_chatgpt_stream_that_fails_with_http_200_is_an_error_not_an_answer(monkeypatch):
+    """A used-up plan arrives as an error event inside a 200 stream; partial output is never used."""
+    for events in (
+        ({"type": "error", "error": {"type": "usage_limit_reached", "message": "The usage limit has been reached"}},),
+        ({"type": "response.output_item.done", "item": _provider_payload()["output"][0]},
+         {"type": "response.failed", "response": {"error": None, "output": []}}),
+        ({"type": "response.output_item.done", "item": _provider_payload()["output"][0]},
+         {"type": "response.completed", "response": {"output": []}}),  # no web search ran
+    ):
+        try:
+            web_search._read_response_stream(_stream_lines(*events))
+        except RuntimeError as error:
+            assert "ChatGPT web search" in str(error)
+        else:
+            raise AssertionError(events)

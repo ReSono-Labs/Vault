@@ -106,7 +106,7 @@ def _connect_oauth(store, owner) -> None:
     )
 
 
-def test_oauth_stays_selected_while_api_key_serves_transcription_and_web_search(credential_context) -> None:
+def test_oauth_stays_selected_while_api_key_serves_transcription_and_search_follows_sign_in(credential_context) -> None:
     _, store, owner, member = credential_context
     _connect_oauth(store, owner)
     # OAuth only: the API-key capabilities fail with a clear, actionable message.
@@ -120,16 +120,17 @@ def test_oauth_stays_selected_while_api_key_serves_transcription_and_web_search(
     assert store.has_api_key(owner, "openai") is True and store.has_api_key(member, "openai") is True
     conversation = store.resolve(owner, "openai")
     assert (conversation.auth_method, conversation.value) == ("chatgpt_oauth", "oauth-access")
-    for capability in ("live_transcription", "web_search"):
-        credential = store.resolve(owner, "openai", capability)
-        assert (credential.auth_method, credential.value) == ("api_key", "sk-retained")
+    credential = store.resolve(owner, "openai", "live_transcription")
+    assert (credential.auth_method, credential.value) == ("api_key", "sk-retained")
+    # Web search follows the selected method (2026-11-23): ChatGPT sign-in searches through Codex.
+    assert store.resolve(owner, "openai", "web_search").auth_method == "chatgpt_oauth"
     # Other capabilities and background work keep following the selected method.
     assert store.resolve(owner, "openai", "memory_review").auth_method == "chatgpt_oauth"
     background, model = store.background_access(user_id=owner.user_id, workspace_id=owner.workspace_id)
     assert background.auth_method == "chatgpt_oauth" and model == "gpt-5.6-luna"
     search, _ = store.background_access(user_id=owner.user_id, workspace_id=owner.workspace_id,
                                         capability="web_search")
-    assert (search.auth_method, search.value) == ("api_key", "sk-retained")
+    assert (search.auth_method, search.value) == ("chatgpt_oauth", "oauth-access")
     # The method can still be switched explicitly, and the capabilities do not move.
     store.select_auth_method(owner, provider_key="openai", auth_method="api_key")
     assert store.resolve(owner, "openai").value == "sk-retained"

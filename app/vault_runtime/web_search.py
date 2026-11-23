@@ -77,10 +77,14 @@ def register_web_search_tool(
 
 def run_web_search(*, credentials: VoiceProviderCredentialStore, context: ToolInvocationContext, query: str) -> dict[str, object]:
     provider_key = credentials.selected_provider(user_id=context.user_id, workspace_id=context.workspace_id)
-    # OpenAI web search is an API-key capability even while ChatGPT OAuth is the selected method.
+    # Web search uses the provider's selected sign-in method, like every other model call.
     credential, model_key = credentials.background_access(user_id=context.user_id, workspace_id=context.workspace_id,
         provider_key=provider_key, capability="web_search")
-    if provider_key == "openai":
+    if provider_key == "openai" and getattr(credential, "auth_method", "api_key") == "chatgpt_oauth":
+        payload = _codex_web_search(access_token=credential.value, model_key=model_key, query=query)
+        answer = _clean_text(_output_text(payload))
+        citations = _url_citations(payload, output_text=answer or "", limit=MAX_WEB_SEARCH_RESULTS)
+    elif provider_key == "openai":
         payload = _responses_web_search(api_key=credential.value, model_key=model_key, query=query)
         answer = _clean_text(_output_text(payload))
         citations = _url_citations(payload, output_text=answer or "", limit=MAX_WEB_SEARCH_RESULTS)
@@ -133,6 +137,86 @@ def _responses_web_search(*, api_key: str, model_key: str, query: str) -> dict[s
     if not isinstance(value, dict):
         raise RuntimeError("The Web search provider returned an invalid response.")
     return value
+
+
+CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses"
+
+
+def _codex_web_search(*, access_token: str, model_key: str, query: str) -> dict[str, Any]:
+    """OpenAI hosted web search through the owner's ChatGPT sign-in (the Codex Responses endpoint).
+
+    The endpoint requires a streamed, unstored request; the answer and its url_citation annotations
+    are read from the stream. Request shape after pi-web-access openai-search.ts (MIT)."""
+    from app.vault_runtime.voice.openai_realtime import chatgpt_account_id
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json",
+               "Accept": "text/event-stream", "OpenAI-Beta": "responses=experimental", "originator": "resono_vault"}
+    account = chatgpt_account_id(access_token)
+    if account:
+        headers["chatgpt-account-id"] = account
+    payload = {
+        "model": model_key,
+        "instructions": DIRECT_WEB_SEARCH_INSTRUCTIONS
+                        + f" Today's date is {datetime.now(UTC).date().isoformat()}. Prefer live, current sources.",
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": query}]}],
+        "tools": [{"type": "web_search"}],
+        "tool_choice": "required",
+        "include": ["web_search_call.action.sources"],
+        "store": False,
+        "stream": True,
+    }
+    with httpx.stream("POST", CODEX_RESPONSES_URL, headers=headers, json=payload, timeout=60.0) as response:
+        if response.status_code >= 400:
+            response.read()
+            raise RuntimeError(f"ChatGPT web search returned HTTP {response.status_code}.")
+        return _read_response_stream(response.iter_lines())
+
+
+def _read_response_stream(lines: Any) -> dict[str, Any]:
+    """The final response from a Responses event stream. The stream can fail with HTTP 200 (a
+    terminal error or response.failed event, for example a used-up plan), which is raised."""
+    items: list[Any] = []
+    final: dict[str, Any] | None = None
+    searched = False
+    failure: str | None = None
+    for line in lines:
+        if not isinstance(line, str) or not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            continue
+        try:
+            event = json.loads(data)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("type")
+        if kind == "error":
+            error = event.get("error") if isinstance(event.get("error"), dict) else event
+            failure = failure or str(error.get("code") or error.get("type") or error.get("message") or "error")
+        if isinstance(kind, str) and kind.startswith("response.web_search_call"):
+            searched = True
+        if kind == "response.output_item.done" and isinstance(event.get("item"), dict):
+            items.append(event["item"])
+            searched = searched or event["item"].get("type") == "web_search_call"
+        if kind in {"response.completed", "response.done", "response.failed", "response.incomplete"} \
+                and isinstance(event.get("response"), dict):
+            final = event["response"]
+            error = final.get("error")
+            if isinstance(error, dict):
+                failure = failure or str(error.get("code") or error.get("type") or error.get("message") or "error")
+            if kind == "response.failed":
+                failure = failure or "response_failed"
+    if failure:
+        raise RuntimeError(f"ChatGPT web search failed: {failure}")
+    if final is None:
+        final = {"output": items}
+    elif not final.get("output"):
+        final = {**final, "output": items}
+    searched = searched or any(isinstance(i, dict) and i.get("type") == "web_search_call" for i in final["output"])
+    if not searched:
+        raise RuntimeError("ChatGPT web search returned no web search.")
+    return final
 
 
 def _xai_web_search(*, api_key: str, model_key: str, query: str) -> dict[str, Any]:

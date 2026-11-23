@@ -454,7 +454,7 @@ describe("standalone Browser Voice shell", () => {
     }));
     render(<BrowserVoiceApp />);
     fireEvent.click((await screen.findAllByRole("button", { name: "Connections" }))[0]);
-    expect(await screen.findByText(/An API key saved here is used for live transcription and Web search/)).toBeInTheDocument();
+    expect(await screen.findByText(/An API key saved here is used for live transcription\./)).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Use API key" }));
     expect(await screen.findByRole("button", { name: "Use OAuth" })).toBeInTheDocument();
     expect(posts).toContainEqual({ path: "/providers/openai/auth-method", body: JSON.stringify({ authMethod: "api_key" }) });
